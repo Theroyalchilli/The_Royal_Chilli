@@ -1,0 +1,12 @@
+backups
+data
+docs
+scripts
+supabase
+*.zip
+screenshot_*.png
+ss_*.png
+jest.config.js
+jest.setup.js
+lib/__tests__
+.env.example

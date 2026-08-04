@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
-import { seedDatabase } from "@/lib/seed";
 
 export async function POST() {
-  try {
-    const result = await seedDatabase();
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("Seed error:", error);
-    return NextResponse.json({ error: "Failed to seed database" }, { status: 500 });
-  }
+  return NextResponse.json({
+    message:
+      "Database seeding is now handled via SQL. Please paste the contents of supabase/schema.sql into the Supabase SQL Editor and run it to create tables and seed initial data.",
+    skipped: true,
+  });
 }
 
 export async function GET() {
-  try {
-    const result = await seedDatabase();
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("Seed error:", error);
-    return NextResponse.json({ error: "Failed to seed database" }, { status: 500 });
-  }
+  return NextResponse.json({
+    message:
+      "Database seeding is now handled via SQL. Please paste the contents of supabase/schema.sql into the Supabase SQL Editor and run it to create tables and seed initial data.",
+    skipped: true,
+  });
 }

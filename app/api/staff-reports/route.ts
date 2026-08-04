@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from "next/server";
+import supabase from "@/lib/supabase";
+import { getSessionFromRequest } from "@/lib/auth";
+import { canManageStaff } from "@/lib/permissions";
+import { computeHoursForPeriod } from "@/lib/payroll";
+
+export async function GET(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  if (!session || !canManageStaff(session.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
+
+  const { data: staff, error: staffErr } = await supabase.from("staff").select("id, name, role").eq("active", 1).order("name");
+  if (staffErr) return NextResponse.json({ error: "Failed to fetch staff" }, { status: 500 });
+
+  const hoursByStaff = await computeHoursForPeriod(from, to);
+
+  const { data: lateCounts } = await supabase
+    .from("clock_events")
+    .select("staff_id, late_minutes")
+    .gte("clock_in", `${from}T00:00:00.000Z`)
+    .lte("clock_in", `${to}T23:59:59.999Z`)
+    .gt("late_minutes", 0);
+  const lateByStaff = new Map<number, number>();
+  for (const l of lateCounts || []) lateByStaff.set(l.staff_id, (lateByStaff.get(l.staff_id) || 0) + 1);
+
+  const { data: entries } = await supabase
+    .from("payroll_entries")
+    .select("staff_id, gross_pay, payroll_periods!inner(period_start, period_end)")
+    .gte("payroll_periods.period_start", from)
+    .lte("payroll_periods.period_end", to);
+  const costByStaff = new Map<number, number>();
+  for (const e of entries || []) costByStaff.set(e.staff_id, (costByStaff.get(e.staff_id) || 0) + Number(e.gross_pay));
+
+  const rows = (staff || []).map((s) => ({
+    staff_id: s.id,
+    name: s.name,
+    role: s.role,
+    hours_worked: Math.round((hoursByStaff.get(s.id) || 0) * 100) / 100,
+    late_count: lateByStaff.get(s.id) || 0,
+    labour_cost: Math.round((costByStaff.get(s.id) || 0) * 100) / 100,
+  }));
+
+  const totals = rows.reduce(
+    (acc, r) => ({ hours: acc.hours + r.hours_worked, cost: acc.cost + r.labour_cost }),
+    { hours: 0, cost: 0 }
+  );
+
+  return NextResponse.json({ rows, totals });
+}

@@ -38,3 +38,19 @@ next-env.d.ts
 /data/*.db-journal
 /data/*.db-shm
 /data/*.db-wal
+
+# backups (real customer/business data — never commit)
+/backups/
+
+# contains real staff login PINs — never commit
+/docs/TESTING.md
+/docs/TESTING.docx
+
+# leftover source zip from the old static-site handover (265MB, superseded
+# by app/(public)/ — not project content, shouldn't bloat repo history)
+/The-Royal-Chilli-Website-Handover.zip
+
+.vercel
+.env*
+
+.vercel

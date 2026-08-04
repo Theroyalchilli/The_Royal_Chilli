@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import getDb, { generateOrderNumber } from "@/lib/db";
+import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { generateOrderNumber } from "@/lib/orders";
+import { findOrCreateCustomerByPhone } from "@/lib/customers";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,37 +15,61 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const date = searchParams.get("date");
     const tableId = searchParams.get("table_id");
+    const orderType = searchParams.get("order_type");
+    const source = searchParams.get("source"); // 'website' = customer self-service (takeaway/delivery), not a staff-created POS order
 
-    const db = getDb();
-    let query = `
-      SELECT o.*, rt.table_number, s.name as staff_name
-      FROM orders o
-      LEFT JOIN restaurant_tables rt ON o.table_id = rt.id
-      LEFT JOIN staff s ON o.staff_id = s.id
-      WHERE 1=1
-    `;
-    const params: (string | number)[] = [];
+    let query = supabase
+      .from("orders")
+      .select(`
+        *,
+        restaurant_tables(table_number),
+        staff:staff!orders_staff_id_fkey(name)
+      `)
+      .order("created_at", { ascending: false });
 
     if (status === "open") {
       // "open" means any unpaid, active order
-      query += ` AND o.status NOT IN ('paid', 'cancelled')`;
+      query = query.not("status", "in", '("paid","cancelled")');
     } else if (status) {
-      query += ` AND o.status = ?`;
-      params.push(status);
+      query = query.eq("status", status);
     }
+
+    if (orderType) {
+      query = query.eq("order_type", orderType);
+    }
+
+    if (source === "website") {
+      // Website orders never have a staff_id — only staff-created POS orders do.
+      query = query.is("staff_id", null).in("order_type", ["takeaway", "delivery"]);
+    }
+
     if (tableId) {
-      query += ` AND o.table_id = ?`;
-      params.push(Number(tableId));
+      query = query.eq("table_id", Number(tableId));
     }
+
     if (date) {
-      query += ` AND date(o.created_at) = ?`;
-      params.push(date);
+      const dayStart = date + "T00:00:00.000Z";
+      const dayEnd = date + "T23:59:59.999Z";
+      query = query.gte("created_at", dayStart).lte("created_at", dayEnd);
     }
 
-    query += ` ORDER BY o.created_at DESC`;
+    const { data: orders, error } = await query;
+    if (error) throw error;
 
-    const orders = db.prepare(query).all(...params);
-    return NextResponse.json({ orders });
+    // Flatten joined fields to match original shape
+    const flatOrders = (orders ?? []).map((o) => {
+      const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
+        restaurant_tables: { table_number: string } | null;
+        staff: { name: string } | null;
+      };
+      return {
+        ...rest,
+        table_number: rt?.table_number ?? null,
+        staff_name: s?.name ?? null,
+      };
+    });
+
+    return NextResponse.json({ orders: flatOrders });
   } catch (error) {
     console.error("Orders fetch error:", error);
     return NextResponse.json(
@@ -80,13 +106,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = getDb();
-    const orderNumber = generateOrderNumber();
-
     // Get open work period
-    const workPeriod = db
-      .prepare("SELECT id FROM work_periods WHERE status = 'open' ORDER BY opened_at DESC LIMIT 1")
-      .get() as { id: number } | undefined;
+    const { data: workPeriod } = await supabase
+      .from("work_periods")
+      .select("id")
+      .eq("status", "open")
+      .order("opened_at", { ascending: false })
+      .limit(1)
+      .single();
 
     // Calculate totals
     const subtotal = items.reduce(
@@ -99,66 +126,110 @@ export async function POST(req: NextRequest) {
     const tax = Math.round(taxableAmount * 0.2 * 100) / 100; // 20% VAT
     const total = Math.round((taxableAmount + tax) * 100) / 100;
 
-    const insertOrder = db.prepare(`
-      INSERT INTO orders (
-        order_number, order_type, table_id, customer_name, customer_phone,
-        customer_address, staff_id, work_period_id, subtotal, discount,
-        discount_reason, tax, total, notes, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
-    `);
+    const orderNumber = await generateOrderNumber();
+    const customerId = customer_phone ? await findOrCreateCustomerByPhone(customer_phone, customer_name || "Guest") : null;
 
-    const result = insertOrder.run(
-      orderNumber,
-      order_type,
-      table_id || null,
-      customer_name || null,
-      customer_phone || null,
-      customer_address || null,
-      session.id,
-      workPeriod?.id || null,
-      subtotal,
-      discountAmt,
-      discount_reason || null,
-      tax,
-      total,
-      notes || null
-    );
+    const { data: newOrder, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        order_number: orderNumber,
+        order_type,
+        table_id: table_id || null,
+        customer_id: customerId,
+        customer_name: customer_name || null,
+        customer_phone: customer_phone || null,
+        customer_address: customer_address || null,
+        staff_id: session.id,
+        work_period_id: workPeriod?.id || null,
+        subtotal,
+        discount: discountAmt,
+        discount_reason: discount_reason || null,
+        tax,
+        total,
+        notes: notes || null,
+        status: "open",
+      })
+      .select()
+      .single();
 
-    const orderId = result.lastInsertRowid;
+    if (orderError) throw orderError;
+
+    const orderId = newOrder.id;
 
     // Insert order items
-    const insertItem = db.prepare(`
-      INSERT INTO order_items (order_id, menu_item_id, item_name, item_price, quantity, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+    type IncomingItem = {
+      menu_item_id?: number;
+      item_name: string;
+      item_price: number;
+      quantity: number;
+      notes?: string;
+      selected_modifiers?: { id: number; name: string; price_delta: number }[];
+    };
+    const typedItems = items as IncomingItem[];
+    const itemRows = typedItems.map((item) => ({
+      order_id: orderId,
+      menu_item_id: item.menu_item_id || null,
+      item_name: item.item_name,
+      item_price: item.item_price,
+      quantity: item.quantity,
+      original_quantity: item.quantity,
+      notes: item.notes || null,
+    }));
 
-    for (const item of items) {
-      insertItem.run(
-        orderId,
-        item.menu_item_id || null,
-        item.item_name,
-        item.item_price,
-        item.quantity,
-        item.notes || null
-      );
+    const { data: insertedItems, error: itemsError } = await supabase
+      .from("order_items")
+      .insert(itemRows)
+      .select("id, menu_item_id");
+
+    if (itemsError) throw itemsError;
+
+    const modifierRows = (insertedItems || []).flatMap((row, idx) =>
+      (typedItems[idx].selected_modifiers || []).map((m) => ({
+        order_item_id: row.id,
+        modifier_option_id: m.id,
+        option_name: m.name,
+        price_delta: m.price_delta,
+      }))
+    );
+    if (modifierRows.length > 0) {
+      const { error: modErr } = await supabase.from("order_item_modifiers").insert(modifierRows);
+      if (modErr) throw modErr;
     }
 
     // Update table status if dine-in
     if (order_type === "dine_in" && table_id) {
-      db.prepare("UPDATE restaurant_tables SET status = 'occupied' WHERE id = ?").run(table_id);
+      await supabase
+        .from("restaurant_tables")
+        .update({ status: "occupied" })
+        .eq("id", table_id);
     }
 
-    const order = db
-      .prepare(`
-        SELECT o.*, rt.table_number, s.name as staff_name
-        FROM orders o
-        LEFT JOIN restaurant_tables rt ON o.table_id = rt.id
-        LEFT JOIN staff s ON o.staff_id = s.id
-        WHERE o.id = ?
+    // Fetch full order with joins
+    const { data: order, error: fetchError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        restaurant_tables(table_number),
+        staff:staff!orders_staff_id_fkey(name)
       `)
-      .get(orderId);
+      .eq("id", orderId)
+      .single();
 
-    return NextResponse.json({ success: true, order }, { status: 201 });
+    if (fetchError) throw fetchError;
+
+    const { restaurant_tables: rt, staff: s, ...orderRest } = order as typeof order & {
+      restaurant_tables: { table_number: string } | null;
+      staff: { name: string } | null;
+    };
+
+    return NextResponse.json(
+      {
+        success: true,
+        order: { ...orderRest, table_number: rt?.table_number ?? null, staff_name: s?.name ?? null },
+        items: insertedItems,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Order create error:", error);
     return NextResponse.json(

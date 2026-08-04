@@ -1,0 +1,55 @@
+import Image from "next/image";
+import type { Metadata } from "next";
+import fs from "fs";
+import path from "path";
+
+export const metadata: Metadata = {
+  title: "Gallery — The Royal Chilli",
+  description: "A taste of what's on the menu at The Royal Chilli, Hounslow — real dishes, real photos.",
+};
+
+function captionFromFilename(file: string) {
+  return file
+    .replace(/\.webp$/, "")
+    .replace(/^\d+_/, "") // drop duplicate-upload timestamp prefixes
+    .replace(/_/g, " ");
+}
+
+export default function GalleryPage() {
+  const galleryDir = path.join(process.cwd(), "public", "gallery");
+  const files = fs.readdirSync(galleryDir).filter((f) => f.endsWith(".webp"));
+
+  // A few dishes were uploaded twice under different filenames — show each dish once.
+  const seen = new Set<string>();
+  const photos = files
+    .map((file) => ({ file, caption: captionFromFilename(file) }))
+    .filter(({ caption }) => {
+      const key = caption.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.caption.localeCompare(b.caption));
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-16">
+      <div className="text-center">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Gallery</p>
+        <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-4xl font-bold">
+          A Taste of <span className="italic text-primary">The Royal Chilli</span>
+        </h1>
+      </div>
+
+      <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {photos.map(({ file, caption }) => (
+          <div key={file} className="group relative aspect-square overflow-hidden rounded-xl">
+            <Image src={`/gallery/${file}`} alt={caption} fill className="object-cover transition group-hover:scale-105" />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100">
+              <p className="text-xs font-medium text-white">{caption}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

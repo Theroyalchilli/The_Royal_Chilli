@@ -8,6 +8,7 @@ import TableGrid from "@/components/pos/TableGrid";
 import MenuPanel from "@/components/pos/MenuPanel";
 import OrderTicket from "@/components/pos/OrderTicket";
 import PaymentModal from "@/components/pos/PaymentModal";
+import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
 import type {
   MenuCategory,
   MenuItem,
@@ -15,7 +16,8 @@ import type {
   CartItem,
 } from "@/lib/types";
 
-type OrderType = "dine_in" | "takeaway" | "delivery";
+type OrderType = "dine_in" | "takeaway" | "delivery" | "online";
+type MobileTab = "floor" | "menu" | "order";
 
 interface SessionUser {
   id: number;
@@ -48,22 +50,65 @@ export default function POSPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
   const [currentOrderNumber, setCurrentOrderNumber] = useState("");
+  const [allOrderIds, setAllOrderIds] = useState<number[]>([]);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
   const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("floor");
+  const [clickPos, setClickPos] = useState<{ x: number; y: number } | null>(null);
+  const [onlineBadge, setOnlineBadge] = useState(0);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+
+  // End of Day modal
+  const [endOfDayOpen, setEndOfDayOpen] = useState(false);
+  const [eodData, setEodData] = useState<{
+    total_revenue: number;
+    cash_total: number;
+    card_total: number;
+    total_orders: number;
+    open_orders: number;
+  } | null>(null);
+  const [eodClosingCash, setEodClosingCash] = useState("");
+  const [eodLoading, setEodLoading] = useState(false);
+  const [eodClosed, setEodClosed] = useState(false);
+  const [eodError, setEodError] = useState("");
+
+  // Track last click/tap position for context-aware toast
+  useEffect(() => {
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const src = "touches" in e ? e.touches[0] : e;
+      if (src) setClickPos({ x: src.clientX, y: src.clientY });
+    };
+    window.addEventListener("mousedown", handler);
+    window.addEventListener("touchstart", handler as EventListener);
+    return () => {
+      window.removeEventListener("mousedown", handler);
+      window.removeEventListener("touchstart", handler as EventListener);
+    };
+  }, []);
+
+  // Auto-clear status toast after 3 seconds
+  useEffect(() => {
+    if (!status) return;
+    const t = setTimeout(() => setStatus(""), 3000);
+    return () => clearTimeout(t);
+  }, [status]);
 
   const happyHour = isHappyHour();
   const breakfastTime = isBreakfastTime();
+  const isManager = session?.role === "owner" || session?.role === "manager";
 
-  // Computed totals
-  const subtotal = cartItems.reduce(
-    (sum, i) => sum + i.item_price * i.quantity,
-    0
+  // Computed totals — exclude voided items
+  const subtotal = cartItems.filter(i => !i.voided).reduce(
+    (sum, i) => sum + i.item_price * i.quantity, 0
   );
   const tax = Math.round((subtotal - discount) * 0.2 * 100) / 100;
   const total = Math.round((subtotal - discount + tax) * 100) / 100;
+  const unsentCount = cartItems.filter(i => !i.sent && !i.voided).length;
+  const cartCount = cartItems.filter(i => !i.voided).reduce((s, i) => s + i.quantity, 0);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -75,21 +120,19 @@ export default function POSPage() {
     loadSession();
   }, []);
 
+
   const loadSession = async () => {
-    try {
-      const res = await fetch("/api/auth/login", { method: "GET" });
-      // We rely on the cookie, just decode from the page
-      // Actually let's get user info from a simpler approach
-    } catch {
-      // ignore
-    }
-    // Parse from document cookie is not possible (httpOnly), so we'll
-    // just check if we can reach a protected endpoint
     try {
       const res = await fetch("/api/orders?status=open");
       if (!res.ok) {
         router.push("/login");
         return;
+      }
+      // Fetch session user details
+      const meRes = await fetch("/api/auth/me");
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        setSession(meData.user);
       }
     } catch {
       router.push("/login");
@@ -118,17 +161,20 @@ export default function POSPage() {
     setTables(data.tables || []);
   }, []);
 
+  // Two lines only merge if they're the same dish with the exact same
+  // modifier selections — e.g. "Chicken Tikka" and "Malai Tikka" versions of
+  // the same platter must stay as separate lines, same rule as the website cart.
+  const modifierKey = (mods?: CartItem["selected_modifiers"]) =>
+    (mods || []).map((m) => m.id).sort((a, b) => a - b).join(",");
+
   const handleAddItem = (item: CartItem) => {
     setCartItems((prev) => {
       const existing = prev.findIndex(
-        (i) => i.menu_item_id === item.menu_item_id
+        (i) => i.menu_item_id === item.menu_item_id && !i.sent && modifierKey(i.selected_modifiers) === modifierKey(item.selected_modifiers)
       );
       if (existing >= 0) {
         const updated = [...prev];
-        updated[existing] = {
-          ...updated[existing],
-          quantity: updated[existing].quantity + 1,
-        };
+        updated[existing] = { ...updated[existing], quantity: updated[existing].quantity + 1 };
         return updated;
       }
       return [...prev, item];
@@ -136,6 +182,7 @@ export default function POSPage() {
   };
 
   const handleUpdateQty = (idx: number, qty: number) => {
+    if (cartItems[idx]?.sent) return;
     if (qty <= 0) {
       handleRemoveItem(idx);
       return;
@@ -148,7 +195,32 @@ export default function POSPage() {
   };
 
   const handleRemoveItem = (idx: number) => {
+    if (cartItems[idx]?.sent) return;
     setCartItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleVoidItem = async (idx: number, newQty: number) => {
+    const item = cartItems[idx];
+    if (!item?.db_id || !item?.order_id) return;
+    try {
+      if (newQty === 0) {
+        await fetch(`/api/orders/${item.order_id}/items`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId: item.db_id, action: "void" }),
+        });
+        setCartItems(prev => prev.map((i, n) => n === idx ? { ...i, voided: true } : i));
+      } else {
+        await fetch(`/api/orders/${item.order_id}/items`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId: item.db_id, action: "reduce", quantity: newQty }),
+        });
+        setCartItems(prev => prev.map((i, n) => n === idx ? { ...i, quantity: newQty } : i));
+      }
+    } catch {
+      // silent
+    }
   };
 
   const handleSetDiscount = (d: number, reason: string) => {
@@ -159,35 +231,48 @@ export default function POSPage() {
   const handleOrderTypeChange = (type: OrderType) => {
     setOrderType(type);
     setSelectedTable(null);
-    setShowCustomerForm(type !== "dine_in");
+    setCartItems([]);
+    setDiscount(0);
+    setDiscountReason("");
+    setCurrentOrderId(null);
+    setCurrentOrderNumber("");
+    setAllOrderIds([]);
+    setShowCustomerForm(type !== "dine_in" && type !== "online");
+    setMobileTab(type === "online" ? "order" : "floor");
   };
 
-  // Recall an existing open order for a table (SambaPOS-style ticket recall)
   const recallOrderForTable = useCallback(async (tableId: number) => {
     try {
       const res = await fetch(`/api/orders?table_id=${tableId}&status=open`);
       const data = await res.json();
-      const existing = data.orders?.[0];
-      if (!existing) return false;
-
-      // Load items into cart
-      const itemsRes = await fetch(`/api/orders/${existing.id}/items`);
-      const itemsData = await itemsRes.json();
-
-      const recalled: CartItem[] = (itemsData.items || []).map((i: { menu_item_id: number; item_name: string; item_price: number; quantity: number; is_veg?: number }) => ({
-        menu_item_id: i.menu_item_id,
-        item_name: i.item_name,
-        item_price: i.item_price,
-        quantity: i.quantity,
-        is_veg: i.is_veg ?? 0,
-      }));
-
-      setCartItems(recalled);
-      setCurrentOrderId(existing.id);
-      setCurrentOrderNumber(existing.order_number);
-      setDiscount(existing.discount ?? 0);
-      setDiscountReason(existing.discount_reason ?? "");
-      setStatus(`Recalled order ${existing.order_number} — ready to pay`);
+      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null }[] = data.orders || [];
+      if (orders.length === 0) return false;
+      const ordersOldFirst = [...orders].reverse();
+      const allItems: CartItem[] = [];
+      for (const order of ordersOldFirst) {
+        const itemsRes = await fetch(`/api/orders/${order.id}/items`);
+        const itemsData = await itemsRes.json();
+        const items: CartItem[] = (itemsData.items || [])
+          .filter((i: { status: string }) => i.status !== "cancelled")
+          .map((i: { id: number; menu_item_id: number; item_name: string; item_price: number; quantity: number; is_veg?: number }) => ({
+            menu_item_id: i.menu_item_id,
+            item_name: i.item_name,
+            item_price: i.item_price,
+            quantity: i.quantity,
+            is_veg: i.is_veg ?? 0,
+            sent: true,
+            db_id: i.id,
+            order_id: order.id,
+          }));
+        allItems.push(...items);
+      }
+      const firstOrder = ordersOldFirst[0];
+      setCartItems(allItems);
+      setCurrentOrderId(firstOrder.id);
+      setCurrentOrderNumber(firstOrder.order_number);
+      setAllOrderIds(ordersOldFirst.map(o => o.id));
+      setDiscount(firstOrder.discount ?? 0);
+      setDiscountReason(firstOrder.discount_reason ?? "");
       return true;
     } catch {
       return false;
@@ -195,17 +280,10 @@ export default function POSPage() {
   }, []);
 
   const handleSendToKitchen = async () => {
-    if (cartItems.length === 0) {
-      setStatus("Please add items to the order");
-      return;
-    }
-    if (orderType === "dine_in" && !selectedTable) {
-      setStatus("Please select a table");
-      return;
-    }
-
+    const newItems = cartItems.filter(i => !i.sent);
+    if (newItems.length === 0) return;
+    if (orderType === "dine_in" && !selectedTable) return;
     setLoading(true);
-    setStatus("");
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -216,34 +294,35 @@ export default function POSPage() {
           customer_name: customerName || null,
           customer_phone: customerPhone || null,
           customer_address: customerAddress || null,
-          items: cartItems,
+          items: newItems,
           notes,
-          discount,
-          discount_reason: discountReason,
+          discount: currentOrderId ? 0 : discount,
+          discount_reason: currentOrderId ? null : discountReason,
         }),
       });
-
       const data = await res.json();
-      if (!res.ok) {
-        setStatus(data.error || "Failed to create order");
-        return;
-      }
-
+      if (!res.ok) return;
       const orderId = data.order.id;
-
-      // Send to kitchen
       await fetch(`/api/orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "sent_to_kitchen" }),
       });
-
-      setCurrentOrderId(orderId);
-      setCurrentOrderNumber(data.order.order_number);
-      setStatus(`Order ${data.order.order_number} sent to kitchen!`);
+      if (!currentOrderId) {
+        setCurrentOrderId(orderId);
+        setCurrentOrderNumber(data.order.order_number);
+      }
+      setAllOrderIds(prev => prev.includes(orderId) ? prev : [...prev, orderId]);
+      const returnedItems: { id: number; menu_item_id: number }[] = data.items || [];
+      let itemIdx = 0;
+      setCartItems(prev => prev.map(i => {
+        if (i.sent) return i;
+        const dbItem = returnedItems[itemIdx++];
+        return { ...i, sent: true, db_id: dbItem?.id, order_id: orderId };
+      }));
       refreshTables();
     } catch {
-      setStatus("Failed to send order");
+      // silent
     } finally {
       setLoading(false);
     }
@@ -258,11 +337,9 @@ export default function POSPage() {
       setStatus("Please select a table");
       return;
     }
-
     setLoading(true);
     try {
       if (!currentOrderId) {
-        // Create order first
         const res = await fetch("/api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -285,6 +362,7 @@ export default function POSPage() {
         }
         setCurrentOrderId(data.order.id);
         setCurrentOrderNumber(data.order.order_number);
+        setAllOrderIds([data.order.id]);
       }
       setPaymentOpen(true);
     } catch {
@@ -301,7 +379,6 @@ export default function POSPage() {
   const handlePaymentClose = () => {
     setPaymentOpen(false);
     if (currentOrderId) {
-      // Clear order after payment
       handleClear();
     }
   };
@@ -317,7 +394,9 @@ export default function POSPage() {
     setNotes("");
     setCurrentOrderId(null);
     setCurrentOrderNumber("");
+    setAllOrderIds([]);
     setStatus("");
+    setMobileTab("floor");
     refreshTables();
   };
 
@@ -326,195 +405,612 @@ export default function POSPage() {
     router.push("/login");
   };
 
+  const openEndOfDay = async () => {
+    setEndOfDayOpen(true);
+    setEodClosed(false);
+    setEodClosingCash("");
+    setEodError("");
+    setEodLoading(true);
+    try {
+      const res = await fetch("/api/work-periods", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setEodData(data.summary);
+      } else {
+        setEodError("Couldn't load today's summary. Try again.");
+      }
+    } catch {
+      setEodError("Couldn't load today's summary. Try again.");
+    } finally {
+      setEodLoading(false);
+    }
+  };
+
+  const handleCloseDay = async () => {
+    setEodLoading(true);
+    setEodError("");
+    try {
+      const res = await fetch("/api/work-periods", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          closing_cash: parseFloat(eodClosingCash) || 0,
+          staff_id: session?.id,
+        }),
+      });
+      if (res.ok) {
+        setEodClosed(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setEodError(data.error || "Failed to close the day. Try again.");
+      }
+    } catch {
+      setEodError("Failed to close the day. Try again.");
+    } finally {
+      setEodLoading(false);
+    }
+  };
+
+  const handlePrintEod = () => {
+    if (!eodData) return;
+    const date = new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const time = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const html = `<!DOCTYPE html><html><head><title>End of Day Report</title>
+    <style>
+      body { font-family: monospace; font-size: 12px; max-width: 300px; margin: 20px auto; color: #000; }
+      h1 { text-align: center; font-size: 16px; margin-bottom: 4px; }
+      .sub { text-align: center; font-size: 11px; color: #555; margin-bottom: 16px; }
+      .divider { border-top: 1px dashed #000; margin: 10px 0; }
+      .row { display: flex; justify-content: space-between; margin: 4px 0; }
+      .label { color: #555; }
+      .value { font-weight: bold; }
+      .total { font-size: 15px; font-weight: bold; }
+      .footer { text-align: center; margin-top: 16px; font-size: 10px; color: #888; }
+    </style></head><body>
+    <h1>THE ROYAL CHILLI</h1>
+    <div class="sub">43 Kingsley Road, Hounslow TW3 1PA</div>
+    <div class="sub">END OF DAY REPORT</div>
+    <div class="sub">${date} · ${time}</div>
+    <div class="divider"></div>
+    <div class="row"><span class="label">Total Orders</span><span class="value">${eodData.total_orders}</span></div>
+    <div class="row"><span class="label">Total Revenue</span><span class="value total">£${eodData.total_revenue.toFixed(2)}</span></div>
+    <div class="divider"></div>
+    <div class="row"><span class="label">💵 Cash</span><span class="value">£${eodData.cash_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">💳 Card</span><span class="value">£${eodData.card_total.toFixed(2)}</span></div>
+    <div class="divider"></div>
+    <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
+    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - eodData.cash_total).toFixed(2)}</span></div>
+    <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
+    </body></html>`;
+    const w = window.open("", "_blank", "width=400,height=600");
+    if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+  };
+
+  const handleTableSelect = async (t: RestaurantTable) => {
+    if (t.id !== selectedTable) {
+      setCartItems([]);
+      setDiscount(0);
+      setDiscountReason("");
+      setCurrentOrderId(null);
+      setCurrentOrderNumber("");
+      setAllOrderIds([]);
+      setStatus("");
+    }
+    setSelectedTable(t.id);
+    setMobileTab("menu");
+    if (t.status === "occupied") {
+      const found = await recallOrderForTable(t.id);
+      if (!found) setStatus("No open bill found for this table");
+    }
+  };
+
   const timeStr = currentTime.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
   });
 
+  // Shared table header card
+  const tbl = tables.find(t => t.id === selectedTable);
+  const tableHeader = tbl ? (
+    <div className="relative rounded-2xl overflow-hidden border border-red-500/30 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent">
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-red-500/0 via-red-400 to-red-500/0" />
+      <div className="flex items-center gap-3 px-3 py-3">
+        <div className="w-12 h-12 rounded-xl bg-red-500/20 border border-red-400/30 flex flex-col items-center justify-center flex-shrink-0 shadow-lg shadow-red-500/10">
+          <span className="text-red-600/70 text-[9px] font-black leading-none tracking-widest uppercase">Table</span>
+          <span className="text-red-200 text-lg font-black leading-tight">{tbl.table_number}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-foreground font-black text-base leading-tight">Table {tbl.table_number}</span>
+            <span className="text-[9px] font-bold text-red-600 bg-red-500/15 border border-red-500/25 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+              {tbl.location === "outdoor" ? "Outdoor" : tbl.location === "private" ? "VIP" : "Main"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-muted-foreground text-xs">🪑 {tbl.capacity} seats</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-emerald-600 text-xs font-semibold">● Active</span>
+          </div>
+        </div>
+        <button
+          onClick={() => { setSelectedTable(null); handleClear(); }}
+          className="flex-shrink-0 text-[11px] font-semibold text-muted-foreground hover:text-red-600 bg-surface-hover/80 hover:bg-red-50 border border-border hover:border-red-500/40 px-2.5 py-1.5 rounded-lg transition-all no-select"
+        >
+          ← Tables
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  // Shared action buttons (totals + send + pay + clear)
+  const actionButtons = (
+    <div className="px-3 pb-3 pt-2 flex-shrink-0 border-t border-border/60 mt-2 space-y-2">
+      {cartItems.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+          <span>{cartCount} items · VAT incl.</span>
+          <div className="flex items-center gap-2">
+            {discount > 0 && <span className="text-yellow-600">−{formatCurrency(discount)}</span>}
+            <span className="text-muted-foreground">VAT {formatCurrency(tax)}</span>
+            <span className="text-foreground font-bold">{formatCurrency(total)}</span>
+          </div>
+        </div>
+      )}
+      {cartItems.some(i => !i.sent) && (
+        <button onClick={handleSendToKitchen} disabled={loading}
+          className="pos-btn no-select w-full h-12 bg-red-600 hover:bg-red-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2">
+          {loading ? <span className="opacity-60">Processing…</span> : <><span>🍳</span><span>Send to Kitchen</span></>}
+        </button>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={handlePayment} disabled={loading || cartItems.length === 0}
+          className="pos-btn no-select h-12 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white rounded-xl transition-all flex flex-col items-center justify-center leading-tight">
+          <span className="text-[10px] font-semibold opacity-80">Pay Now</span>
+          <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(total) : "—"}</span>
+        </button>
+        <button onClick={handleClear} disabled={loading}
+          className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-border text-foreground hover:text-foreground font-semibold rounded-xl transition-all text-sm flex items-center justify-center gap-1.5">
+          <span>🗑️</span><span>Clear</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // Bottom tab bar config
+  const mobileTabs: { key: MobileTab; icon: string; label: string; badge: number | null }[] = [
+    { key: "floor",  icon: "🪑",  label: "Tables", badge: null },
+    { key: "menu",   icon: "🍽️", label: "Menu",   badge: unsentCount > 0 ? unsentCount : null },
+    { key: "order",  icon: "📋",  label: "Order",  badge: cartCount > 0 ? cartCount : null },
+  ];
+
   return (
-    <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-orange-400 font-bold text-lg">🌶️ Royal Chilli</span>
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+
+      {/* ── Top Bar ── */}
+      <div className="flex items-center justify-between px-3 py-2 bg-surface border-b border-border flex-shrink-0 gap-3">
+
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <img src="/logo.png" alt="The Royal Chilli" className="h-10 w-10 rounded-lg object-cover flex-shrink-0" />
+          <div className="flex flex-col leading-none gap-0.5">
+            <span style={{ fontFamily: "var(--font-cinzel)" }} className="text-foreground font-bold text-sm lg:text-[15px] tracking-wide leading-none">
+              The Royal Chilli
+            </span>
+            <span style={{ fontFamily: "var(--font-playfair)" }} className="text-yellow-600 text-[11px] font-bold italic tracking-widest leading-none">
+              Dil Se Desi
+            </span>
+          </div>
           {breakfastTime && (
-            <span className="bg-yellow-500 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">
-              BREAKFAST
-            </span>
-          )}
-          {happyHour && (
-            <span className="bg-purple-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              HAPPY HOUR 🎉
-            </span>
+            <span className="hidden sm:inline bg-yellow-500 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">BREAKFAST</span>
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-white font-mono text-xl font-bold">{timeStr}</span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push("/pos/kitchen")}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg border border-gray-700 transition-colors"
-            >
+        {/* Right side — clock + nav */}
+        <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
+          <span className="text-foreground font-mono text-lg lg:text-xl font-bold tabular-nums">{timeStr}</span>
+
+          {/* Desktop nav */}
+          <div className="hidden lg:flex items-center gap-1.5">
+            {session && (
+              <div className="flex items-center gap-1.5 mr-1 px-2.5 py-1.5 bg-surface-hover/60 border border-border rounded-lg">
+                <span className="text-foreground text-xs font-semibold">{session.name}</span>
+                <span className="text-[10px] text-muted-foreground capitalize bg-elevated px-1.5 py-0.5 rounded">{session.role}</span>
+              </div>
+            )}
+            <button onClick={() => router.push("/staff")}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+              👥 Staff Hub
+            </button>
+            <button onClick={() => router.push("/pos/kitchen")}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               🍳 Kitchen
             </button>
-            <button
-              onClick={() => router.push("/pos/tables")}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg border border-gray-700 transition-colors"
-            >
+            <button onClick={() => router.push("/pos/tables")}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               🍽️ Tables
             </button>
-            <button
-              onClick={() => router.push("/pos/reports")}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold rounded-lg border border-gray-700 transition-colors"
-            >
+            <button onClick={() => router.push("/pos/reports")}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               📊 Reports
             </button>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 bg-red-900/50 hover:bg-red-900 text-red-300 text-xs font-semibold rounded-lg border border-red-800 transition-colors"
-            >
+            {isManager && (
+              <button onClick={openEndOfDay}
+                className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-300 transition-colors">
+                🌙 End of Day
+              </button>
+            )}
+            <button onClick={handleLogout}
+              className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg border border-red-300 transition-colors">
               Logout
             </button>
+          </div>
+
+          {/* Mobile: More menu + logout */}
+          <div className="relative lg:hidden">
+            <button onClick={() => setShowMobileMenu((v) => !v)}
+              className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+              ☰ More
+            </button>
+            {showMobileMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMobileMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 w-44 bg-surface border border-border rounded-lg shadow-xl overflow-hidden">
+                  {session && (
+                    <div className="px-3 py-2 border-b border-border">
+                      <p className="text-foreground text-xs font-semibold">{session.name}</p>
+                      <p className="text-muted-foreground text-[10px] capitalize">{session.role}</p>
+                    </div>
+                  )}
+                  <button onClick={() => { setShowMobileMenu(false); router.push("/staff"); }}
+                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                    👥 Staff Hub
+                  </button>
+                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/kitchen"); }}
+                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                    🍳 Kitchen
+                  </button>
+                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/tables"); }}
+                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                    🍽️ Tables
+                  </button>
+                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/reports"); }}
+                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                    📊 Reports
+                  </button>
+                  {isManager && (
+                    <button onClick={() => { setShowMobileMenu(false); openEndOfDay(); }}
+                      className="w-full text-left px-3 py-2 text-indigo-700 text-xs font-semibold hover:bg-surface-hover">
+                      🌙 End of Day
+                    </button>
+                  )}
+                  <button onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-red-700 text-xs font-semibold hover:bg-surface-hover border-t border-border">
+                    Logout
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Panel - Order */}
-        <div className="w-[360px] flex-shrink-0 flex flex-col border-r border-gray-800/60 bg-gray-900 overflow-hidden">
+      {/* ══════════════════════════════════════════
+          DESKTOP LAYOUT  (lg = 1024px and above)
+      ══════════════════════════════════════════ */}
+      <div className="hidden lg:flex flex-1 overflow-hidden">
 
-          {/* ── Order Type Tabs ── */}
+        {/* Left Panel */}
+        <div className="w-[360px] flex-shrink-0 flex flex-col border-r border-border/60 bg-surface overflow-hidden">
+
           <div className="px-3 pt-3 pb-2 flex-shrink-0">
-            <OrderTypeSelector value={orderType} onChange={handleOrderTypeChange} />
+            <OrderTypeSelector value={orderType} onChange={handleOrderTypeChange} onlineBadge={onlineBadge} />
           </div>
 
-          {/* ── TABLE SECTION (dine-in only) ── */}
-          {orderType === "dine_in" && (
+          {orderType === "online" && (
+            <div className="flex-1 overflow-y-auto px-3 pb-3 min-h-0">
+              <div className="mb-2 pt-1">
+                <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Online Orders</span>
+              </div>
+              <OnlineOrdersPanel onCountChange={setOnlineBadge} />
+            </div>
+          )}
+
+          {orderType !== "online" && orderType === "dine_in" && !selectedTable && (
             <div className="px-3 pb-3 flex-shrink-0">
-              {/* Section header */}
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">Floor Plan</span>
-                <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Select a Table</span>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"/>Free</span>
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"/>Busy</span>
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>Rsv</span>
                 </div>
               </div>
-              <TableGrid
-                tables={tables}
-                selectedTable={selectedTable}
-                onSelect={async (t) => {
-                  setSelectedTable(t.id);
-                  if (t.status === "occupied") {
-                    const found = await recallOrderForTable(t.id);
-                    if (!found) setStatus("No open bill found for this table");
-                  }
-                }}
-              />
-              {/* Selected table pill */}
-              {selectedTable && (
-                <div className="mt-2 flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 rounded-lg px-3 py-1.5">
-                  <span className="w-2 h-2 rounded-full bg-orange-400"/>
-                  <span className="text-orange-300 text-xs font-semibold">
-                    Table {tables.find(t => t.id === selectedTable)?.table_number} selected
-                    {tables.find(t => t.id === selectedTable)?.capacity && (
-                      <span className="text-orange-400/60 font-normal ml-1">
-                        · {tables.find(t => t.id === selectedTable)?.capacity} seats
-                      </span>
-                    )}
+              <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} />
+              {cartCount > 0 ? (
+                <div className="mt-3 flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 animate-pulse">
+                  <span className="text-amber-600 text-base">⚠️</span>
+                  <div>
+                    <p className="text-amber-700 text-xs font-bold">{cartCount} item{cartCount > 1 ? "s" : ""} added — select a table</p>
+                    <p className="text-amber-500/70 text-[10px]">Tap a table above to assign this order</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground text-xs mt-3">Tap a table to start an order</p>
+              )}
+            </div>
+          )}
+
+          {orderType !== "online" && orderType === "dine_in" && selectedTable && (
+            <div className="mx-3 mb-3 flex-shrink-0">
+              {tableHeader}
+            </div>
+          )}
+
+          {(orderType === "takeaway" || orderType === "delivery") && (
+            <div className="px-3 pb-3 flex-shrink-0 space-y-2">
+              <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer Name"
+                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
+              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone Number"
+                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
+              {orderType === "delivery" && (
+                <textarea value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="Delivery Address" rows={2}
+                  className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none" />
+              )}
+              <div className="border-t border-border/80" />
+            </div>
+          )}
+
+          {orderType !== "online" && (selectedTable || orderType !== "dine_in") && (
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0 px-3">
+              <div className="flex items-center justify-between mb-2 flex-shrink-0">
+                <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Order Items</span>
+                {cartItems.length > 0 && (
+                  <span className="text-[10px] bg-red-500/20 text-red-700 border border-red-500/30 rounded-full px-2 py-0.5 font-semibold">
+                    {cartCount} items
                   </span>
-                  <button onClick={() => setSelectedTable(null)} className="ml-auto text-orange-400/50 hover:text-orange-300 text-xs">✕</button>
+                )}
+              </div>
+              <div className="flex-1 overflow-hidden min-h-0 h-full">
+                <OrderTicket
+                  items={cartItems}
+                  onUpdateQty={handleUpdateQty}
+                  onRemove={handleRemoveItem}
+                  onVoid={handleVoidItem}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Discount controls — manager only */}
+          {cartItems.length > 0 && (
+            <div className="px-3 pt-1 flex-shrink-0">
+              {isManager ? (
+                <>
+                  {discount > 0 && (
+                    <div className="flex items-center justify-between bg-yellow-100 border border-yellow-300/40 rounded-lg px-3 py-1.5 text-xs">
+                      <span className="text-yellow-700 font-semibold">Discount: -{formatCurrency(discount)}</span>
+                      <button onClick={() => handleSetDiscount(0, "")} className="text-muted-foreground hover:text-red-600 text-[10px]">✕ Remove</button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2 bg-surface-hover/60 border border-border rounded-lg px-3 py-1.5">
+                  <span className="text-muted-foreground text-xs">🔒</span>
+                  <span className="text-muted-foreground text-xs">Discounts — Manager only</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Customer info for takeaway/delivery */}
-          {(orderType === "takeaway" || orderType === "delivery") && (
-            <div className="px-3 pb-3 flex-shrink-0 space-y-2">
-              <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer Name"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500" />
-              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone Number"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500" />
-              {orderType === "delivery" && (
-                <textarea value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="Delivery Address" rows={2}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500 resize-none" />
-              )}
+          {actionButtons}
+        </div>
+
+        {/* Right Panel - Menu (hidden for online orders) */}
+        {orderType !== "online" && (
+          <div className="flex-1 overflow-hidden flex flex-col p-3">
+            <MenuPanel categories={categories} items={items} onAddItem={handleAddItem} layout="horizontal" orderType={orderType} />
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════
+          MOBILE / TABLET LAYOUT  (below lg)
+      ══════════════════════════════════════════ */}
+      <div className="flex lg:hidden flex-1 flex-col overflow-hidden">
+
+        {/* Tab Content */}
+        <div className="flex-1 overflow-hidden">
+
+          {/* ── Floor Tab ── */}
+          {mobileTab === "floor" && (
+            <div className="h-full overflow-y-auto">
+              <div className="p-3 space-y-3">
+                <OrderTypeSelector value={orderType} onChange={handleOrderTypeChange} onlineBadge={onlineBadge} />
+
+                {orderType === "online" && (
+                  <OnlineOrdersPanel onCountChange={setOnlineBadge} />
+                )}
+
+                {orderType !== "online" && orderType === "dine_in" && !selectedTable && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Select a Table</span>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"/>Free</span>
+                        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"/>Busy</span>
+                        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>Rsv</span>
+                      </div>
+                    </div>
+                    <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} />
+                    {cartCount > 0 ? (
+                      <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 animate-pulse">
+                        <span className="text-amber-600 text-base">⚠️</span>
+                        <div>
+                          <p className="text-amber-700 text-xs font-bold">{cartCount} item{cartCount > 1 ? "s" : ""} added — select a table</p>
+                          <p className="text-amber-500/70 text-[10px]">Tap a table above to assign this order</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground text-xs">Tap a table to start an order</p>
+                    )}
+                  </>
+                )}
+
+                {orderType !== "online" && orderType === "dine_in" && selectedTable && (
+                  <>
+                    {tableHeader}
+                    <button onClick={() => setMobileTab("menu")}
+                      className="w-full py-3 bg-red-600/20 border border-red-500/30 text-red-700 font-semibold rounded-xl text-sm no-select pos-btn">
+                      🍽️ Browse Menu →
+                    </button>
+                    <button onClick={() => setMobileTab("order")}
+                      className="w-full py-3 bg-surface-hover border border-border text-foreground font-semibold rounded-xl text-sm no-select pos-btn">
+                      📋 View Order{cartCount > 0 ? ` (${cartCount} items)` : ""}
+                    </button>
+                  </>
+                )}
+
+                {(orderType === "takeaway" || orderType === "delivery") && (
+                  <div className="space-y-2">
+                    <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer Name"
+                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
+                    <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone Number"
+                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
+                    {orderType === "delivery" && (
+                      <textarea value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="Delivery Address" rows={2}
+                        className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none" />
+                    )}
+                    <button onClick={() => setMobileTab("menu")}
+                      className="w-full py-3 bg-red-600/20 border border-red-500/30 text-red-700 font-semibold rounded-xl text-sm no-select pos-btn">
+                      🍽️ Browse Menu →
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* ── Divider ── */}
-          <div className="mx-3 border-t border-gray-800/80 flex-shrink-0" />
+          {/* ── Menu Tab ── */}
+          {mobileTab === "menu" && (
+            <div className="h-full flex flex-col overflow-hidden p-2 gap-2">
+              {orderType === "dine_in" && !selectedTable && (
+                <div className="flex-shrink-0 flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2">
+                  <span className="text-amber-600">⚠️</span>
+                  <p className="text-amber-700 text-xs font-bold flex-1">No table selected — go to Tables tab first</p>
+                  <button onClick={() => setMobileTab("floor")}
+                    className="text-[10px] font-bold text-amber-600 bg-amber-500/20 border border-amber-500/30 px-2 py-1 rounded-lg no-select">
+                    → Tables
+                  </button>
+                </div>
+              )}
+              <div className="flex-1 overflow-hidden min-h-0">
+                <MenuPanel categories={categories} items={items} onAddItem={handleAddItem} layout="horizontal" orderType={orderType} />
+              </div>
+            </div>
+          )}
 
-          {/* ── ORDER ITEMS SECTION ── */}
-          <div className="flex-1 flex flex-col overflow-hidden min-h-0 px-3 pt-2">
-            <div className="flex items-center justify-between mb-2 flex-shrink-0">
-              <span className="text-[11px] font-bold text-gray-400 tracking-widest uppercase">Order Items</span>
+          {/* ── Order Tab ── */}
+          {mobileTab === "order" && (
+            <div className="h-full flex flex-col overflow-hidden">
+              {orderType === "dine_in" && selectedTable && (
+                <div className="px-3 pt-3 pb-2 flex-shrink-0">
+                  {tableHeader}
+                </div>
+              )}
+              {(orderType === "takeaway" || orderType === "delivery") && customerName && (
+                <div className="px-3 pt-3 pb-2 flex-shrink-0">
+                  <div className="bg-surface-hover/60 rounded-xl px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">Customer: </span>
+                    <span className="text-foreground font-semibold">{customerName}</span>
+                    {customerPhone && <span className="text-muted-foreground"> · {customerPhone}</span>}
+                  </div>
+                </div>
+              )}
+              <div className="px-3 pb-1 flex-shrink-0 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Order Items</span>
+                {cartCount > 0 && (
+                  <span className="text-[10px] bg-red-500/20 text-red-700 border border-red-500/30 rounded-full px-2 py-0.5 font-semibold">
+                    {cartCount} items
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 overflow-hidden min-h-0 px-3">
+                <OrderTicket
+                  items={cartItems}
+                  onUpdateQty={handleUpdateQty}
+                  onRemove={handleRemoveItem}
+                  onVoid={handleVoidItem}
+                />
+              </div>
+              {/* Discount controls — manager only (mobile) */}
               {cartItems.length > 0 && (
-                <span className="text-[10px] bg-orange-500/20 text-orange-300 border border-orange-500/30 rounded-full px-2 py-0.5 font-semibold">
-                  {cartItems.reduce((s, i) => s + i.quantity, 0)} items
+                <div className="px-3 pt-1 flex-shrink-0">
+                  {isManager ? (
+                    <>
+                      {happyHour && discount === 0 && (
+                        <button onClick={() => handleSetDiscount(Math.round(subtotal * 0.1 * 100) / 100, "Happy Hour 10%")}
+                          className="w-full py-1.5 bg-purple-100 border border-purple-300 rounded-lg text-purple-700 text-xs font-semibold hover:bg-purple-200 transition-colors no-select">
+                          🎉 Happy Hour — tap to apply 10% off
+                        </button>
+                      )}
+                      {discount > 0 && (
+                        <div className="flex items-center justify-between bg-yellow-100 border border-yellow-300/40 rounded-lg px-3 py-1.5 text-xs">
+                          <span className="text-yellow-700 font-semibold">Discount: -{formatCurrency(discount)}</span>
+                          <button onClick={() => handleSetDiscount(0, "")} className="text-muted-foreground hover:text-red-600 text-[10px]">✕ Remove</button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-surface-hover/60 border border-border rounded-lg px-3 py-1.5">
+                      <span className="text-muted-foreground text-xs">🔒</span>
+                      <span className="text-muted-foreground text-xs">Discounts — Manager only</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {actionButtons}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Tab Bar */}
+        <div className="flex-shrink-0 flex border-t border-border bg-surface">
+          {mobileTabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setMobileTab(tab.key)}
+              className={`flex-1 relative flex flex-col items-center justify-center py-3 gap-0.5 transition-colors no-select ${
+                mobileTab === tab.key
+                  ? "text-red-600 border-t-2 border-red-400 -mt-[2px]"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-xl leading-none">{tab.icon}</span>
+              <span className="text-[10px] font-semibold">{tab.label}</span>
+              {tab.badge !== null && (
+                <span className="absolute top-1.5 right-[calc(50%-22px)] bg-red-500 text-white text-[9px] font-black rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 leading-none">
+                  {tab.badge}
                 </span>
               )}
-            </div>
-            <div className="flex-1 overflow-hidden min-h-0">
-              <OrderTicket
-                items={cartItems}
-                discount={discount}
-                onUpdateQty={handleUpdateQty}
-                onRemove={handleRemoveItem}
-                onSetDiscount={handleSetDiscount}
-              />
-            </div>
-          </div>
-
-          {/* ── Happy hour ── */}
-          {happyHour && discount === 0 && cartItems.length > 0 && (
-            <div className="px-3 pt-2 flex-shrink-0">
-              <button onClick={() => handleSetDiscount(Math.round(subtotal * 0.1 * 100) / 100, "Happy Hour 10%")}
-                className="w-full py-2 bg-purple-900/40 border border-purple-600/60 rounded-lg text-purple-300 text-xs font-semibold hover:bg-purple-800/50 transition-colors no-select">
-                🎉 Apply Happy Hour 10% Discount
-              </button>
-            </div>
-          )}
-
-          {/* ── Status message ── */}
-          {status && (
-            <div className="px-3 pt-2 flex-shrink-0">
-              <div className="bg-blue-900/40 border border-blue-600/50 rounded-lg px-3 py-2 text-blue-300 text-xs text-center">{status}</div>
-            </div>
-          )}
-
-          {/* ── Action Buttons ── */}
-          <div className="px-3 py-3 flex-shrink-0 border-t border-gray-800/60 mt-2 space-y-2">
-            <button onClick={handleSendToKitchen} disabled={loading || cartItems.length === 0}
-              className="pos-btn no-select w-full h-11 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2">
-              {loading ? <span className="opacity-60">Processing…</span> : <><span>🍳</span><span>Send to Kitchen</span></>}
             </button>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={handlePayment} disabled={loading || cartItems.length === 0}
-                className="pos-btn no-select h-11 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-1.5">
-                <span>💳</span>
-                <span>{cartItems.length > 0 ? formatCurrency(total) : "Pay"}</span>
-              </button>
-              <button onClick={handleClear} disabled={loading}
-                className="pos-btn no-select h-11 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white font-semibold rounded-xl transition-all text-sm flex items-center justify-center gap-1.5">
-                <span>🗑️</span><span>Clear</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Panel - Menu */}
-        <div className="flex-1 overflow-hidden flex flex-col p-3">
-          <MenuPanel
-            categories={categories}
-            items={items}
-            onAddItem={handleAddItem}
-          />
+          ))}
         </div>
       </div>
+
+      {/* Status Toast — appears near the last tap/click */}
+      {status && (
+        <div
+          className="fixed z-50 pointer-events-none transition-opacity"
+          style={clickPos ? {
+            left: Math.min(clickPos.x, window.innerWidth - 220),
+            top: Math.max(clickPos.y - 52, 64),
+          } : { top: 64, left: "50%", transform: "translateX(-50%)" }}
+        >
+          <div className="bg-surface border border-red-500/70 text-foreground text-xs font-semibold px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 whitespace-nowrap">
+            <span className="text-red-600">⚠️</span>
+            <span>{status}</span>
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
       <PaymentModal
@@ -522,6 +1018,7 @@ export default function POSPage() {
         onClose={handlePaymentClose}
         orderId={currentOrderId}
         orderNumber={currentOrderNumber}
+        extraOrderIds={allOrderIds.filter(id => id !== currentOrderId)}
         items={cartItems}
         subtotal={subtotal}
         discount={discount}
@@ -529,6 +1026,126 @@ export default function POSPage() {
         total={total}
         onPaymentComplete={handlePaymentComplete}
       />
+
+      {/* End of Day Modal */}
+      {endOfDayOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🌙</span>
+                <h2 className="text-foreground font-bold text-lg">End of Day</h2>
+              </div>
+              <button
+                onClick={() => setEndOfDayOpen(false)}
+                className="text-muted-foreground hover:text-foreground text-xl font-bold transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {eodError && (
+                <div className="bg-red-50 border border-red-300 rounded-xl px-3 py-2.5 text-red-700 text-sm font-semibold">
+                  ⚠ {eodError}
+                </div>
+              )}
+              {eodLoading && !eodData ? (
+                <div className="text-muted-foreground text-center py-6 animate-pulse">Loading summary...</div>
+              ) : eodClosed ? (
+                /* Success State */
+                <div className="space-y-4">
+                  <div className="text-center py-4">
+                    <div className="text-4xl mb-3">✅</div>
+                    <p className="text-green-600 font-bold text-lg">Day Closed Successfully</p>
+                    <p className="text-muted-foreground text-sm mt-1">Cash drawer reconciliation complete</p>
+                  </div>
+                  <button
+                    onClick={handlePrintEod}
+                    className="w-full py-3 bg-elevated hover:bg-elevated-hover text-foreground font-bold rounded-xl transition-colors"
+                  >
+                    🖨️ Print Report
+                  </button>
+                  <button
+                    onClick={() => setEndOfDayOpen(false)}
+                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                /* Normal state */
+                <>
+                  {/* Revenue Summary */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-surface-hover rounded-xl p-3">
+                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Revenue</div>
+                      <div className="text-red-600 text-xl font-bold">
+                        £{(eodData?.total_revenue || 0).toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="bg-surface-hover rounded-xl p-3">
+                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Orders</div>
+                      <div className="text-blue-600 text-xl font-bold">{eodData?.total_orders || 0}</div>
+                    </div>
+                    <div className="bg-surface-hover rounded-xl p-3">
+                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💵 Cash</div>
+                      <div className="text-green-600 text-xl font-bold">£{(eodData?.cash_total || 0).toFixed(2)}</div>
+                    </div>
+                    <div className="bg-surface-hover rounded-xl p-3">
+                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💳 Card</div>
+                      <div className="text-purple-600 text-xl font-bold">£{(eodData?.card_total || 0).toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  {(eodData?.open_orders || 0) > 0 && (
+                    <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5">
+                      <span className="text-amber-600">⚠️</span>
+                      <p className="text-amber-700 text-xs font-semibold">
+                        {eodData?.open_orders} open order{(eodData?.open_orders || 0) > 1 ? "s" : ""} still outstanding
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Closing Cash Input */}
+                  <div>
+                    <label className="block text-muted-foreground text-xs font-semibold mb-1.5">
+                      Closing Cash Count (£)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={eodClosingCash}
+                      onChange={(e) => setEodClosingCash(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={handlePrintEod}
+                      disabled={!eodData}
+                      className="py-3 bg-elevated hover:bg-elevated-hover disabled:opacity-40 text-foreground font-bold rounded-xl transition-colors text-sm"
+                    >
+                      🖨️ Print
+                    </button>
+                    <button
+                      onClick={handleCloseDay}
+                      disabled={eodLoading}
+                      className="py-3 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm"
+                    >
+                      {eodLoading ? "Closing..." : "🔒 Close Day"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

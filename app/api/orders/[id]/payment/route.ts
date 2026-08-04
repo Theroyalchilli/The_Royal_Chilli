@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import getDb from "@/lib/db";
+import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { awardPurchasePoints } from "@/lib/customers";
 
 export async function POST(
   req: NextRequest,
@@ -13,7 +14,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const { method, amount, change_given, reference } = await req.json();
+    const { method, amount, tip_amount, change_given, reference, extraOrderIds } = await req.json();
 
     if (!method || !amount) {
       return NextResponse.json(
@@ -22,13 +23,13 @@ export async function POST(
       );
     }
 
-    const db = getDb();
+    const { data: order, error: fetchError } = await supabase
+      .from("orders")
+      .select("id, total, amount_paid, table_id, status, customer_id")
+      .eq("id", id)
+      .single();
 
-    const order = db
-      .prepare("SELECT * FROM orders WHERE id = ?")
-      .get(id) as { id: number; total: number; table_id: number | null; status: string } | undefined;
-
-    if (!order) {
+    if (fetchError || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -39,25 +40,62 @@ export async function POST(
       );
     }
 
-    // Record payment
-    db.prepare(`
-      INSERT INTO payments (order_id, method, amount, change_given, reference, staff_id)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, method, amount, change_given || 0, reference || null, session.id);
-
-    // Mark order as paid
-    db.prepare(
-      "UPDATE orders SET status = 'paid', updated_at = datetime('now') WHERE id = ?"
-    ).run(id);
-
-    // Free the table
-    if (order.table_id) {
-      db.prepare(
-        "UPDATE restaurant_tables SET status = 'available' WHERE id = ?"
-      ).run(order.table_id);
+    const remainingBefore = Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100;
+    if (Number(amount) > remainingBefore + 0.01) {
+      return NextResponse.json(
+        { error: `Amount exceeds the remaining balance of £${remainingBefore.toFixed(2)}` },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ success: true });
+    // Record payment — the trigger on payments updates orders.amount_paid automatically.
+    const { error: paymentError } = await supabase
+      .from("payments")
+      .insert({
+        order_id: Number(id),
+        method,
+        amount,
+        tip_amount: tip_amount || 0,
+        change_given: change_given || 0,
+        reference: reference || null,
+        staff_id: session.id,
+      });
+    if (paymentError) throw paymentError;
+
+    const { data: refreshed } = await supabase.from("orders").select("total, amount_paid").eq("id", id).single();
+    const isFullyPaid = refreshed && Number(refreshed.amount_paid) >= Number(refreshed.total) - 0.01;
+
+    if (isFullyPaid) {
+      await supabase.from("orders").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", id);
+    }
+
+    // Merged/extra orders are paid in full alongside the primary one — record a real
+    // payment row for each (previously they were marked paid with no payment history at all,
+    // which would silently undercount cash/card totals in reporting).
+    if (Array.isArray(extraOrderIds) && extraOrderIds.length > 0) {
+      const { data: extraOrders } = await supabase.from("orders").select("id, total, amount_paid").in("id", extraOrderIds);
+      for (const extra of extraOrders || []) {
+        const extraRemaining = Math.round((Number(extra.total) - Number(extra.amount_paid)) * 100) / 100;
+        if (extraRemaining <= 0.01) continue;
+        await supabase.from("payments").insert({
+          order_id: extra.id, method, amount: extraRemaining, staff_id: session.id,
+          reference: reference ? `${reference} (merged with #${id})` : `Merged with #${id}`,
+        });
+        await supabase.from("orders").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", extra.id);
+      }
+    }
+
+    // Free the table only once the primary order is actually fully settled.
+    if (isFullyPaid && order.table_id) {
+      await supabase.from("restaurant_tables").update({ status: "available" }).eq("id", order.table_id);
+    }
+
+    if (isFullyPaid && order.customer_id) {
+      await awardPurchasePoints(order.customer_id, Number(order.total), order.id);
+    }
+
+    const remainingAfter = refreshed ? Math.max(0, Math.round((Number(refreshed.total) - Number(refreshed.amount_paid)) * 100) / 100) : 0;
+    return NextResponse.json({ success: true, fully_paid: isFullyPaid, remaining_balance: remainingAfter });
   } catch (error) {
     console.error("Payment error:", error);
     return NextResponse.json(

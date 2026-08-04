@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import getDb from "@/lib/db";
+import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 
 export async function GET(
@@ -13,27 +13,38 @@ export async function GET(
     }
 
     const { id } = await params;
-    const db = getDb();
 
-    const order = db
-      .prepare(`
-        SELECT o.*, rt.table_number, s.name as staff_name
-        FROM orders o
-        LEFT JOIN restaurant_tables rt ON o.table_id = rt.id
-        LEFT JOIN staff s ON o.staff_id = s.id
-        WHERE o.id = ?
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        restaurant_tables(table_number),
+        staff:staff!orders_staff_id_fkey(name)
       `)
-      .get(id);
+      .eq("id", id)
+      .single();
 
-    if (!order) {
+    if (orderError || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const items = db
-      .prepare("SELECT * FROM order_items WHERE order_id = ? ORDER BY created_at")
-      .all(id);
+    const { restaurant_tables: rt, staff: s, ...orderRest } = order as typeof order & {
+      restaurant_tables: { table_number: string } | null;
+      staff: { name: string } | null;
+    };
 
-    return NextResponse.json({ order, items });
+    const { data: items, error: itemsError } = await supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", id)
+      .order("created_at");
+
+    if (itemsError) throw itemsError;
+
+    return NextResponse.json({
+      order: { ...orderRest, table_number: rt?.table_number ?? null, staff_name: s?.name ?? null },
+      items,
+    });
   } catch (error) {
     console.error("Order fetch error:", error);
     return NextResponse.json(
@@ -57,54 +68,77 @@ export async function PUT(
     const body = await req.json();
     const { status, discount, discount_reason, notes } = body;
 
-    const db = getDb();
+    const { data: order, error: fetchError } = await supabase
+      .from("orders")
+      .select("id, table_id, status, subtotal")
+      .eq("id", id)
+      .single();
 
-    const order = db
-      .prepare("SELECT * FROM orders WHERE id = ?")
-      .get(id) as { id: number; table_id: number | null; status: string } | undefined;
-
-    if (!order) {
+    if (fetchError || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
     if (status) {
-      db.prepare(
-        "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?"
-      ).run(status, id);
+      const { error } = await supabase
+        .from("orders")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
 
       // Free table when order is paid or cancelled
       if ((status === "paid" || status === "cancelled") && order.table_id) {
-        db.prepare(
-          "UPDATE restaurant_tables SET status = 'available' WHERE id = ?"
-        ).run(order.table_id);
+        await supabase
+          .from("restaurant_tables")
+          .update({ status: "available" })
+          .eq("id", order.table_id);
       }
     }
 
     if (discount !== undefined) {
-      const existing = db
-        .prepare("SELECT subtotal FROM orders WHERE id = ?")
-        .get(id) as { subtotal: number };
-      const taxableAmount = existing.subtotal - discount;
+      const existingSubtotal = (order as { subtotal: number }).subtotal;
+      const taxableAmount = existingSubtotal - discount;
       const tax = Math.round(taxableAmount * 0.2 * 100) / 100;
       const total = Math.round((taxableAmount + tax) * 100) / 100;
 
-      db.prepare(
-        `UPDATE orders SET discount = ?, discount_reason = ?, tax = ?, total = ?,
-         notes = COALESCE(?, notes), updated_at = datetime('now') WHERE id = ?`
-      ).run(discount, discount_reason || null, tax, total, notes || null, id);
+      const updatePayload: Record<string, unknown> = {
+        discount,
+        discount_reason: discount_reason || null,
+        tax,
+        total,
+        updated_at: new Date().toISOString(),
+      };
+      if (notes) updatePayload.notes = notes;
+
+      const { error } = await supabase
+        .from("orders")
+        .update(updatePayload)
+        .eq("id", id);
+
+      if (error) throw error;
     }
 
-    const updated = db
-      .prepare(`
-        SELECT o.*, rt.table_number, s.name as staff_name
-        FROM orders o
-        LEFT JOIN restaurant_tables rt ON o.table_id = rt.id
-        LEFT JOIN staff s ON o.staff_id = s.id
-        WHERE o.id = ?
+    const { data: updated, error: updError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        restaurant_tables(table_number),
+        staff:staff!orders_staff_id_fkey(name)
       `)
-      .get(id);
+      .eq("id", id)
+      .single();
 
-    return NextResponse.json({ success: true, order: updated });
+    if (updError) throw updError;
+
+    const { restaurant_tables: rt, staff: s, ...orderRest } = updated as typeof updated & {
+      restaurant_tables: { table_number: string } | null;
+      staff: { name: string } | null;
+    };
+
+    return NextResponse.json({
+      success: true,
+      order: { ...orderRest, table_number: rt?.table_number ?? null, staff_name: s?.name ?? null },
+    });
   } catch (error) {
     console.error("Order update error:", error);
     return NextResponse.json(
@@ -125,20 +159,29 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const db = getDb();
 
-    const order = db
-      .prepare("SELECT * FROM orders WHERE id = ?")
-      .get(id) as { id: number; table_id: number | null } | undefined;
+    const { data: order, error: fetchError } = await supabase
+      .from("orders")
+      .select("id, table_id")
+      .eq("id", id)
+      .single();
 
-    if (!order) {
+    if (fetchError || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    db.prepare("UPDATE orders SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(id);
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw error;
 
     if (order.table_id) {
-      db.prepare("UPDATE restaurant_tables SET status = 'available' WHERE id = ?").run(order.table_id);
+      await supabase
+        .from("restaurant_tables")
+        .update({ status: "available" })
+        .eq("id", order.table_id);
     }
 
     return NextResponse.json({ success: true });

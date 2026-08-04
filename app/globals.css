@@ -3,26 +3,31 @@
 @tailwind utilities;
 
 @layer base {
+  /* Cream + red theme — the only theme; there is no dark mode. */
   :root {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 14%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 14%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 24 95% 53%;
+    --background: 48 100% 96%;
+    --foreground: 20 14% 11%;
+    --surface: 0 0% 100%;
+    --surface-hover: 40 30% 94%;
+    --elevated: 40 20% 88%;
+    --elevated-hover: 40 18% 82%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14% 11%;
+    --primary: 0 72% 51%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 22%;
-    --input: 217 33% 22%;
-    --ring: 24 95% 53%;
+    --secondary: 40 20% 92%;
+    --secondary-foreground: 20 14% 11%;
+    --muted: 40 20% 92%;
+    --muted-foreground: 25 8% 45%;
+    --accent: 40 20% 92%;
+    --accent-foreground: 20 14% 11%;
+    --destructive: 0 74% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 15% 85%;
+    --input: 40 15% 85%;
+    --ring: 0 72% 51%;
     --radius: 0.5rem;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -60,16 +65,16 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(222 47% 11%);
+  background: hsl(var(--background));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(217 33% 30%);
+  background: hsl(var(--border));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(217 33% 40%);
+  background: hsl(var(--muted-foreground));
 }
 
 /* Prevent text selection on touch buttons */
@@ -82,6 +87,16 @@ html {
 .pos-btn:active {
   transform: scale(0.97);
   transition: transform 0.08s ease;
+}
+
+/* Hero background crossfade — plays on mount, so each rotation (a fresh
+   <img> via React key change) fades in instead of popping in abruptly. */
+@keyframes hero-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-hero-fade {
+  animation: hero-fade 1s ease-in-out forwards;
 }
 
 /* Veg indicator dot */

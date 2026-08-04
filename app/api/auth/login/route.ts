@@ -1,37 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import getDb from "@/lib/db";
+import supabase from "@/lib/supabase";
 import { createSession, getSessionCookieOptions } from "@/lib/auth";
 import type { Staff } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, pin } = await req.json();
+    const { username, password } = await req.json();
 
-    if (!name || !pin) {
+    if (!username || !password) {
       return NextResponse.json(
-        { error: "Name and PIN required" },
+        { error: "Username and password required" },
         { status: 400 }
       );
     }
 
-    const db = getDb();
-    const staff = db
-      .prepare(
-        "SELECT * FROM staff WHERE name = ? AND active = 1"
-      )
-      .get(name) as Staff | undefined;
+    const { data, error } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("username", username.trim().toLowerCase())
+      .eq("active", 1)
+      .single();
 
-    if (!staff) {
+    if (error || !data || !data.password_hash) {
       return NextResponse.json(
-        { error: "Staff member not found" },
+        { error: "Invalid username or password" },
         { status: 401 }
       );
     }
 
-    const valid = bcrypt.compareSync(pin, staff.pin_hash);
+    const staff = data as Staff;
+    const valid = await bcrypt.compare(password, staff.password_hash!);
     if (!valid) {
-      return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
     }
 
     const token = await createSession({

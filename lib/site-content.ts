@@ -4,7 +4,7 @@
 export const siteContent = {
   hero: {
     tag: "Authentic Indian Cuisine · London",
-    line1: "From the Heart",
+    line1: "Dil Se Desi",
     line2: "Royal in Taste, Rich in Tradition",
     desc: "Experience the rich flavours and time-honoured traditions of authentic Indian cooking — every dish crafted with love, care, and passion in the heart of London.",
     bgImages: [

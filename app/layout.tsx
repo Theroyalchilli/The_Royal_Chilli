@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins, Playfair_Display, Cinzel } from "next/font/google";
+import { Poppins, Playfair_Display, Cinzel, Work_Sans } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
 import "./globals.css";
 
@@ -16,6 +16,12 @@ const cinzel = Cinzel({
   subsets: ["latin"],
   weight: ["700", "900"],
   variable: "--font-cinzel",
+});
+
+const workSans = Work_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400"],
+  variable: "--font-worksans",
 });
 
 export const metadata: Metadata = {
@@ -36,7 +42,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${poppins.variable} ${playfair.variable} ${cinzel.variable} ${poppins.className} antialiased`}>
+      <body className={`${poppins.variable} ${playfair.variable} ${cinzel.variable} ${workSans.variable} ${poppins.className} antialiased`}>
         <PwaRegister />
         {children}
       </body>

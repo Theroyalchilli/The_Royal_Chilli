@@ -26,7 +26,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-black/65" />
         <div className="relative z-10 mx-auto max-w-3xl px-4 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">{hero.tag}</p>
-          <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-4xl font-bold italic text-white sm:text-6xl">
+          <h1 className="mt-4 font-[family-name:var(--font-worksans)] text-4xl font-light text-white sm:text-6xl">
             {hero.line1}
             <br />
             <span className="text-primary">{hero.line2}</span>

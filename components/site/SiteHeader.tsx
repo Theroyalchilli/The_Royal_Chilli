@@ -11,7 +11,7 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/menu", label: "Menu" },
   { href: "/order", label: "Order Online" },
-  { href: "/reservations", label: "Reservations" },
+  { href: "/reservations", label: "Book a Table" },
   { href: "/gallery", label: "Gallery" },
 ];
 

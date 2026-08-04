@@ -37,7 +37,7 @@ export default function HomePage() {
               Order Online
             </Link>
             <Link href="/reservations" className="rounded-full border border-white/40 px-6 py-3 font-semibold text-white hover:bg-white/10">
-              Reserve a Table
+              Book a Table
             </Link>
           </div>
         </div>

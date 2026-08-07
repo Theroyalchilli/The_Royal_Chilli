@@ -16,7 +16,29 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ tables });
+    // Oldest active order per table = when it actually became occupied,
+    // for the attention-SLA timer (not just the "occupied" status flag,
+    // which a busy shift can forget to clear).
+    const { data: activeOrders } = await supabase
+      .from("orders")
+      .select("table_id, created_at")
+      .not("table_id", "is", null)
+      .in("status", ["open", "sent_to_kitchen", "ready"])
+      .order("created_at", { ascending: true });
+
+    const occupiedSinceByTable = new Map<number, string>();
+    for (const o of activeOrders || []) {
+      if (o.table_id != null && !occupiedSinceByTable.has(o.table_id)) {
+        occupiedSinceByTable.set(o.table_id, o.created_at);
+      }
+    }
+
+    const tablesWithTiming = (tables || []).map((t) => ({
+      ...t,
+      occupied_since: occupiedSinceByTable.get(t.id) ?? null,
+    }));
+
+    return NextResponse.json({ tables: tablesWithTiming });
   } catch (error) {
     console.error("Tables fetch error:", error);
     return NextResponse.json(

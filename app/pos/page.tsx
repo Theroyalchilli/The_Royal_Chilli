@@ -14,6 +14,7 @@ import type {
   MenuItem,
   RestaurantTable,
   CartItem,
+  WorkPeriod,
 } from "@/lib/types";
 
 type OrderType = "dine_in" | "takeaway" | "delivery" | "online";
@@ -72,9 +73,19 @@ export default function POSPage() {
     open_orders: number;
   } | null>(null);
   const [eodClosingCash, setEodClosingCash] = useState("");
+  const [eodOpeningCash, setEodOpeningCash] = useState(0);
   const [eodLoading, setEodLoading] = useState(false);
   const [eodClosed, setEodClosed] = useState(false);
   const [eodError, setEodError] = useState("");
+
+  // Till (shift) open/close gate
+  const [tillPeriod, setTillPeriod] = useState<WorkPeriod | null>(null);
+  const [tillChecked, setTillChecked] = useState(false);
+  const [tillFetchFailed, setTillFetchFailed] = useState(false);
+  const [tillBypassed, setTillBypassed] = useState(false);
+  const [openingCashInput, setOpeningCashInput] = useState("");
+  const [openTillLoading, setOpenTillLoading] = useState(false);
+  const [openTillError, setOpenTillError] = useState("");
 
   // Track last click/tap position for context-aware toast
   useEffect(() => {
@@ -118,7 +129,50 @@ export default function POSPage() {
   useEffect(() => {
     loadMenuData();
     loadSession();
+    checkTillStatus();
   }, []);
+
+  const checkTillStatus = async () => {
+    try {
+      const res = await fetch("/api/work-periods", { cache: "no-store" });
+      if (!res.ok) throw new Error("failed");
+      const data = await res.json();
+      setTillPeriod(data.period && data.period.status === "open" ? data.period : null);
+      setTillFetchFailed(false);
+    } catch {
+      // Fail open — never lock staff out of taking orders because of a network blip.
+      setTillFetchFailed(true);
+    } finally {
+      setTillChecked(true);
+    }
+  };
+
+  const handleOpenTill = async () => {
+    setOpenTillLoading(true);
+    setOpenTillError("");
+    try {
+      const res = await fetch("/api/work-periods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opening_cash: parseFloat(openingCashInput) || 0,
+          staff_id: session?.id,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTillPeriod(data.period);
+        setOpeningCashInput("");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setOpenTillError(data.error || "Failed to open the till. Try again.");
+      }
+    } catch {
+      setOpenTillError("Failed to open the till. Try again.");
+    } finally {
+      setOpenTillLoading(false);
+    }
+  };
 
 
   const loadSession = async () => {
@@ -416,6 +470,7 @@ export default function POSPage() {
       if (res.ok) {
         const data = await res.json();
         setEodData(data.summary);
+        setEodOpeningCash(data.period?.opening_cash || 0);
       } else {
         setEodError("Couldn't load today's summary. Try again.");
       }
@@ -440,6 +495,7 @@ export default function POSPage() {
       });
       if (res.ok) {
         setEodClosed(true);
+        setTillPeriod(null);
       } else {
         const data = await res.json().catch(() => ({}));
         setEodError(data.error || "Failed to close the day. Try again.");
@@ -475,11 +531,13 @@ export default function POSPage() {
     <div class="row"><span class="label">Total Orders</span><span class="value">${eodData.total_orders}</span></div>
     <div class="row"><span class="label">Total Revenue</span><span class="value total">£${eodData.total_revenue.toFixed(2)}</span></div>
     <div class="divider"></div>
-    <div class="row"><span class="label">💵 Cash</span><span class="value">£${eodData.cash_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">💵 Cash Sales</span><span class="value">£${eodData.cash_total.toFixed(2)}</span></div>
     <div class="row"><span class="label">💳 Card</span><span class="value">£${eodData.card_total.toFixed(2)}</span></div>
     <div class="divider"></div>
+    <div class="row"><span class="label">Opening Float</span><span class="value">£${eodOpeningCash.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.cash_total).toFixed(2)}</span></div>
     <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
-    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - eodData.cash_total).toFixed(2)}</span></div>
+    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.cash_total)).toFixed(2)}</span></div>
     <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
     </body></html>`;
     const w = window.open("", "_blank", "width=400,height=600");
@@ -616,6 +674,20 @@ export default function POSPage() {
                 <span className="text-[10px] text-muted-foreground capitalize bg-elevated px-1.5 py-0.5 rounded">{session.role}</span>
               </div>
             )}
+            {tillChecked && !tillFetchFailed && (
+              tillPeriod ? (
+                <div title={`Opened ${new Date(tillPeriod.opened_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · Float £${tillPeriod.opening_cash.toFixed(2)}`}
+                  className="hidden xl:flex items-center gap-1.5 mr-1 px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <span className="text-green-700 text-[11px] font-bold">Till Open</span>
+                </div>
+              ) : (
+                <div className="hidden xl:flex items-center gap-1.5 mr-1 px-2.5 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  <span className="text-red-700 text-[11px] font-bold">Till Closed</span>
+                </div>
+              )
+            )}
             <button onClick={() => router.push("/staff")}
               className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               👥 Staff Hub
@@ -658,6 +730,11 @@ export default function POSPage() {
                     <div className="px-3 py-2 border-b border-border">
                       <p className="text-foreground text-xs font-semibold">{session.name}</p>
                       <p className="text-muted-foreground text-[10px] capitalize">{session.role}</p>
+                      {tillChecked && !tillFetchFailed && (
+                        <p className={`text-[10px] font-bold mt-0.5 ${tillPeriod ? "text-green-600" : "text-red-600"}`}>
+                          {tillPeriod ? "🟢 Till Open" : "🔴 Till Closed"}
+                        </p>
+                      )}
                     </div>
                   )}
                   <button onClick={() => { setShowMobileMenu(false); router.push("/staff"); }}
@@ -1108,6 +1185,12 @@ export default function POSPage() {
                     </div>
                   )}
 
+                  {/* Opening float + expected cash */}
+                  <div className="flex items-center justify-between bg-surface-hover rounded-xl px-3 py-2.5 text-xs">
+                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Sales</span>
+                    <span className="text-foreground font-bold">£{(eodOpeningCash + (eodData?.cash_total || 0)).toFixed(2)} expected</span>
+                  </div>
+
                   {/* Closing Cash Input */}
                   <div>
                     <label className="block text-muted-foreground text-xs font-semibold mb-1.5">
@@ -1122,6 +1205,11 @@ export default function POSPage() {
                       placeholder="0.00"
                       className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
                     />
+                    {eodClosingCash && eodData && (
+                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.cash_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
+                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.cash_total)).toFixed(2)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -1141,6 +1229,59 @@ export default function POSPage() {
                     </button>
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Open Till gate ──
+          No open work_period for today: block ordering until a float is
+          counted in. Managers get an escape hatch so a bug in this check
+          can never lock the whole team out mid-service. */}
+      {tillChecked && !tillFetchFailed && !tillPeriod && !tillBypassed && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-sm mx-4 shadow-2xl">
+            <div className="px-6 py-5 border-b border-border text-center">
+              <div className="text-3xl mb-2">🔐</div>
+              <h2 className="text-foreground font-bold text-lg">Till Closed</h2>
+              <p className="text-muted-foreground text-xs mt-1">Count in the float to open the till and start taking orders.</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {openTillError && (
+                <div className="bg-red-50 border border-red-300 rounded-xl px-3 py-2.5 text-red-700 text-sm font-semibold">
+                  ⚠ {openTillError}
+                </div>
+              )}
+              <div>
+                <label className="block text-muted-foreground text-xs font-semibold mb-1.5">
+                  Opening Cash Float (£)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  autoFocus
+                  value={openingCashInput}
+                  onChange={(e) => setOpeningCashInput(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
+                />
+              </div>
+              <button
+                onClick={handleOpenTill}
+                disabled={openTillLoading}
+                className="w-full py-3 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm"
+              >
+                {openTillLoading ? "Opening…" : "🔓 Open Till"}
+              </button>
+              {isManager && (
+                <button
+                  onClick={() => setTillBypassed(true)}
+                  className="w-full text-center text-muted-foreground hover:text-foreground text-xs font-semibold underline underline-offset-2"
+                >
+                  Continue without opening (manager)
+                </button>
               )}
             </div>
           </div>

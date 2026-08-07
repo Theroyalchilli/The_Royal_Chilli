@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn, TABLE_ATTENTION_MINUTES, minutesSince, tableElapsedLabel } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/types";
 
 interface Props {
@@ -61,6 +61,8 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
               {group.map(table => {
                 const isSelected = selectedTable === table.id;
                 const status = table.status as "available" | "occupied" | "reserved";
+                const elapsedMins = table.occupied_since ? minutesSince(table.occupied_since) : null;
+                const needsAttention = status === "occupied" && elapsedMins !== null && elapsedMins >= TABLE_ATTENTION_MINUTES;
 
                 const statusCfg = {
                   available: {
@@ -84,7 +86,14 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
                     label:  "text-amber-600",
                     text:   "Rsv",
                   },
-                }[status];
+                  attention: {
+                    card:   "bg-orange-100 border-orange-400 hover:border-orange-500",
+                    stripe: "bg-orange-600",
+                    num:    "text-orange-800",
+                    label:  "text-orange-700",
+                    text:   "Attention",
+                  },
+                }[needsAttention ? "attention" : status];
 
                 return (
                   <button
@@ -104,14 +113,17 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
                       isSelected ? "bg-blue-400" : statusCfg.stripe
                     )} />
 
-                    {/* Pulsing dot for occupied */}
+                    {/* Pulsing dot for occupied / attention */}
                     {status === "occupied" && !isSelected && (
                       <div className="absolute top-2 right-2">
                         <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60" />
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
+                          <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-60", needsAttention ? "bg-orange-400" : "bg-red-400")} />
+                          <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", needsAttention ? "bg-orange-600" : "bg-red-500")} />
                         </span>
                       </div>
+                    )}
+                    {needsAttention && !isSelected && (
+                      <div className="absolute top-1.5 left-1.5 text-[10px]">⚠️</div>
                     )}
                     {isSelected && (
                       <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-blue-400" />
@@ -133,9 +145,9 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
                       {isSelected ? "Selected" : statusCfg.text}
                     </span>
 
-                    {/* Capacity */}
-                    <span className="text-[9px] text-muted-foreground leading-none mt-0.5">
-                      {table.capacity}p
+                    {/* Capacity / elapsed time */}
+                    <span className={cn("text-[9px] leading-none mt-0.5", needsAttention ? "text-orange-700 font-bold" : "text-muted-foreground")}>
+                      {elapsedMins !== null ? `${table.capacity}p · ${tableElapsedLabel(elapsedMins)}` : `${table.capacity}p`}
                     </span>
                   </button>
                 );

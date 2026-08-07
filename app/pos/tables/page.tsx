@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { RestaurantTable } from "@/lib/types";
+import { TABLE_ATTENTION_MINUTES, minutesSince, tableElapsedLabel } from "@/lib/utils";
 
 const tableStatusCfg = {
   available: { label: "Available", color: "bg-green-100 border-green-300 text-green-700", dot: "bg-green-500", ring: "ring-green-500" },
   occupied:  { label: "Occupied",  color: "bg-red-100 border-red-300 text-red-700",       dot: "bg-red-500",   ring: "ring-red-500"   },
   reserved:  { label: "Reserved",  color: "bg-yellow-100 border-yellow-300 text-yellow-700", dot: "bg-yellow-500", ring: "ring-yellow-500" },
+  attention: { label: "Needs Attention", color: "bg-orange-100 border-orange-400 text-orange-800", dot: "bg-orange-600", ring: "ring-orange-500" },
 };
 
 const resvStatusCfg: Record<string, { label: string; color: string; bg: string }> = {
@@ -275,6 +277,7 @@ export default function TablesPage() {
     available: tables.filter(t => t.status === "available").length,
     occupied:  tables.filter(t => t.status === "occupied").length,
     reserved:  tables.filter(t => t.status === "reserved").length,
+    attention: tables.filter(t => t.status === "occupied" && t.occupied_since && minutesSince(t.occupied_since) >= TABLE_ATTENTION_MINUTES).length,
   };
 
   const resvBadge = reservations.filter(r => r.status === "pending").length;
@@ -296,6 +299,9 @@ export default function TablesPage() {
             <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-green-700 text-sm">{summary.available} Free</span></div>
             <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-red-700 text-sm">{summary.occupied} Occupied</span></div>
             <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /><span className="text-yellow-700 text-sm">{summary.reserved} Reserved</span></div>
+            {summary.attention > 0 && (
+              <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 animate-pulse" /><span className="text-orange-700 text-sm font-bold">{summary.attention} Needs Attention</span></div>
+            )}
           </div>
         </div>
 
@@ -354,15 +360,19 @@ export default function TablesPage() {
                     </h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                       {locTables.map(table => {
-                        const cfg = tableStatusCfg[table.status];
+                        const elapsedMins = table.occupied_since ? minutesSince(table.occupied_since) : null;
+                        const needsAttention = table.status === "occupied" && elapsedMins !== null && elapsedMins >= TABLE_ATTENTION_MINUTES;
+                        const cfg = tableStatusCfg[needsAttention ? "attention" : table.status];
                         return (
                           <div key={table.id} className={`rounded-2xl border-2 p-4 ${cfg.color} transition-all`}>
                             <div className="flex items-center justify-between mb-3">
                               <span className="text-2xl font-black">{table.table_number}</span>
-                              <span className={`w-3 h-3 rounded-full ${cfg.dot}`} />
+                              <span className={`w-3 h-3 rounded-full ${cfg.dot} ${needsAttention ? "animate-pulse" : ""}`} />
                             </div>
-                            <div className="text-sm font-semibold mb-1">{cfg.label}</div>
-                            <div className="text-xs opacity-70 mb-3">{table.capacity} seats</div>
+                            <div className="text-sm font-semibold mb-1">{needsAttention ? "⚠️ " : ""}{cfg.label}</div>
+                            <div className="text-xs opacity-70 mb-3">
+                              {table.capacity} seats{elapsedMins !== null ? ` · ${tableElapsedLabel(elapsedMins)}` : ""}
+                            </div>
                             <div className="space-y-1.5">
                               {table.status !== "available" && (
                                 <button onClick={() => handleTableStatus(table.id, "available")}

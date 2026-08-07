@@ -40,3 +40,16 @@ export function getTimeElapsed(dateStr: string): string {
   const mins = diffMins % 60;
   return `${hours}h ${mins}m ago`;
 }
+
+// A table occupied longer than this without being cleared/paid is flagged
+// for staff attention (unattended guests, forgotten bill, stalled kitchen).
+export const TABLE_ATTENTION_MINUTES = 45;
+
+export function minutesSince(dateStr: string): number {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+}
+
+export function tableElapsedLabel(mins: number): string {
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}

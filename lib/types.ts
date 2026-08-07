@@ -158,6 +158,7 @@ export interface RestaurantTable {
   capacity: number;
   status: "available" | "occupied" | "reserved";
   location: "main" | "outdoor" | "private";
+  occupied_since?: string | null; // created_at of the table's oldest active order, if any
 }
 
 export interface WorkPeriod {

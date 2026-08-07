@@ -514,21 +514,19 @@ function ChecklistTab({ staffId }: { staffId: number }) {
 }
 
 // ── Employee picker + main ──────────────────────────────────────────────────
-function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSelect: (s: Staff) => void }) {
-  const [employees, setEmployees] = useState<Staff[]>([]);
+function EmployeePicker({ employees, selected, onSelect, onAddNew }: { employees: Staff[]; selected: Staff | null; onSelect: (s: Staff) => void; onAddNew: () => void }) {
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    fetch("/api/employees").then((r) => r.json()).then((d) => setEmployees(d.employees || []));
-  }, []);
 
   const filtered = employees.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
-      <div className="p-2 border-b border-border">
+      <div className="p-2 border-b border-border space-y-2">
         <input placeholder="Search employee…" value={search} onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <button onClick={onAddNew} className="w-full px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">
+          + New Employee
+        </button>
       </div>
       <div className="max-h-[420px] overflow-y-auto">
         {filtered.map((e) => (
@@ -544,6 +542,105 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
   );
 }
 
+// ── New Employee modal ──────────────────────────────────────────────────────
+const ROLES: { value: string; label: string }[] = [
+  { value: "employee", label: "Employee" }, { value: "waiter", label: "Waiter" }, { value: "chef", label: "Chef" },
+  { value: "kitchen", label: "Kitchen Staff" }, { value: "cashier", label: "Cashier" }, { value: "driver", label: "Driver" },
+  { value: "supervisor", label: "Supervisor" }, { value: "inventory_manager", label: "Inventory Manager" },
+  { value: "accountant", label: "Accountant" }, { value: "manager", label: "Manager" }, { value: "admin", label: "Admin" }, { value: "owner", label: "Owner" },
+];
+
+function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (staff: Staff) => void }) {
+  const [form, setForm] = useState({
+    name: "", username: "", password: "", role: "employee", email: "", phone: "",
+    employment_type: "hourly" as "hourly" | "salaried", pay_rate: "0", pay_frequency: "weekly" as "weekly" | "monthly",
+    hire_date: new Date().toISOString().slice(0, 10),
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    if (!form.name.trim() || !form.username.trim() || form.password.length < 6) {
+      setError("Name and username are required, and the password needs at least 6 characters.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/employees", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(), username: form.username.trim().toLowerCase(), password: form.password, role: form.role,
+          email: form.email.trim() || null, phone: form.phone.trim() || null,
+          employment_type: form.employment_type, pay_rate: Number(form.pay_rate) || 0,
+          pay_frequency: form.pay_frequency, hire_date: form.hire_date || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create employee");
+      onCreated(data.employee);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-5 py-4 border-b border-border">
+          <h2 className="text-foreground font-bold text-lg">New Employee</h2>
+          <p className="text-muted-foreground text-xs mt-1">Creates their login account. You&apos;ll land on their HR record next to fill in onboarding, RTW and the checklist.</p>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="col-span-2 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <input placeholder="Password (6+ characters)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+              {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+            <input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <select value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value as "hourly" | "salaried" })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+              <option value="hourly">Hourly</option>
+              <option value="salaried">Salaried</option>
+            </select>
+            <select value={form.pay_frequency} onChange={(e) => setForm({ ...form, pay_frequency: e.target.value as "weekly" | "monthly" })}
+              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <div className="col-span-2 flex items-center gap-2">
+              <span className="text-muted-foreground text-sm">£</span>
+              <input type="number" step="0.01" placeholder="Pay rate" value={form.pay_rate} onChange={(e) => setForm({ ...form, pay_rate: e.target.value })}
+                className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              <span className="text-muted-foreground text-xs">{form.employment_type === "hourly" ? "per hour" : `per ${form.pay_frequency === "weekly" ? "week" : "month"}`}</span>
+            </div>
+          </div>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+        </div>
+        <div className="px-5 py-4 border-t border-border flex gap-3">
+          <button onClick={onClose} className="flex-1 h-11 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
+          <button onClick={save} disabled={saving} className="flex-1 h-11 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-xl">
+            {saving ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "onboarding", label: "Onboarding" },
   { id: "rtw", label: "RTW Verification" },
@@ -552,9 +649,18 @@ const TABS = [
 ] as const;
 
 export default function HrView() {
+  const [employees, setEmployees] = useState<Staff[]>([]);
   const [selected, setSelected] = useState<Staff | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("onboarding");
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showNewEmployee, setShowNewEmployee] = useState(false);
+
+  const loadEmployees = useCallback(async () => {
+    const res = await fetch("/api/employees");
+    const data = await res.json();
+    setEmployees(data.employees || []);
+  }, []);
+  useEffect(() => { loadEmployees(); }, [loadEmployees]);
 
   return (
     <>
@@ -577,7 +683,7 @@ export default function HrView() {
 
       <div className="px-4 py-6">
         <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
-          <EmployeePicker selected={selected} onSelect={(s) => { setSelected(s); setTab("onboarding"); }} />
+          <EmployeePicker employees={employees} selected={selected} onSelect={(s) => { setSelected(s); setTab("onboarding"); }} onAddNew={() => setShowNewEmployee(true)} />
 
           <div>
             {!selected ? (
@@ -625,6 +731,18 @@ export default function HrView() {
             <button onClick={() => setShowPrivacy(false)} className="mt-4 w-full py-2.5 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Close</button>
           </div>
         </div>
+      )}
+
+      {showNewEmployee && (
+        <NewEmployeeModal
+          onClose={() => setShowNewEmployee(false)}
+          onCreated={async (staff) => {
+            setShowNewEmployee(false);
+            await loadEmployees();
+            setSelected(staff);
+            setTab("onboarding");
+          }}
+        />
       )}
     </>
   );

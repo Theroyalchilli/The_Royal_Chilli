@@ -21,8 +21,42 @@ export async function GET(req: NextRequest) {
 
     if (ordersError) throw ordersError;
 
-    // Fetch items for each order
-    const orderIds = (orders ?? []).map((o: { id: number }) => o.id);
+    // Orders cancelled in the last 2 minutes: kitchen needs a brief, explicit
+    // "stop prep" alert instead of the ticket silently vanishing next poll.
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { data: justCancelled } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        restaurant_tables(table_number),
+        staff:staff!orders_staff_id_fkey(name)
+      `)
+      .eq("status", "cancelled")
+      .gte("updated_at", twoMinAgo);
+
+    // "Modified" ticket: this table already had an earlier order today, so
+    // this ticket represents items added mid-visit, not a fresh table.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: todaysTableOrders } = await supabase
+      .from("orders")
+      .select("table_id, created_at")
+      .not("table_id", "is", null)
+      .neq("status", "cancelled")
+      .gte("created_at", todayStart.toISOString())
+      .order("created_at", { ascending: true });
+
+    const firstOrderTimeByTable = new Map<number, string>();
+    for (const o of todaysTableOrders || []) {
+      if (o.table_id != null && !firstOrderTimeByTable.has(o.table_id)) {
+        firstOrderTimeByTable.set(o.table_id, o.created_at);
+      }
+    }
+
+    // Fetch items for each order (active + just-cancelled, so the cancelled
+    // alert card can still show what was in it)
+    const allOrderRows = [...(orders ?? []), ...(justCancelled ?? [])];
+    const orderIds = allOrderRows.map((o: { id: number }) => o.id);
 
     let itemsByOrder: Record<number, unknown[]> = {};
     if (orderIds.length > 0) {
@@ -56,16 +90,38 @@ export async function GET(req: NextRequest) {
       const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
         restaurant_tables: { table_number: string } | null;
         staff: { name: string } | null;
+        id: number;
+        table_id: number | null;
+        created_at: string;
+      };
+      const firstOrderTime = rest.table_id != null ? firstOrderTimeByTable.get(rest.table_id) : undefined;
+      return {
+        ...rest,
+        table_number: rt?.table_number ?? null,
+        staff_name: s?.name ?? null,
+        items: itemsByOrder[rest.id] ?? [],
+        is_modification: !!firstOrderTime && new Date(rest.created_at) > new Date(firstOrderTime),
+        just_cancelled: false,
+      };
+    });
+
+    const cancelledAlerts = (justCancelled ?? []).map((o) => {
+      const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
+        restaurant_tables: { table_number: string } | null;
+        staff: { name: string } | null;
+        id: number;
       };
       return {
         ...rest,
         table_number: rt?.table_number ?? null,
         staff_name: s?.name ?? null,
-        items: itemsByOrder[(o as { id: number }).id] ?? [],
+        items: itemsByOrder[rest.id] ?? [],
+        is_modification: false,
+        just_cancelled: true,
       };
     });
 
-    return NextResponse.json({ orders: ordersWithItems });
+    return NextResponse.json({ orders: [...cancelledAlerts, ...ordersWithItems] });
   } catch (error) {
     console.error("Kitchen fetch error:", error);
     return NextResponse.json(

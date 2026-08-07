@@ -194,6 +194,9 @@ export interface Order {
   // Joined fields
   table_number?: string;
   staff_name?: string;
+  // Kitchen-display-only flags (set by /api/kitchen)
+  is_modification?: boolean;
+  just_cancelled?: boolean;
 }
 
 export interface OrderItem {

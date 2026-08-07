@@ -102,7 +102,9 @@ export default function KitchenBoard() {
   };
 
   const getOrderCardClass = (order: OrderWithItems): string => {
+    if (order.just_cancelled) return "border-red-600 bg-red-200 animate-pulse";
     if (order.status === "ready") return "border-green-500 bg-green-100";
+    if (order.is_modification) return "border-orange-500 bg-orange-100";
     const age = getAgeMinutes(order.created_at);
     if (age >= 20) return "border-red-500 bg-red-100 animate-pulse";
     if (age >= 10) return "border-red-500 bg-red-100";
@@ -116,6 +118,9 @@ export default function KitchenBoard() {
     if (age >= 10) return "text-red-600";
     return "text-yellow-600";
   };
+
+  const orderHasChanges = (order: OrderWithItems): boolean =>
+    order.items.some((i) => i.status === "cancelled" || (i.original_quantity != null && i.quantity < i.original_quantity));
 
   if (loading) {
     return (
@@ -171,6 +176,14 @@ export default function KitchenBoard() {
               Ready: {orders.filter((o) => o.status === "ready").length}
             </span>
           </div>
+          {orders.some((o) => o.just_cancelled) && (
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-600 inline-block animate-pulse" />
+              <span className="text-red-600 text-xs sm:text-sm font-bold">
+                Cancelled: {orders.filter((o) => o.just_cancelled).length}
+              </span>
+            </div>
+          )}
           <div className="text-muted-foreground text-[10px] sm:text-xs hidden lg:block">
             Refreshes every 10s • Last:{" "}
             {lastRefresh.toLocaleTimeString("en-GB", {
@@ -232,19 +245,31 @@ export default function KitchenBoard() {
                   <div className="text-right">
                     <div
                       className={`text-xs font-bold px-2 py-1 rounded-full ${
-                        order.status === "sent_to_kitchen"
-                          ? "bg-yellow-600/30 text-yellow-600"
-                          : "bg-green-600/30 text-green-600"
+                        order.just_cancelled
+                          ? "bg-red-700 text-white"
+                          : order.status === "ready"
+                          ? "bg-green-600/30 text-green-600"
+                          : order.is_modification
+                          ? "bg-orange-600/30 text-orange-700"
+                          : "bg-yellow-600/30 text-yellow-600"
                       }`}
                     >
-                      {order.status === "sent_to_kitchen" ? "NEW" : "READY"}
+                      {order.just_cancelled ? "❌ CANCELLED" : order.status === "ready" ? "READY" : order.is_modification ? "🔁 ADDED ITEMS" : "NEW"}
                     </div>
-                    <div className={`text-xs font-bold mt-1 ${getTimerColor(order)}`}>
-                      {/* tick included to trigger re-render every 60s */}
-                      {tick >= 0 && getAgeMinutes(order.created_at)}m ago
-                    </div>
+                    {!order.just_cancelled && (
+                      <div className={`text-xs font-bold mt-1 ${getTimerColor(order)}`}>
+                        {/* tick included to trigger re-render every 60s */}
+                        {tick >= 0 && getAgeMinutes(order.created_at)}m ago
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {!order.just_cancelled && orderHasChanges(order) && (
+                  <div className="mb-2 -mt-1 text-[10px] font-black text-red-700 bg-red-100 border border-red-300 rounded px-2 py-1 inline-block">
+                    ⚠ ITEMS CHANGED SINCE SENT
+                  </div>
+                )}
 
                 {/* Items */}
                 <div className="border-t border-border pt-3 space-y-1.5">
@@ -306,28 +331,34 @@ export default function KitchenBoard() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="mt-3 space-y-2">
-                  <button
-                    onClick={() => window.open(`/pos/kitchen/print/${order.id}`, "_blank", "width=400,height=600")}
-                    className="pos-btn no-select w-full py-2 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-lg text-xs transition-colors"
-                  >
-                    🖨️ Print KOT
-                  </button>
-                  {order.status === "sent_to_kitchen" && (
+                {order.just_cancelled ? (
+                  <div className="mt-3 bg-red-700 rounded-lg px-3 py-2 text-center">
+                    <p className="text-white text-xs font-bold">Stop prep — guest cancelled</p>
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
                     <button
-                      onClick={() => handleStatusUpdate(order.id, "ready")}
-                      className="pos-btn no-select w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-sm transition-colors"
+                      onClick={() => window.open(`/pos/kitchen/print/${order.id}`, "_blank", "width=400,height=600")}
+                      className="pos-btn no-select w-full py-2 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-lg text-xs transition-colors"
                     >
-                      ✓ Mark Ready
+                      🖨️ Print KOT
                     </button>
-                  )}
-                  {order.status === "ready" && (
-                    <div className="bg-green-100 border border-green-300/50 rounded-lg px-3 py-2 text-center">
-                      <p className="text-green-700 text-xs font-semibold">✓ Food is Ready</p>
-                      <p className="text-muted-foreground text-[10px] mt-0.5">Cashier collects payment at POS</p>
-                    </div>
-                  )}
-                </div>
+                    {order.status === "sent_to_kitchen" && (
+                      <button
+                        onClick={() => handleStatusUpdate(order.id, "ready")}
+                        className="pos-btn no-select w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-sm transition-colors"
+                      >
+                        ✓ Mark Ready
+                      </button>
+                    )}
+                    {order.status === "ready" && (
+                      <div className="bg-green-100 border border-green-300/50 rounded-lg px-3 py-2 text-center">
+                        <p className="text-green-700 text-xs font-semibold">✓ Food is Ready</p>
+                        <p className="text-muted-foreground text-[10px] mt-0.5">Cashier collects payment at POS</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

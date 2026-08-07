@@ -339,8 +339,10 @@ function PurchaseOrdersTab({ suppliers, ingredients }: { suppliers: Supplier[]; 
 // ── Recipes ──────────────────────────────────────────────────────────────────
 function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [menuItems, setMenuItems] = useState<{ id: number; name: string }[]>([]);
   const [modal, setModal] = useState(false);
   const [name, setName] = useState("");
+  const [menuItemId, setMenuItemId] = useState(0);
   const [lines, setLines] = useState<{ ingredient_id: number; quantity: number }[]>([{ ingredient_id: 0, quantity: 0 }]);
 
   const load = useCallback(async () => {
@@ -349,19 +351,31 @@ function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
     setRecipes(data.recipes || []);
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetch("/api/menu").then((r) => r.json()).then((d) => setMenuItems((d.items || []).map((i: { id: number; name: string }) => ({ id: i.id, name: i.name }))));
+  }, []);
 
   async function save() {
     if (!name.trim()) return;
     await fetch("/api/recipes", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, ingredients: lines.filter((l) => l.ingredient_id > 0) }),
+      body: JSON.stringify({ name, menu_item_id: menuItemId || null, ingredients: lines.filter((l) => l.ingredient_id > 0) }),
     });
-    setModal(false); setName(""); setLines([{ ingredient_id: 0, quantity: 0 }]);
+    setModal(false); setName(""); setMenuItemId(0); setLines([{ ingredient_id: 0, quantity: 0 }]);
     load();
   }
 
+  // Menu items that don't have a costed recipe yet — the ones a manager
+  // actually needs to act on, so surface them instead of a full A-Z dump.
+  const uncostedMenuItems = menuItems.filter((mi) => !recipes.some((r) => r.menu_item_id === mi.id));
+
   return (
     <div>
+      {menuItems.length > 0 && uncostedMenuItems.length > 0 && (
+        <p className="mb-2 text-amber-600 text-xs">
+          ⚠ {uncostedMenuItems.length} of {menuItems.length} menu items have no recipe yet — their sales won&apos;t count toward recipe-based COGS in Finance until costed.
+        </p>
+      )}
       <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Recipe</button></div>
       <div className="mt-3 rounded-xl border border-border overflow-x-auto">
         <table className="w-full text-sm">
@@ -385,6 +399,11 @@ function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
           <div className="bg-surface border border-border rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5">
             <h2 className="text-foreground font-bold text-lg">New Recipe</h2>
             <input placeholder="Recipe name" value={name} onChange={(e) => setName(e.target.value)} className="mt-3 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <select value={menuItemId} onChange={(e) => setMenuItemId(Number(e.target.value))} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+              <option value={0}>Link to menu item (optional)…</option>
+              {menuItems.map((mi) => <option key={mi.id} value={mi.id}>{mi.name}</option>)}
+            </select>
+            <p className="mt-1 text-muted-foreground text-[11px]">Linking a menu item feeds this recipe's cost into the real P&amp;L and deducts stock automatically when it's sold.</p>
             <div className="mt-3 space-y-2">
               {lines.map((l, i) => (
                 <div key={i} className="grid grid-cols-[1fr_80px] gap-2">

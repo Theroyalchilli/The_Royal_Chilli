@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { awardPurchasePoints } from "@/lib/customers";
+import { depleteStockForOrder } from "@/lib/inventory";
 
 export async function POST(
   req: NextRequest,
@@ -67,6 +68,9 @@ export async function POST(
 
     if (isFullyPaid) {
       await supabase.from("orders").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", id);
+      // Best-effort stock depletion from recipes — never let this affect
+      // whether the payment itself succeeds.
+      depleteStockForOrder(Number(id), session.id).catch((e) => console.error("Stock depletion failed for order", id, e));
     }
 
     // Merged/extra orders are paid in full alongside the primary one — record a real
@@ -82,6 +86,7 @@ export async function POST(
           reference: reference ? `${reference} (merged with #${id})` : `Merged with #${id}`,
         });
         await supabase.from("orders").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", extra.id);
+        depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e));
       }
     }
 

@@ -20,7 +20,10 @@ function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: strin
 function PnlTab() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
-  const [data, setData] = useState<{ revenue: number; ingredient_purchases: number; labour_cost: number; other_expenses: number; net_profit: number } | null>(null);
+  const [data, setData] = useState<{
+    revenue: number; ingredient_purchases: number; labour_cost: number; other_expenses: number; net_profit: number;
+    recipe_cogs: number; recipe_cogs_coverage_pct: number; net_profit_recipe_basis: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/finance/pnl?from=${from}&to=${to}`);
@@ -41,6 +44,23 @@ function PnlTab() {
         </div>
       )}
       <p className="mt-3 text-muted-foreground text-xs">Ingredient purchases are used as a cost-of-goods proxy (money spent on stock received in this period) rather than a full inventory-valuation COGS calculation.</p>
+
+      {data && (
+        <div className="mt-6 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
+          <p className="text-foreground font-bold text-sm">Recipe-Based COGS (accrual)</p>
+          <p className="text-muted-foreground text-xs mt-1">
+            Cost of what was actually sold, from recipe ingredient costs — not just what was bought.
+          </p>
+          <div className="mt-3 rounded-lg border border-border bg-surface divide-y divide-border">
+            <Row label="Recipe-based COGS" value={-data.recipe_cogs} />
+            <Row label="Net Profit (recipe basis)" value={data.net_profit_recipe_basis} bold />
+          </div>
+          <p className="mt-2 text-xs font-semibold" style={{ color: data.recipe_cogs_coverage_pct >= 80 ? "#16a34a" : data.recipe_cogs_coverage_pct >= 30 ? "#d97706" : "#dc2626" }}>
+            Based on recipes covering {data.recipe_cogs_coverage_pct}% of this period&apos;s revenue.
+            {data.recipe_cogs_coverage_pct < 80 && " Add recipes in Inventory → Recipes & Food Cost for a fuller picture."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

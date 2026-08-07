@@ -110,6 +110,11 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [maxEmployees, setMaxEmployees] = useState("20");
   const [depositAmount, setDepositAmount] = useState("0");
   const [readerId, setReaderId] = useState("");
+  const [geofenceEnabled, setGeofenceEnabled] = useState(false);
+  const [restaurantLat, setRestaurantLat] = useState("");
+  const [restaurantLng, setRestaurantLng] = useState("");
+  const [geofenceRadius, setGeofenceRadius] = useState("150");
+  const [locating, setLocating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -127,9 +132,27 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
         if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
+        setGeofenceEnabled(!!s.geofence_enabled);
+        if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
+        if (s.restaurant_longitude != null) setRestaurantLng(String(s.restaurant_longitude));
+        if (s.geofence_radius_meters !== undefined) setGeofenceRadius(String(s.geofence_radius_meters));
       })
       .finally(() => setLoading(false));
   }, []);
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setRestaurantLat(pos.coords.latitude.toFixed(6));
+        setRestaurantLng(pos.coords.longitude.toFixed(6));
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
 
   async function save() {
     setSaving(true);
@@ -141,6 +164,10 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         vat_rate: Number(vatRate), max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
         stripe_terminal_reader_id: readerId.trim(),
+        geofence_enabled: geofenceEnabled,
+        restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
+        restaurant_longitude: restaurantLng ? Number(restaurantLng) : null,
+        geofence_radius_meters: Number(geofenceRadius) || 150,
       }),
     });
     setSaving(false);
@@ -234,6 +261,51 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${overtimeEnabled ? "translate-x-6" : ""}`} />
               </button>
             </div>
+
+            <div className="pt-2 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-foreground text-sm font-medium">Geofenced Clock-In</p>
+                  <p className="text-muted-foreground text-xs">Blocks self-service clock-in unless staff are near the restaurant. Clock-out is never blocked.</p>
+                </div>
+                <button onClick={() => setGeofenceEnabled((v) => !v)}
+                  className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${geofenceEnabled ? "bg-red-600" : "bg-elevated"}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${geofenceEnabled ? "translate-x-6" : ""}`} />
+                </button>
+              </div>
+
+              {geofenceEnabled && (
+                <div className="mt-3 space-y-3">
+                  {(!restaurantLat || !restaurantLng) && (
+                    <p className="text-amber-600 text-xs">⚠ Set the restaurant&apos;s location below — geofencing has no effect until this is filled in.</p>
+                  )}
+                  <button onClick={useCurrentLocation} disabled={locating}
+                    className="w-full py-2 bg-elevated hover:bg-elevated-hover disabled:opacity-50 text-foreground text-sm font-semibold rounded-lg">
+                    {locating ? "Getting location…" : "📍 Use My Current Location"}
+                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Latitude</label>
+                      <input type="number" step="0.000001" value={restaurantLat} onChange={(e) => setRestaurantLat(e.target.value)}
+                        className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Longitude</label>
+                      <input type="number" step="0.000001" value={restaurantLng} onChange={(e) => setRestaurantLng(e.target.value)}
+                        className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">Allowed Radius (metres)</label>
+                    <input type="number" min="10" value={geofenceRadius} onChange={(e) => setGeofenceRadius(e.target.value)}
+                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                    <p className="mt-1 text-muted-foreground text-xs">150m is a reasonable default — GPS on a phone is typically accurate to 10-30m, tighter than that will cause false rejections.</p>
+                  </div>
+                  <p className="text-muted-foreground text-xs">A manager can always clock a team member in manually from Attendance → Team, bypassing this check (GPS trouble, dead phone, etc.). Browser location can be spoofed, so treat this as a soft deterrent, not a hard security control.</p>
+                </div>
+              )}
+            </div>
+
             <button onClick={save} disabled={saving} className="w-full py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-lg">
               {saving ? "Saving…" : saved ? "✓ Saved" : "Save Settings"}
             </button>

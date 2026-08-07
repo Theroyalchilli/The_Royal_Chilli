@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import type { ClockEvent } from "@/lib/types";
+import type { ClockEvent, Staff } from "@/lib/types";
 
 function fmt(dt: string | null) {
   if (!dt) return "—";
@@ -14,6 +14,21 @@ function durationLabel(start: string, end: string | null) {
   const hours = Math.floor(ms / 3_600_000);
   const mins = Math.round((ms % 3_600_000) / 60_000);
   return `${hours}h ${mins}m`;
+}
+
+// Best-effort — resolves null (rather than rejecting) on denial/timeout/no
+// support, so a geolocation problem never throws past the caller. The
+// clock-in API itself decides whether a missing location is a hard block
+// (geofencing on) or a non-issue (geofencing off).
+function getLocation(): Promise<{ latitude: number; longitude: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
 }
 
 function CorrectionModal({ event, onClose, onSubmitted }: { event: ClockEvent; onClose: () => void; onSubmitted: () => void }) {
@@ -79,7 +94,11 @@ export default function AttendanceView({ isManager }: { isManager: boolean }) {
   const [history, setHistory] = useState<ClockEvent[]>([]);
   const [correctingEvent, setCorrectingEvent] = useState<ClockEvent | null>(null);
   const [teamEvents, setTeamEvents] = useState<(ClockEvent & { staff_name: string })[]>([]);
+  const [teamStaff, setTeamStaff] = useState<Staff[]>([]);
+  const [manualClockInFor, setManualClockInFor] = useState("");
+  const [manualClockingIn, setManualClockingIn] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
   const [, forceTick] = useState(0);
 
@@ -97,8 +116,16 @@ export default function AttendanceView({ isManager }: { isManager: boolean }) {
     setTeamEvents(data.clockEvents || []);
   }, []);
 
+  const refreshTeamStaff = useCallback(async () => {
+    const res = await fetch("/api/employees");
+    const data = await res.json();
+    setTeamStaff(data.employees || []);
+  }, []);
+
   useEffect(() => { refreshMe(); }, [refreshMe]);
-  useEffect(() => { if (isManager && tab === "team") refreshTeam(); }, [isManager, tab, refreshTeam]);
+  useEffect(() => {
+    if (isManager && tab === "team") { refreshTeam(); refreshTeamStaff(); }
+  }, [isManager, tab, refreshTeam, refreshTeamStaff]);
   useEffect(() => {
     const t = setInterval(() => forceTick((n) => n + 1), 30000);
     return () => clearInterval(t);
@@ -116,6 +143,39 @@ export default function AttendanceView({ isManager }: { isManager: boolean }) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function clockIn() {
+    setLocating(true);
+    const loc = await getLocation();
+    setLocating(false);
+    await action("/api/attendance/clock-in", loc || {});
+  }
+
+  async function clockOut() {
+    setLocating(true);
+    const loc = await getLocation();
+    setLocating(false);
+    await action("/api/attendance/clock-out", loc || {});
+  }
+
+  async function manualClockIn() {
+    if (!manualClockInFor) return;
+    setManualClockingIn(true);
+    setError("");
+    try {
+      const res = await fetch("/api/attendance/clock-in", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staff_id: Number(manualClockInFor) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setManualClockInFor("");
+      refreshTeam();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setManualClockingIn(false);
     }
   }
 
@@ -159,7 +219,7 @@ export default function AttendanceView({ isManager }: { isManager: boolean }) {
                       disabled={busy} className="px-5 py-2.5 bg-elevated hover:bg-elevated-hover text-foreground text-sm font-bold rounded-xl disabled:opacity-50">
                       {onBreak ? "▶ End Break" : "⏸ Start Break"}
                     </button>
-                    <button onClick={() => action("/api/attendance/clock-out")} disabled={busy}
+                    <button onClick={clockOut} disabled={busy || locating}
                       className="px-5 py-2.5 bg-red-700 hover:bg-red-600 text-white text-sm font-bold rounded-xl disabled:opacity-50">
                       ⏹ Clock Out
                     </button>
@@ -168,9 +228,9 @@ export default function AttendanceView({ isManager }: { isManager: boolean }) {
               ) : (
                 <>
                   <p className="text-muted-foreground text-sm">You&apos;re not clocked in</p>
-                  <button onClick={() => action("/api/attendance/clock-in")} disabled={busy}
+                  <button onClick={clockIn} disabled={busy || locating}
                     className="mt-4 px-8 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-50">
-                    ▶ Clock In
+                    {locating ? "Checking location…" : "▶ Clock In"}
                   </button>
                 </>
               )}
@@ -201,11 +261,27 @@ export default function AttendanceView({ isManager }: { isManager: boolean }) {
 
         {tab === "team" && isManager && (
           <div className="mt-6 space-y-2">
+            <div className="rounded-xl border border-border bg-surface-hover px-4 py-3 flex items-center gap-2 flex-wrap mb-2">
+              <select value={manualClockInFor} onChange={(e) => setManualClockInFor(e.target.value)}
+                className="flex-1 min-w-[180px] bg-surface border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+                <option value="">Clock in a team member…</option>
+                {teamStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <button onClick={manualClockIn} disabled={!manualClockInFor || manualClockingIn}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
+                {manualClockingIn ? "Clocking in…" : "Clock In"}
+              </button>
+              <p className="w-full text-muted-foreground text-xs">Bypasses the location check — use for GPS trouble, a dead phone, etc.</p>
+            </div>
             {teamEvents.map((e) => (
               <div key={e.id} className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <p className="text-foreground text-sm font-medium">{e.staff_name} — {fmt(e.clock_in)} → {e.clock_out ? fmt(e.clock_out) : "still open"}</p>
-                  <p className="text-muted-foreground text-xs">{durationLabel(e.clock_in, e.clock_out)} {e.late_minutes > 0 && `· ${e.late_minutes}m late`}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {durationLabel(e.clock_in, e.clock_out)} {e.late_minutes > 0 && `· ${e.late_minutes}m late`}
+                    {e.clocked_in_by_manager != null && " · clocked in by manager"}
+                    {e.clock_in_distance_m != null && ` · ${Math.round(e.clock_in_distance_m)}m from restaurant at clock-in`}
+                  </p>
                   {e.correction_status === "pending" && (
                     <p className="text-amber-600 text-xs mt-1">Requesting: {e.requested_clock_in ? fmt(e.requested_clock_in) : "—"} → {e.requested_clock_out ? fmt(e.requested_clock_out) : "—"} ({e.correction_reason})</p>
                   )}

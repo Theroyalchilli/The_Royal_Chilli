@@ -283,6 +283,16 @@ CREATE TABLE clock_events (
   requested_clock_out TIMESTAMPTZ,
   approved_by         INT REFERENCES staff(id),
   approved_at         TIMESTAMPTZ,
+  -- Geofencing: location captured on both clock-in and clock-out, but only
+  -- clock-in is ever blocked by it. clocked_in_by_manager records a manager
+  -- override (GPS trouble etc.) — location fields don't apply on those rows.
+  clock_in_latitude    NUMERIC(9,6),
+  clock_in_longitude   NUMERIC(9,6),
+  clock_in_distance_m  NUMERIC(9,1),
+  clock_out_latitude   NUMERIC(9,6),
+  clock_out_longitude  NUMERIC(9,6),
+  clock_out_distance_m NUMERIC(9,1),
+  clocked_in_by_manager INT REFERENCES staff(id),
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -781,7 +791,11 @@ INSERT INTO app_settings (key, value) VALUES
   ('vat_rate', '0.2'),
   ('max_employees', '20'),
   ('reservation_deposit_amount', '0'),
-  ('stripe_terminal_reader_id', '""');
+  ('stripe_terminal_reader_id', '""'),
+  ('geofence_enabled', 'false'),
+  ('restaurant_latitude', 'null'),
+  ('restaurant_longitude', 'null'),
+  ('geofence_radius_meters', '150');
 
 -- =====================
 -- SEED: Role Permissions (matches the defaults previously hardcoded in lib/permissions.ts)

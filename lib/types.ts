@@ -64,6 +64,13 @@ export interface ClockEvent {
   requested_clock_out: string | null;
   approved_by: number | null;
   approved_at: string | null;
+  clock_in_latitude?: number | null;
+  clock_in_longitude?: number | null;
+  clock_in_distance_m?: number | null;
+  clock_out_latitude?: number | null;
+  clock_out_longitude?: number | null;
+  clock_out_distance_m?: number | null;
+  clocked_in_by_manager?: number | null;
   created_at: string;
   staff_name?: string;
 }

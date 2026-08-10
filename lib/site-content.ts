@@ -8,10 +8,9 @@ export const siteContent = {
     line2: "Royal in Taste, Rich in Tradition",
     desc: "Experience the rich flavours and time-honoured traditions of authentic Indian cooking — every dish crafted with love, care, and passion in the heart of London.",
     bgImages: [
-      "/gallery/Royal_Mixed_Platter.webp",
-      "/gallery/Tandoori_Sizzler.webp",
-      "/gallery/Chicken_Dum_Biryani.webp",
-      "/gallery/Chicken_Lollipop.webp",
+      "/hero/storefront.jpg",
+      "/hero/interior-1.jpg",
+      "/hero/interior-2.jpg",
     ],
   },
   about: {

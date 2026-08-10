@@ -1,17 +1,32 @@
+import fs from "fs";
+import path from "path";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getActiveMenu } from "@/lib/menu";
-import MenuBrowser from "@/components/site/MenuBrowser";
-
-export const revalidate = 60;
+import PdfMenuSlides from "@/components/site/PdfMenuSlidesLoader";
 
 export const metadata: Metadata = {
-  title: "Menu — The Royal Chilli",
+  title: "Kitchen Menu — The Royal Chilli",
   description: "Browse our full menu of authentic North and South Indian dishes — tandoori, biryani, curries, breads, and more. Order online for collection or delivery.",
 };
 
-export default async function MenuPage() {
-  const categories = await getActiveMenu();
+// PDFs dropped into public/menu-pdf show up here automatically — no code
+// change needed to add/replace/remove a menu, just swap the file(s) and
+// redeploy (public/ is part of the build output, same as the gallery photos).
+function getMenuPdfFiles(): string[] {
+  const dir = path.join(process.cwd(), "public", "menu-pdf");
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith(".pdf"))
+      .sort()
+      .map((f) => `/menu-pdf/${encodeURIComponent(f)}`);
+  } catch {
+    return [];
+  }
+}
+
+export default function MenuPage() {
+  const files = getMenuPdfFiles();
 
   return (
     <div>
@@ -28,7 +43,7 @@ export default async function MenuPage() {
         </Link>
       </div>
 
-      <MenuBrowser categories={categories} />
+      <PdfMenuSlides files={files} />
     </div>
   );
 }

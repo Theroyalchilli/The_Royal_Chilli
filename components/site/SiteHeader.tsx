@@ -9,7 +9,7 @@ import { siteContent } from "@/lib/site-content";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/menu", label: "Menu" },
+  { href: "/menu", label: "Kitchen Menu" },
   { href: "/order", label: "Order Online" },
   { href: "/reservations", label: "Book a Table" },
   { href: "/gallery", label: "Gallery" },

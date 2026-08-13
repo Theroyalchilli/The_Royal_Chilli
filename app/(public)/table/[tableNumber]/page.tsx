@@ -21,7 +21,7 @@ export default async function TablePage({
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <div className="text-5xl">🔍</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl font-bold">Table Not Found</h1>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Table Not Found</h1>
         <p className="mt-2 text-muted-foreground">
           We couldn&apos;t find table &ldquo;{tableNumber}&rdquo;. Please ask a member of staff for help.
         </p>

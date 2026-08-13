@@ -42,7 +42,7 @@ export default function ModifierPickerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-5">
-        <h2 className="font-[family-name:var(--font-playfair)] text-xl font-bold">{item.name}</h2>
+        <h2 className="font-[family-name:var(--font-playfair)] text-xl">{item.name}</h2>
         {item.description && <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>}
 
         <div className="mt-4 space-y-4">
@@ -78,11 +78,11 @@ export default function ModifierPickerModal({
         </div>
 
         <div className="mt-5 flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-full border border-border py-2.5 font-semibold">Cancel</button>
+          <button onClick={onClose} className="flex-1 border border-border py-2.5 text-xs uppercase tracking-[0.1em]">Cancel</button>
           <button
             onClick={() => canConfirm && onConfirm(allSelectedIds, unitPrice)}
             disabled={!canConfirm}
-            className="flex-1 rounded-full bg-primary py-2.5 font-semibold text-primary-foreground disabled:opacity-50"
+            className="flex-1 bg-primary py-2.5 text-xs uppercase tracking-[0.15em] text-primary-foreground disabled:opacity-50"
           >
             Add · {formatCurrency(unitPrice)}
           </button>

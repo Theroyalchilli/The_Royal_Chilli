@@ -123,25 +123,25 @@ export default function DineInOrder({
     <div className="pb-32">
       <div className="mx-auto max-w-4xl px-4 py-10">
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Table {tableNumber}</p>
-          <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-3xl font-bold">
+          <p className="text-xs uppercase tracking-[0.3em] text-primary">Table {tableNumber}</p>
+          <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl">
             Welcome to <span className="italic text-primary">The Royal Chilli</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">Browse the menu, add items, and send your order straight to the kitchen.</p>
         </div>
 
         <div className="mt-6 flex justify-center gap-3">
-          <button onClick={() => sendRequest("waiter")} className="rounded-full border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary">
+          <button onClick={() => sendRequest("waiter")} className="border border-border px-4 py-2 text-xs uppercase tracking-[0.1em] hover:border-primary hover:text-primary">
             🙋 Call Waiter
           </button>
-          <button onClick={() => sendRequest("bill")} className="rounded-full border border-border px-4 py-2 text-sm font-medium hover:border-primary hover:text-primary">
+          <button onClick={() => sendRequest("bill")} className="border border-border px-4 py-2 text-xs uppercase tracking-[0.1em] hover:border-primary hover:text-primary">
             🧾 Request Bill
           </button>
         </div>
         {requestMsg && <p className="mt-3 text-center text-sm text-primary">{requestMsg}</p>}
 
         {items.length > 0 && (
-          <div className="mt-8 rounded-xl border border-border p-4">
+          <div className="mt-8 border border-border p-4">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Your Order {order && <span className="text-muted-foreground">· {order.order_number}</span>}</h2>
               {order && <span className="font-semibold text-primary">{formatCurrency(order.total)}</span>}
@@ -167,7 +167,7 @@ export default function DineInOrder({
         <div className="mt-10 space-y-14">
           {categories.map((category) => (
             <section key={category.id}>
-              <h2 className="font-[family-name:var(--font-playfair)] text-2xl font-bold text-primary">{category.name}</h2>
+              <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-primary">{category.name}</h2>
               <div className="mt-4 divide-y divide-border">
                 {category.items.map((item) => {
                   const lines = linesForItem(item.id);
@@ -228,7 +228,7 @@ export default function DineInOrder({
             <button
               onClick={sendToKitchen}
               disabled={sending}
-              className="rounded-full bg-primary px-6 py-2.5 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="bg-primary px-6 py-2.5 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               {sending ? "Sending…" : "Send to Kitchen"}
             </button>

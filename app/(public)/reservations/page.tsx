@@ -81,7 +81,7 @@ function ReservationsForm() {
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <div className="text-5xl">✅</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl font-bold">Deposit Paid — Table Confirmed!</h1>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Deposit Paid — Table Confirmed!</h1>
         <p className="mt-2 text-muted-foreground">We'll see you soon. Questions? Call us on {contact.phone}.</p>
       </div>
     );
@@ -91,7 +91,7 @@ function ReservationsForm() {
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <div className="text-5xl">⚠️</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl font-bold">Deposit Payment Cancelled</h1>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Deposit Payment Cancelled</h1>
         <p className="mt-2 text-muted-foreground">
           Your booking request is still held, but the deposit hasn&apos;t been paid yet. Call us on {contact.phone} to sort this out, or try booking again.
         </p>
@@ -103,7 +103,7 @@ function ReservationsForm() {
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <div className="text-5xl">{waitlisted ? "⏳" : "✅"}</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl font-bold">
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">
           {waitlisted ? "You're on the Waitlist" : "Request Received!"}
         </h1>
         <p className="mt-2 text-muted-foreground">
@@ -119,53 +119,53 @@ function ReservationsForm() {
   return (
     <div className="mx-auto max-w-lg px-4 py-16">
       <div className="text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">{reservation.tag}</p>
-        <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-4xl font-bold">
+        <p className="text-xs uppercase tracking-[0.3em] text-primary">{reservation.tag}</p>
+        <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           {reservation.title} <span className="italic text-primary">{reservation.titleGold}</span>
         </h1>
         <p className="mt-3 text-muted-foreground">{reservation.desc}</p>
       </div>
 
-      <div className="mt-8 space-y-3">
+      <div className="mt-10 space-y-3">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone number"
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email (optional, for confirmation)"
           type="email"
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <div className="grid grid-cols-2 gap-3">
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+            className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
           />
           <input
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+            className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
           />
         </div>
-        <div className="flex items-center justify-between rounded-lg border border-border px-4 py-2.5">
+        <div className="flex items-center justify-between border border-border px-4 py-2.5">
           <span className="text-sm text-muted-foreground">Number of guests</span>
           <div className="flex items-center gap-3">
-            <button onClick={() => setGuests((g) => Math.max(1, g - 1))} className="h-10 w-10 rounded-full border border-border">−</button>
+            <button onClick={() => setGuests((g) => Math.max(1, g - 1))} className="h-9 w-9 border border-border">−</button>
             <span className="w-4 text-center">{guests}</span>
-            <button onClick={() => setGuests((g) => g + 1)} className="h-10 w-10 rounded-full border border-border">+</button>
+            <button onClick={() => setGuests((g) => g + 1)} className="h-9 w-9 border border-border">+</button>
           </div>
         </div>
         <textarea
@@ -173,19 +173,19 @@ function ReservationsForm() {
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Special requests (optional)"
           rows={3}
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
       </div>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
       {fullMessage ? (
-        <div className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-center">
+        <div className="mt-6 border border-amber-500/40 bg-amber-500/10 p-4 text-center">
           <p className="text-sm text-amber-600">{fullMessage}</p>
           <button
             onClick={() => submit(true)}
             disabled={submitting}
-            className="mt-3 w-full rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            className="mt-3 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? "Joining…" : "Join Waitlist"}
           </button>
@@ -194,7 +194,7 @@ function ReservationsForm() {
         <button
           onClick={() => submit(false)}
           disabled={submitting}
-          className="mt-6 w-full rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
         >
           {submitting ? "Booking…" : "Book Table"}
         </button>

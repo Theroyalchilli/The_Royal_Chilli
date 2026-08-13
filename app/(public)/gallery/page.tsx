@@ -34,15 +34,15 @@ export default function GalleryPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
       <div className="text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Gallery</p>
-        <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-4xl font-bold">
+        <p className="text-xs uppercase tracking-[0.3em] text-primary">Gallery</p>
+        <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           A Taste of <span className="italic text-primary">The Royal Chilli</span>
         </h1>
       </div>
 
-      <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {photos.map(({ file, caption }) => (
-          <div key={file} className="group relative aspect-square overflow-hidden rounded-xl">
+          <div key={file} className="group relative aspect-square overflow-hidden">
             <Image src={`/gallery/${file}`} alt={caption} fill className="object-cover transition group-hover:scale-105" />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100">
               <p className="text-xs font-medium text-white">{caption}</p>

@@ -24,7 +24,7 @@ export default async function OrderConfirmationPage({
   return (
     <div className="mx-auto max-w-md px-4 py-24 text-center">
       <div className="text-5xl">🎉</div>
-      <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl font-bold">Payment Received!</h1>
+      <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Payment Received!</h1>
       {order ? (
         <>
           <p className="mt-2 text-muted-foreground">
@@ -41,7 +41,10 @@ export default async function OrderConfirmationPage({
       ) : (
         <p className="mt-2 text-muted-foreground">Thanks — your payment was received.</p>
       )}
-      <Link href="/" className="mt-8 inline-block rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90">
+      <Link
+        href="/"
+        className="mt-8 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
+      >
         Back to Home
       </Link>
     </div>

@@ -16,8 +16,8 @@ export default function CareersPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16">
       <div className="text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Join Our Team</p>
-        <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-4xl font-bold">
+        <p className="text-xs uppercase tracking-[0.3em] text-primary">Join Our Team</p>
+        <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           Careers at <span className="italic text-primary">The Royal Chilli</span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
@@ -27,15 +27,15 @@ export default function CareersPage() {
 
       <div className="mt-12 space-y-4">
         {roles.map((r) => (
-          <div key={r.title} className="rounded-xl border border-border p-5">
-            <h2 className="font-semibold text-lg">{r.title}</h2>
+          <div key={r.title} className="border border-border p-6">
+            <h2 className="text-lg">{r.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{r.desc}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-12 rounded-xl border border-border bg-card p-6 text-center">
-        <h2 className="font-[family-name:var(--font-playfair)] text-xl font-bold">Interested in joining us?</h2>
+      <div className="mt-12 border border-border bg-card p-8 text-center">
+        <h2 className="font-[family-name:var(--font-playfair)] text-xl">Interested in joining us?</h2>
         <p className="mt-2 text-muted-foreground">
           Call us on{" "}
           <a href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`} className="text-primary hover:underline">

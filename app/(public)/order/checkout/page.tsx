@@ -42,6 +42,16 @@ export default function CheckoutPage() {
 
   useEffect(() => setCart(readCart()), []);
 
+  // Cart starts empty and only populates a moment after mount, so the page's
+  // height (and the order-summary box specifically) changes right after the
+  // initial paint. On some mobile browsers that late layout shift — combined
+  // with scroll anchoring — leaves the page scrolled partway down instead of
+  // at the top. Force it back to the top both on mount and again once the
+  // cart data lands, to cover the page before and after that shift.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [cart]);
+
   const subtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
   const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? zoneCheck.fee || 0 : 0;
   const total = subtotal + deliveryFee;
@@ -122,7 +132,7 @@ export default function CheckoutPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <div className="text-5xl">🎉</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl font-bold">Order Confirmed!</h1>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Order Confirmed!</h1>
         <p className="mt-2 text-muted-foreground">
           Order <strong className="text-primary">{confirmation.orderNumber}</strong> is being prepared.
         </p>
@@ -137,7 +147,10 @@ export default function CheckoutPage() {
             Please have {orderType === "delivery" ? "cash or card ready for the driver" : "cash or card ready when you collect"}.
           </p>
         )}
-        <Link href="/" className="mt-8 inline-block rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90">
+        <Link
+          href="/"
+          className="mt-8 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
+        >
           Back to Home
         </Link>
       </div>
@@ -148,7 +161,10 @@ export default function CheckoutPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <p className="text-muted-foreground">Your cart is empty.</p>
-        <Link href="/order" className="mt-4 inline-block rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90">
+        <Link
+          href="/order"
+          className="mt-4 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
+        >
           Browse Menu
         </Link>
       </div>
@@ -157,9 +173,9 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16">
-      <h1 className="font-[family-name:var(--font-playfair)] text-3xl font-bold">Checkout</h1>
+      <h1 className="font-[family-name:var(--font-playfair)] text-3xl">Checkout</h1>
 
-      <div className="mt-6 space-y-2 rounded-xl border border-border p-4">
+      <div className="mt-6 space-y-2 border border-border p-4">
         {cart.map((c) => (
           <div key={c.lineId} className="flex justify-between text-sm">
             <span>
@@ -192,7 +208,7 @@ export default function CheckoutPage() {
           <button
             key={t}
             onClick={() => setOrderType(t)}
-            className={`flex-1 rounded-full border px-4 py-2 text-sm font-medium capitalize ${
+            className={`flex-1 border px-4 py-2 text-xs uppercase tracking-[0.1em] ${
               orderType === t ? "border-primary bg-primary text-primary-foreground" : "border-border"
             }`}
           >
@@ -206,7 +222,7 @@ export default function CheckoutPage() {
           <button
             key={String(scheduled)}
             onClick={() => setIsScheduled(scheduled)}
-            className={`flex-1 rounded-full border px-4 py-2 text-sm font-medium ${
+            className={`flex-1 border px-4 py-2 text-xs uppercase tracking-[0.1em] ${
               isScheduled === scheduled ? "border-primary bg-primary text-primary-foreground" : "border-border"
             }`}
           >
@@ -216,8 +232,8 @@ export default function CheckoutPage() {
       </div>
       {isScheduled && (
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <input type="date" value={scheduleDate} min={defaultScheduleDate()} onChange={(e) => setScheduleDate(e.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />
-          <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />
+          <input type="date" value={scheduleDate} min={defaultScheduleDate()} onChange={(e) => setScheduleDate(e.target.value)} className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />
+          <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />
         </div>
       )}
 
@@ -226,20 +242,20 @@ export default function CheckoutPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone number"
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email (optional, for order confirmation)"
           type="email"
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         {orderType === "delivery" && (
           <>
@@ -248,14 +264,14 @@ export default function CheckoutPage() {
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Delivery address"
               rows={2}
-              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+              className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
             />
             <input
               value={postcode}
               onChange={(e) => setPostcode(e.target.value)}
               onBlur={() => checkPostcode(postcode)}
               placeholder="Postcode"
-              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+              className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
             />
             {checkingZone && <p className="text-xs text-muted-foreground">Checking delivery availability…</p>}
             {!checkingZone && zoneCheck && (
@@ -275,7 +291,7 @@ export default function CheckoutPage() {
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes (optional)"
           rows={2}
-          className="w-full rounded-lg border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
       </div>
 
@@ -285,7 +301,7 @@ export default function CheckoutPage() {
             <button
               key={String(online)}
               onClick={() => setPayOnline(online)}
-              className={`flex-1 rounded-full border px-4 py-2 text-sm font-medium ${
+              className={`flex-1 border px-4 py-2 text-xs uppercase tracking-[0.1em] ${
                 payOnline === online ? "border-primary bg-primary text-primary-foreground" : "border-border"
               }`}
             >
@@ -300,7 +316,7 @@ export default function CheckoutPage() {
       <button
         onClick={submitOrder}
         disabled={submitting || (orderType === "delivery" && (!zoneCheck || !zoneCheck.deliverable))}
-        className="mt-6 w-full rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
       >
         {submitting ? "Placing Order…" : payOnline ? `Continue to Payment · ${formatCurrency(total)}` : `Place Order · ${formatCurrency(total)}`}
       </button>

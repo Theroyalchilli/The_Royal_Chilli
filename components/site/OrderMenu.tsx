@@ -67,8 +67,8 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
     <div className="pb-28">
       <div className="mx-auto max-w-4xl px-4 py-16">
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Order Online</p>
-          <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-4xl font-bold">
+          <p className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</p>
+          <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
             Collection &amp; <span className="italic text-primary">Delivery</span>
           </h1>
         </div>
@@ -157,7 +157,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
             </span>
             <button
               onClick={() => router.push("/order/checkout")}
-              className="rounded-full bg-primary px-6 py-2.5 font-semibold text-primary-foreground hover:opacity-90"
+              className="bg-primary px-6 py-2.5 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90"
             >
               Checkout
             </button>

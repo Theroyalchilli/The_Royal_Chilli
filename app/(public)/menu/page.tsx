@@ -31,13 +31,13 @@ export default function MenuPage() {
   return (
     <div>
       <div className="mx-auto max-w-4xl px-4 py-16 text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Our Menu</p>
-        <h1 className="mt-2 font-[family-name:var(--font-playfair)] text-4xl font-bold">
+        <p className="text-xs uppercase tracking-[0.3em] text-primary">Our Menu</p>
+        <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           Taste the <span className="italic text-primary">Royal Difference</span>
         </h1>
         <Link
           href="/order"
-          className="mt-6 inline-block rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90"
+          className="mt-8 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
         >
           Order Online
         </Link>

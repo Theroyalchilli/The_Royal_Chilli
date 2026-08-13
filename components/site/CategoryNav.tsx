@@ -102,7 +102,7 @@ export function CategoryNavBar({
 export function CategoryHeading({ name, count }: { name: string; count: number }) {
   return (
     <div className="flex items-center gap-3 border-b-2 border-primary/30 pb-2">
-      <h2 className="font-[family-name:var(--font-playfair)] text-2xl font-bold text-primary">{name}</h2>
+      <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-primary">{name}</h2>
       <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{count}</span>
     </div>
   );

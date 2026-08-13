@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { ChevronDown } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import HeroBackground from "@/components/site/HeroBackground";
 
@@ -19,32 +20,50 @@ export default function HomePage() {
 
   return (
     <div>
-      {/* Hero — pulled up by the layout's header padding so it reaches the
-          true top of the page and sits behind the fixed, transparent header. */}
-      <section className="relative -mt-[108px] flex min-h-screen items-center justify-center overflow-hidden md:-mt-[72px]">
-        <HeroBackground images={hero.bgImages} />
-        <div className="absolute inset-0 bg-black/65" />
+      {/* Hero — full-bleed rotating photo, dark-washed for legibility, with
+          the restaurant name centered as large tracked-out serif type (the
+          "wordmark as hero art" treatment) rather than a marketing headline.
+          Pulled up by the layout's header padding so it reaches the true top
+          of the page and sits behind the fixed, transparent header; the
+          matching top padding keeps content clear of it. */}
+      <section className="relative -mt-[108px] flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950 pt-[108px] md:-mt-[72px] md:pt-[72px]">
+        <div className="absolute inset-0">
+          <HeroBackground images={hero.bgImages} />
+          <div className="pointer-events-none absolute inset-0 bg-black/55" />
+        </div>
+
         <div className="relative z-10 mx-auto max-w-3xl px-4 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">{hero.tag}</p>
-          <h1 className="mt-4 font-[family-name:var(--font-worksans)] text-4xl font-light text-white sm:text-6xl">
-            {hero.line1}
-            <br />
-            <span className="text-primary">{hero.line2}</span>
+          <p className="text-xs uppercase tracking-[0.3em] text-white/80 sm:text-sm">{hero.tag}</p>
+          <h1 className="mt-5 font-[family-name:var(--font-cinzel)] text-5xl uppercase leading-tight tracking-[0.12em] text-white sm:text-6xl lg:text-7xl">
+            The Royal Chilli
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-base text-white/85">{hero.desc}</p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/order" className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground hover:opacity-90">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <Link
+              href="/order"
+              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+            >
               Order Online
             </Link>
-            <Link href="/reservations" className="rounded-full border border-white/40 px-6 py-3 font-semibold text-white hover:bg-white/10">
+            <Link
+              href="/reservations"
+              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+            >
               Book a Table
             </Link>
           </div>
         </div>
+
+        <a
+          href="#about"
+          className="absolute bottom-8 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-white/75 transition hover:text-white"
+        >
+          Explore Royal Chilli
+          <ChevronDown size={16} className="animate-bounce" />
+        </a>
       </section>
 
       {/* About */}
-      <section className="mx-auto max-w-5xl px-4 py-20">
+      <section id="about" className="mx-auto max-w-5xl px-4 py-20">
         <div className="grid gap-10 md:grid-cols-2 md:items-center">
           <div>
             <h2 className="font-[family-name:var(--font-playfair)] text-3xl font-bold sm:text-4xl">

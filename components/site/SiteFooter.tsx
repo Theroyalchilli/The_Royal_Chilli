@@ -1,49 +1,68 @@
 import Link from "next/link";
 import { siteContent } from "@/lib/site-content";
 
+// Editorial single-column footer, styled after tamarindrestaurant.com's flat
+// pastel block with centered serif text and thin dividers — recolored to
+// Royal Chilli's own brand hue (a blush tint of --primary) rather than
+// their literal salmon, so the pattern is borrowed, not the palette.
+function Divider() {
+  return <div className="mx-auto my-6 h-px w-10 bg-[#3a0f0c]/25" />;
+}
+
 export default function SiteFooter() {
   const { contact, footer } = siteContent;
   return (
-    <footer className="border-t border-border bg-card">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-3">
-        <div>
-          <h3 className="font-[family-name:var(--font-cinzel)] text-lg text-primary">The Royal Chilli</h3>
-          <p className="mt-3 text-sm text-muted-foreground">{footer.tagline}</p>
+    <footer className="bg-[#f6ddd2] text-[#3a0f0c]">
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <h3 className="font-[family-name:var(--font-cinzel)] text-lg uppercase tracking-[0.2em]">
+          The Royal Chilli
+        </h3>
+        <p className="mx-auto mt-4 max-w-md text-sm text-[#3a0f0c]/80">{footer.tagline}</p>
+
+        <Divider />
+
+        <p className="text-sm">{contact.address}</p>
+        <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-1 inline-block text-sm hover:underline">
+          {contact.phone}
+        </a>
+
+        <Divider />
+
+        <ul className="space-y-1 text-sm text-[#3a0f0c]/80">
+          {contact.hours.map((h) => (
+            <li key={h.day}>
+              {h.day} &nbsp;·&nbsp; {h.time}
+            </li>
+          ))}
+        </ul>
+
+        <Divider />
+
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
           <a
             href={contact.social.instagram}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-block text-sm text-primary hover:underline"
+            className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]"
           >
-            Follow us on Instagram
+            Instagram
           </a>
-        </div>
-        <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Opening Hours</h4>
-          <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-            {contact.hours.map((h) => (
-              <li key={h.day} className="flex justify-between gap-4">
-                <span>{h.day}</span>
-                <span>{h.time}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h4 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Contact</h4>
-          <p className="mt-3 text-sm text-muted-foreground">{contact.address}</p>
-          <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-1 block text-sm text-primary hover:underline">
-            {contact.phone}
-          </a>
+          <Link href="/gallery" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Gallery
+          </Link>
+          <Link href="/reservations" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Reservations
+          </Link>
+          <Link href="/careers" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Careers
+          </Link>
         </div>
       </div>
-      <div className="border-t border-border px-4 py-4 text-center text-xs text-muted-foreground">
+      <div className="border-t border-[#3a0f0c]/15 px-4 py-4 text-center text-xs text-[#3a0f0c]/60">
         <p>{footer.copyright}</p>
-        <div className="mt-1 flex items-center justify-center gap-3 opacity-60">
-          <Link href="/careers" className="hover:opacity-100">Careers</Link>
-          <span>·</span>
-          <Link href="/login" className="hover:opacity-100">Staff Login</Link>
-        </div>
+        <Link href="/login" className="mt-1 inline-block hover:text-[#3a0f0c]">
+          Staff Login
+        </Link>
       </div>
     </footer>
   );

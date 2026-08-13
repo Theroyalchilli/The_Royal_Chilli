@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Phone } from "lucide-react";
@@ -11,7 +10,6 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/menu", label: "Kitchen Menu" },
   { href: "/order", label: "Order Online" },
-  { href: "/reservations", label: "Book a Table" },
   { href: "/gallery", label: "Gallery" },
 ];
 
@@ -42,18 +40,16 @@ export default function SiteHeader() {
           : "border-b border-border bg-background/90 backdrop-blur"
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
-        <Link href="/" className="flex min-w-0 flex-shrink items-center gap-2 sm:gap-3">
-          <Image src="/logo.webp" alt="The Royal Chilli" width={40} height={40} className="flex-shrink-0 rounded-full" />
-          <span
-            className={`truncate font-[family-name:var(--font-cinzel)] text-base tracking-wide sm:text-lg ${
-              floating ? "text-white" : "text-primary"
-            }`}
-          >
-            The Royal Chilli
-          </span>
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-4">
+        <Link
+          href="/"
+          className={`flex-shrink-0 truncate font-[family-name:var(--font-cinzel)] text-sm uppercase tracking-[0.2em] sm:text-base ${
+            floating ? "text-white" : "text-primary"
+          }`}
+        >
+          The Royal Chilli
         </Link>
-        <nav className="hidden items-center gap-6 text-sm font-normal tracking-wide md:flex">
+        <nav className="hidden items-center gap-8 text-xs uppercase tracking-[0.15em] md:flex">
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -64,18 +60,30 @@ export default function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <a
-          href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`}
-          aria-label={`Call ${siteContent.contact.phone}`}
-          className="flex flex-shrink-0 items-center gap-2 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 sm:px-4"
-        >
-          <Phone size={16} className="flex-shrink-0" />
-          <span className="hidden sm:inline">Call · {siteContent.contact.phone}</span>
-        </a>
+        <div className="flex flex-shrink-0 items-center gap-5">
+          <a
+            href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`}
+            aria-label={`Call ${siteContent.contact.phone}`}
+            className={`hidden items-center gap-1.5 text-xs tracking-wide transition hover:text-primary sm:flex ${
+              floating ? "text-white/70" : "text-foreground/60"
+            }`}
+          >
+            <Phone size={13} className="flex-shrink-0" />
+            {siteContent.contact.phone}
+          </a>
+          <Link
+            href="/reservations"
+            className={`text-xs uppercase tracking-[0.15em] transition hover:text-primary ${
+              floating ? "text-white" : "text-foreground"
+            }`}
+          >
+            Book a Table
+          </Link>
+        </div>
       </div>
       <nav
-        className={`flex items-center gap-4 overflow-x-auto border-t px-4 py-2 text-sm font-normal tracking-wide md:hidden ${
-          floating ? "border-transparent" : "border-border"
+        className={`flex items-center gap-4 overflow-x-auto border-t px-4 py-2 text-xs uppercase tracking-[0.1em] md:hidden ${
+          floating ? "border-white/10" : "border-border"
         }`}
       >
         {navLinks.map((link) => (

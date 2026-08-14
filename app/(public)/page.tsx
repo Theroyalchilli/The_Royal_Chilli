@@ -64,7 +64,7 @@ export default function HomePage() {
       </section>
 
       {/* About */}
-      <section id="about" className="mx-auto max-w-5xl px-4 py-24">
+      <section id="about" className="mx-auto max-w-5xl px-4 pb-12 pt-24">
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
           <Reveal>
             <p className="text-xs uppercase tracking-[0.3em] text-primary">Our Story</p>
@@ -81,7 +81,7 @@ export default function HomePage() {
       </section>
 
       {/* Gallery */}
-      <section className="mx-auto max-w-6xl px-4 py-20">
+      <section className="mx-auto max-w-6xl px-4 pb-20 pt-8">
         <Reveal className="text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-primary">Gallery</p>
           <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">

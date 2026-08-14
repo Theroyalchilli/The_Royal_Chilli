@@ -24,7 +24,7 @@ const MENUS: MenuBlock[] = [
   {
     name: "Dinner Menu",
     description: "Our full evening menu — tandoori, biryani, curries, breads and more, crafted with the freshest ingredients and spices imported from India.",
-    image: "/gallery/Royal_Mixed_Platter.webp",
+    image: "/gallery/Chicken_Dum_Biryani.webp",
     pdf: "/menu-pdf/The_Royal_Chilli_Redesigned_Full_Menu.pdf",
   },
   {
@@ -35,7 +35,7 @@ const MENUS: MenuBlock[] = [
   {
     name: "Lunch Menu",
     description: "A lighter, faster menu built for the midday sitting, without compromising on flavour.",
-    image: "/gallery/Chicken_Dum_Biryani.webp",
+    image: "/gallery/Salad.webp",
   },
   {
     name: "Promotions",

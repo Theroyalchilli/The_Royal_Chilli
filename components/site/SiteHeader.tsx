@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, Phone, X } from "lucide-react";
+import { Phone } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 
 const navLinks = [
@@ -14,27 +14,33 @@ const navLinks = [
   { href: "/reservations", label: "Book a Table" },
 ];
 
+// Bare two-line mark that morphs into an X in place (no icon swap, no
+// background box) — styled after tamarindrestaurant.com's own menu toggle,
+// confirmed by inspecting their actual markup/CSS rather than guessing:
+// `.menu-opener span` is two 1px lines with a margin gap; opening removes
+// the gap and rotates each line ±45° so they cross over each other.
+function Hamburger({ open, light }: { open: boolean; light: boolean }) {
+  const line = light ? "bg-white" : "bg-foreground";
+  return (
+    <span className="flex w-6 flex-col">
+      <span className={`h-px w-full ${line} transition-all duration-300 ${open ? "mb-0 rotate-45" : "mb-[7px]"}`} />
+      <span className={`h-px w-full ${line} transition-all duration-300 ${open ? "-mt-px -rotate-45" : ""}`} />
+    </span>
+  );
+}
+
 export default function SiteHeader() {
   const pathname = usePathname();
   const isHome = pathname === "/";
-  const [scrolled, setScrolled] = useState(false);
-  const [hidden, setHidden] = useState(false);
+  const [atTop, setAtTop] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Two independent things driven by scroll: whether the header has scrolled
-  // past the hero (home page only — everywhere else it's always the solid
-  // treatment), and whether it should be hidden entirely (every page) —
-  // slides away on scroll-down, reappears the moment you scroll up, so it
-  // doesn't eat screen space while reading but is never more than one
-  // upward flick away.
+  // The full header only ever shows at the very top of the page. Scroll away
+  // — either direction — and it's gone for good until you're back at the
+  // top; the persistent hamburger below takes over as the only way to reach
+  // navigation for the rest of the scroll, on every breakpoint.
   useEffect(() => {
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      setScrolled(y > 60);
-      setHidden(y > lastY && y > 80);
-      lastY = y;
-    };
+    const onScroll = () => setAtTop(window.scrollY <= 60);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -47,13 +53,17 @@ export default function SiteHeader() {
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
 
-  const floating = isHome && !scrolled;
+  const floating = isHome && atTop;
+  // Hide the full header whenever the menu is open too — otherwise its own
+  // mobile hamburger (opened while at the top) would sit right on top of
+  // the persistent one below.
+  const showHeader = atTop && !menuOpen;
 
   return (
     <>
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,transform] duration-300 ${
-          hidden && !menuOpen ? "-translate-y-full" : "translate-y-0"
+        className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,transform,opacity] duration-300 ${
+          showHeader ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0"
         } ${
           floating
             ? "border-b border-transparent bg-transparent"
@@ -99,32 +109,33 @@ export default function SiteHeader() {
             >
               Book a Table
             </Link>
-            <button
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
-              className={`-mr-1 flex-shrink-0 p-1 md:hidden ${floating ? "text-white" : "text-foreground"}`}
-            >
-              <Menu size={22} />
+            <button onClick={() => setMenuOpen(true)} aria-label="Open menu" className="-mr-1 flex-shrink-0 p-1 md:hidden">
+              <Hamburger open={false} light={floating} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Full-screen mobile menu overlay */}
+      {/* Persistent hamburger — the only way to reach navigation once you've
+          scrolled away from the top, on every breakpoint (desktop included).
+          Same element opens and closes, morphing into an X, exactly like
+          the reference site. */}
+      <button
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label={menuOpen ? "Close menu" : "Open menu"}
+        className={`fixed right-5 top-6 z-[70] p-1 transition-opacity duration-300 ${
+          !atTop || menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
+        <Hamburger open={menuOpen} light={false} />
+      </button>
+
+      {/* Full-screen menu overlay */}
       <div
-        className={`fixed inset-0 z-[60] flex flex-col bg-neutral-950 transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-[60] flex flex-col bg-neutral-950 transition-opacity duration-300 ${
           menuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <div className="flex items-center justify-between px-4 py-4">
-          <span className="font-[family-name:var(--font-cinzel)] text-sm uppercase tracking-[0.2em] text-white">
-            The Royal Chilli
-          </span>
-          <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="p-1 text-white">
-            <X size={24} />
-          </button>
-        </div>
-
         <nav className="flex flex-1 flex-col items-center justify-center gap-8">
           {navLinks.map((link) => (
             <Link

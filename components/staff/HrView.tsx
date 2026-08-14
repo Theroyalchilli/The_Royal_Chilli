@@ -188,8 +188,7 @@ function OnboardingTab({ staffId }: { staffId: number }) {
     <div className="space-y-5">
       {staffInfo && (
         <div className="rounded-xl border border-border bg-surface-hover px-4 py-3 text-sm text-muted-foreground">
-          Basic contact details (name, DOB, phone, email, address, emergency contact name/phone) are managed on the{" "}
-          <Link href="/staff/employees" className="text-red-600 hover:underline">Employees</Link> page. This screen covers what that one doesn&apos;t.
+          Basic contact details (name, DOB, phone, email, address, emergency contact name/phone) are managed on the <strong className="text-foreground">Info</strong> tab. This screen covers what that one doesn&apos;t.
         </div>
       )}
 
@@ -514,29 +513,48 @@ function ChecklistTab({ staffId }: { staffId: number }) {
 }
 
 // ── Employee picker + main ──────────────────────────────────────────────────
-function EmployeePicker({ employees, selected, onSelect, onAddNew }: { employees: Staff[]; selected: Staff | null; onSelect: (s: Staff) => void; onAddNew: () => void }) {
-  const [search, setSearch] = useState("");
-
-  const filtered = employees.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
-
+function EmployeePicker({
+  employees, selected, onSelect, onAddNew, search, setSearch, roleFilter, setRoleFilter, activeFilter, setActiveFilter,
+}: {
+  employees: Staff[]; selected: Staff | null; onSelect: (s: Staff) => void; onAddNew: () => void;
+  search: string; setSearch: (v: string) => void;
+  roleFilter: string; setRoleFilter: (v: string) => void;
+  activeFilter: string; setActiveFilter: (v: string) => void;
+}) {
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="p-2 border-b border-border space-y-2">
-        <input placeholder="Search employee…" value={search} onChange={(e) => setSearch(e.target.value)}
+        <input placeholder="Search name, ID, email…" value={search} onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <div className="flex gap-2">
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
+            className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-2 text-foreground text-xs">
+            <option value="">All roles</option>
+            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+          <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)}
+            className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-2 text-foreground text-xs">
+            <option value="1">Active</option>
+            <option value="0">Inactive</option>
+            <option value="all">All</option>
+          </select>
+        </div>
         <button onClick={onAddNew} className="w-full px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">
           + New Employee
         </button>
       </div>
       <div className="max-h-[420px] overflow-y-auto">
-        {filtered.map((e) => (
+        {employees.map((e) => (
           <button key={e.id} onClick={() => onSelect(e)}
             className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${selected?.id === e.id ? "bg-red-500/10" : "hover:bg-surface-hover"}`}>
-            <p className="text-foreground font-medium text-sm">{e.name}</p>
-            <p className="text-muted-foreground text-xs capitalize">{e.role.replace("_", " ")}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-foreground font-medium text-sm truncate">{e.name}</p>
+              {!e.active && <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground">Inactive</span>}
+            </div>
+            <p className="text-muted-foreground text-xs capitalize">{e.employee_number} · {e.role.replace("_", " ")}</p>
           </button>
         ))}
-        {filtered.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No employees found.</p>}
+        {employees.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No employees found.</p>}
       </div>
     </div>
   );
@@ -594,9 +612,9 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <p className="text-muted-foreground text-xs mt-1">Creates their login account. You&apos;ll land on their HR record next to fill in onboarding, RTW and the checklist.</p>
         </div>
         <div className="p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="col-span-2 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              className="sm:col-span-2 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <input placeholder="Password (6+ characters)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -621,7 +639,7 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
             </select>
-            <div className="col-span-2 flex items-center gap-2">
+            <div className="sm:col-span-2 flex items-center gap-2">
               <span className="text-muted-foreground text-sm">£</span>
               <input type="number" step="0.01" placeholder="Pay rate" value={form.pay_rate} onChange={(e) => setForm({ ...form, pay_rate: e.target.value })}
                 className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -641,7 +659,133 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
   );
 }
 
+// ── Info tab — the employee's core profile (name, login, role, pay, contact
+// details, emergency contact) plus deactivate/reactivate. This is the only
+// place any of that is editable — it used to be a separate "Employees"
+// directory page with its own copy of this form, which had already started
+// drifting from this one (different role-dropdown ordering). ──────────────
+type InfoForm = {
+  name: string; username: string; password: string; role: string; email: string; phone: string;
+  address: string; date_of_birth: string; hire_date: string;
+  employment_type: "hourly" | "salaried"; pay_rate: string; pay_frequency: "weekly" | "monthly";
+  emergency_contact_name: string; emergency_contact_phone: string;
+};
+
+function formFromStaff(s: Staff): InfoForm {
+  return {
+    name: s.name, username: s.username || "", password: "", role: s.role, email: s.email || "", phone: s.phone || "",
+    address: s.address || "", date_of_birth: s.date_of_birth || "", hire_date: s.hire_date || "",
+    employment_type: s.employment_type, pay_rate: String(s.pay_rate), pay_frequency: s.pay_frequency,
+    emergency_contact_name: s.emergency_contact_name || "", emergency_contact_phone: s.emergency_contact_phone || "",
+  };
+}
+
+function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: Staff) => void }) {
+  const [form, setForm] = useState<InfoForm>(formFromStaff(staff));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setForm(formFromStaff(staff)); }, [staff]);
+
+  async function save() {
+    setError("");
+    if (!form.name.trim() || !form.username.trim()) {
+      setError("Name and username are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(), username: form.username.trim().toLowerCase(), role: form.role,
+        email: form.email.trim() || null, phone: form.phone.trim() || null,
+        address: form.address.trim() || null, date_of_birth: form.date_of_birth || null, hire_date: form.hire_date || null,
+        employment_type: form.employment_type, pay_rate: Number(form.pay_rate) || 0, pay_frequency: form.pay_frequency,
+        emergency_contact_name: form.emergency_contact_name.trim() || null, emergency_contact_phone: form.emergency_contact_phone.trim() || null,
+      };
+      if (form.password) payload.password = form.password;
+
+      const res = await fetch(`/api/employees/${staff.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save");
+      setForm((f) => ({ ...f, password: "" }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      onUpdated(data.employee);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive() {
+    const res = await fetch(`/api/employees/${staff.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: staff.active ? 0 : 1 }),
+    });
+    const data = await res.json();
+    if (res.ok) onUpdated(data.employee);
+  }
+
+  return (
+    <div className="space-y-5">
+      <SectionHeading>Login &amp; Role</SectionHeading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Text label="Full name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+        <Text label="Username" value={form.username} onChange={(v) => setForm({ ...form, username: v })} />
+        <Text label="New password (leave blank to keep)" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="6+ characters" />
+        <Select label="Role" value={form.role} onChange={(v) => setForm({ ...form, role: v })} options={ROLES} />
+      </div>
+
+      <SectionHeading>Employment &amp; Pay</SectionHeading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <DateField label="Hire date" value={form.hire_date} onChange={(v) => setForm({ ...form, hire_date: v })} />
+        <Select label="Employment type" value={form.employment_type} onChange={(v) => setForm({ ...form, employment_type: v as "hourly" | "salaried" })}
+          options={[{ value: "hourly", label: "Hourly" }, { value: "salaried", label: "Salaried" }]} />
+        <Select label="Pay frequency" value={form.pay_frequency} onChange={(v) => setForm({ ...form, pay_frequency: v as "weekly" | "monthly" })}
+          options={[{ value: "weekly", label: "Weekly" }, { value: "monthly", label: "Monthly" }]} />
+        <div>
+          <span className="text-muted-foreground text-xs font-semibold">Pay rate</span>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-muted-foreground text-sm">£</span>
+            <input type="number" step="0.01" value={form.pay_rate} onChange={(e) => setForm({ ...form, pay_rate: e.target.value })}
+              className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <span className="text-muted-foreground text-xs whitespace-nowrap">{form.employment_type === "hourly" ? "per hour" : `per ${form.pay_frequency === "weekly" ? "week" : "month"}`}</span>
+          </div>
+        </div>
+      </div>
+
+      <SectionHeading>Contact Details</SectionHeading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Text label="Email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
+        <Text label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
+        <Text label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
+        <DateField label="Date of birth" value={form.date_of_birth} onChange={(v) => setForm({ ...form, date_of_birth: v })} />
+      </div>
+
+      <SectionHeading>Emergency Contact</SectionHeading>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Text label="Name" value={form.emergency_contact_name} onChange={(v) => setForm({ ...form, emergency_contact_name: v })} />
+        <Text label="Phone" value={form.emergency_contact_phone} onChange={(v) => setForm({ ...form, emergency_contact_phone: v })} />
+      </div>
+
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+
+      <div className="flex items-center gap-3 pt-2">
+        <button onClick={save} disabled={saving} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
+          {saving ? "Saving…" : "Save"}
+        </button>
+        {saved && <span className="text-emerald-600 text-sm font-semibold">✓ Saved</span>}
+        <button onClick={toggleActive} className="ml-auto px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
+          {staff.active ? "Deactivate" : "Reactivate"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
+  { id: "info", label: "Info" },
   { id: "onboarding", label: "Onboarding" },
   { id: "rtw", label: "RTW Verification" },
   { id: "checklist", label: "New Starter Checklist" },
@@ -651,15 +795,21 @@ const TABS = [
 export default function HrView() {
   const [employees, setEmployees] = useState<Staff[]>([]);
   const [selected, setSelected] = useState<Staff | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("onboarding");
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("info");
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showNewEmployee, setShowNewEmployee] = useState(false);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [activeFilter, setActiveFilter] = useState("1");
 
   const loadEmployees = useCallback(async () => {
-    const res = await fetch("/api/employees");
+    const params = new URLSearchParams({ active: activeFilter });
+    if (search) params.set("search", search);
+    if (roleFilter) params.set("role", roleFilter);
+    const res = await fetch(`/api/employees?${params}`);
     const data = await res.json();
     setEmployees(data.employees || []);
-  }, []);
+  }, [search, roleFilter, activeFilter]);
   useEffect(() => { loadEmployees(); }, [loadEmployees]);
 
   return (
@@ -668,7 +818,7 @@ export default function HrView() {
         <div className="mx-auto max-w-6xl flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-foreground font-bold text-2xl">HR</h1>
-            <p className="text-muted-foreground text-sm">Onboarding, right-to-work verification and new-starter checklist</p>
+            <p className="text-muted-foreground text-sm">Employee directory, onboarding, right-to-work verification and new-starter checklist</p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setShowPrivacy(true)} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
@@ -683,7 +833,10 @@ export default function HrView() {
 
       <div className="px-4 py-6">
         <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
-          <EmployeePicker employees={employees} selected={selected} onSelect={(s) => { setSelected(s); setTab("onboarding"); }} onAddNew={() => setShowNewEmployee(true)} />
+          <EmployeePicker
+            employees={employees} selected={selected} onSelect={(s) => { setSelected(s); setTab("info"); }} onAddNew={() => setShowNewEmployee(true)}
+            search={search} setSearch={setSearch} roleFilter={roleFilter} setRoleFilter={setRoleFilter} activeFilter={activeFilter} setActiveFilter={setActiveFilter}
+          />
 
           <div>
             {!selected ? (
@@ -695,7 +848,10 @@ export default function HrView() {
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <div>
                     <h2 className="text-foreground font-bold text-lg">{selected.name}</h2>
-                    <p className="text-muted-foreground text-sm capitalize">{selected.employee_number} · {selected.role.replace("_", " ")}</p>
+                    <p className="text-muted-foreground text-sm capitalize">
+                      {selected.employee_number} · {selected.role.replace("_", " ")}
+                      {!selected.active && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground normal-case">Inactive</span>}
+                    </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1 bg-surface-hover p-1 rounded-xl mb-5 w-fit">
@@ -706,6 +862,12 @@ export default function HrView() {
                     </button>
                   ))}
                 </div>
+                {tab === "info" && (
+                  <EmployeeInfoTab
+                    staff={selected}
+                    onUpdated={(s) => { setSelected(s); loadEmployees(); }}
+                  />
+                )}
                 {tab === "onboarding" && <OnboardingTab staffId={selected.id} />}
                 {tab === "rtw" && <RtwVerificationTab staffId={selected.id} />}
                 {tab === "checklist" && <ChecklistTab staffId={selected.id} />}

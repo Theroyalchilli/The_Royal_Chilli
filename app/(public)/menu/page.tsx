@@ -38,6 +38,11 @@ const MENUS: MenuBlock[] = [
     image: "/gallery/Salad.webp",
   },
   {
+    name: "Drinks Menu",
+    description: "Chilled coolers, fresh lassis and soft drinks, poured to cut the heat and carry every dish's spice just right.",
+    image: "/gallery/Drinks_Selection.jpg",
+  },
+  {
     name: "Promotions",
     description: "Seasonal offers, set menus and limited-time specials — announced here first.",
     image: "/gallery/Samosa_Chat.webp",

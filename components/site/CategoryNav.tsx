@@ -24,7 +24,7 @@ export function useCategoryNav(categories: MenuCategory[]) {
           setActiveCategory(id);
         }
       },
-      { rootMargin: "-160px 0px -70% 0px", threshold: 0 }
+      { rootMargin: "-110px 0px -70% 0px", threshold: 0 }
     );
     Object.values(sectionRefs.current).forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
@@ -48,7 +48,7 @@ export function useCategoryNav(categories: MenuCategory[]) {
     const el = sectionRefs.current[id];
     if (!el) return;
     setActiveCategory(id);
-    const offset = window.innerWidth < 768 ? 148 : 100;
+    const offset = window.innerWidth < 768 ? 80 : 120;
     const top = el.getBoundingClientRect().top + window.scrollY - offset;
     window.scrollTo({ top, behavior: "smooth" });
   }
@@ -72,7 +72,7 @@ export function CategoryNavBar({
   return (
     <nav
       ref={navScrollerRef}
-      className="sticky top-[105px] md:top-[65px] z-30 flex w-full gap-2 overflow-x-auto whitespace-nowrap border-y border-border bg-background/95 px-4 py-3 text-sm backdrop-blur [scrollbar-width:none] md:flex-wrap md:justify-center md:overflow-visible md:whitespace-normal [&::-webkit-scrollbar]:hidden"
+      className="sticky top-0 z-30 flex w-full gap-2 overflow-x-auto whitespace-nowrap border-y border-border bg-background/95 px-4 py-3 text-sm backdrop-blur [scrollbar-width:none] md:flex-wrap md:justify-center md:overflow-visible md:whitespace-normal [&::-webkit-scrollbar]:hidden"
     >
       {categories.map((category) => {
         const isActive = activeCategory === category.id;

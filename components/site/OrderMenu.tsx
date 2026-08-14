@@ -91,7 +91,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
               id={slugify(category.name)}
               data-category-id={category.id}
               ref={(el) => { sectionRefs.current[category.id] = el; }}
-              className="scroll-mt-[160px] md:scroll-mt-[110px]"
+              className="scroll-mt-[80px] md:scroll-mt-[120px]"
             >
               <CategoryHeading name={category.name} count={category.items.length} />
               <div className="mt-4 divide-y divide-border">

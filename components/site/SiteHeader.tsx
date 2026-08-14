@@ -89,14 +89,6 @@ export default function SiteHeader() {
         }`}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-4">
-          <Link
-            href="/"
-            className={`flex-shrink-0 truncate font-[family-name:var(--font-cinzel)] text-sm uppercase tracking-[0.2em] sm:text-base ${
-              floating ? "text-white" : "text-primary"
-            }`}
-          >
-            The Royal Chilli
-          </Link>
           <nav className="hidden items-center gap-8 text-xs uppercase tracking-[0.15em] md:flex">
             {navLinks.slice(0, 4).map((link) => (
               <Link
@@ -108,7 +100,7 @@ export default function SiteHeader() {
               </Link>
             ))}
           </nav>
-          <div className="flex flex-shrink-0 items-center gap-5">
+          <div className="ml-auto flex flex-shrink-0 items-center gap-5">
             <a
               href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`}
               aria-label={`Call ${siteContent.contact.phone}`}

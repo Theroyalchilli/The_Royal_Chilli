@@ -32,38 +32,28 @@ type FormState = {
   hire_date: string;
 };
 
-const emptyForm: FormState = {
-  name: "", username: "", password: "", role: "employee", email: "", phone: "",
-  employment_type: "hourly", pay_rate: "0", pay_frequency: "weekly",
-  hire_date: new Date().toISOString().slice(0, 10),
-};
-
 function EmployeeModal({
   editing,
   onClose,
   onSaved,
 }: {
-  editing: Staff | null;
+  editing: Staff;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState<FormState>(
-    editing
-      ? {
-          name: editing.name, username: editing.username || "", password: "", role: editing.role,
-          email: editing.email || "", phone: editing.phone || "",
-          employment_type: editing.employment_type, pay_rate: String(editing.pay_rate),
-          pay_frequency: editing.pay_frequency, hire_date: editing.hire_date || "",
-        }
-      : emptyForm
-  );
+  const [form, setForm] = useState<FormState>({
+    name: editing.name, username: editing.username || "", password: "", role: editing.role,
+    email: editing.email || "", phone: editing.phone || "",
+    employment_type: editing.employment_type, pay_rate: String(editing.pay_rate),
+    pay_frequency: editing.pay_frequency, hire_date: editing.hire_date || "",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   async function save() {
     setError("");
-    if (!form.name.trim() || !form.username.trim() || (!editing && form.password.length < 6)) {
-      setError("Name and username are required, and a new employee needs a password of at least 6 characters.");
+    if (!form.name.trim() || !form.username.trim()) {
+      setError("Name and username are required.");
       return;
     }
     setSaving(true);
@@ -81,9 +71,7 @@ function EmployeeModal({
       };
       if (form.password) payload.password = form.password;
 
-      const res = editing
-        ? await fetch(`/api/employees/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
-        : await fetch("/api/employees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await fetch(`/api/employees/${editing.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
       onSaved();
@@ -99,7 +87,7 @@ function EmployeeModal({
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-foreground font-bold text-lg">{editing ? `Edit ${editing.name}` : "New Employee"}</h2>
+          <h2 className="text-foreground font-bold text-lg">Edit {editing.name}</h2>
         </div>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -108,7 +96,7 @@ function EmployeeModal({
             <input placeholder="Username" value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder={editing ? "New password (leave blank to keep)" : "Password (6+ characters)"} type="password" value={form.password}
+            <input placeholder="New password (leave blank to keep)" type="password" value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as StaffRole })}
@@ -158,7 +146,7 @@ export default function EmployeesDirectory() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [activeFilter, setActiveFilter] = useState("1");
-  const [modalFor, setModalFor] = useState<Staff | null | "new">(null);
+  const [modalFor, setModalFor] = useState<Staff | null>(null);
 
   const fetchEmployees = useCallback(async () => {
     const params = new URLSearchParams({ active: activeFilter });
@@ -196,9 +184,9 @@ export default function EmployeesDirectory() {
             <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
               ← Staff Hub
             </Link>
-            <button onClick={() => setModalFor("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">
-              + Add Employee
-            </button>
+            <Link href="/staff/hr" className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">
+              + Add Employee (via HR)
+            </Link>
           </div>
         </div>
       </div>
@@ -268,7 +256,7 @@ export default function EmployeesDirectory() {
 
       {modalFor && (
         <EmployeeModal
-          editing={modalFor === "new" ? null : modalFor}
+          editing={modalFor}
           onClose={() => setModalFor(null)}
           onSaved={fetchEmployees}
         />

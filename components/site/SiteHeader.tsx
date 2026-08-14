@@ -53,6 +53,18 @@ export default function SiteHeader() {
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
 
+  // The wash itself has no blur (confirmed on the reference site) — the
+  // page content behind it is what's blurred, applied directly to <main>
+  // (a sibling of this overlay, not a blurred ancestor of it) so the menu
+  // text stays crisp. Same 20px / 0.8s easing as the reference's #content.
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!main) return;
+    main.style.transition = "filter 0.8s cubic-bezier(0.25, 0.1, 0.25, 1)";
+    main.style.filter = menuOpen ? "blur(20px)" : "";
+    return () => { main.style.filter = ""; };
+  }, [menuOpen]);
+
   const floating = isHome && atTop;
   // Hide the full header whenever the menu is open too — otherwise its own
   // mobile hamburger (opened while at the top) would sit right on top of

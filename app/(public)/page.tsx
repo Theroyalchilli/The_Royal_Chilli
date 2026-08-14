@@ -73,7 +73,7 @@ export default function HomePage() {
             <p className="mt-6 text-muted-foreground">{about.text1}</p>
             <p className="mt-4 text-muted-foreground">{about.text2}</p>
           </div>
-          <div className="relative aspect-[4/3] overflow-hidden">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-2xl">
             <Image src={galleryImages[1]} alt="Signature dish" fill className="object-cover" />
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function HomePage() {
         </div>
         <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {galleryImages.map((src) => (
-            <div key={src} className="relative aspect-square overflow-hidden">
+            <div key={src} className="relative aspect-square overflow-hidden rounded-xl">
               <Image src={src} alt="" fill className="object-cover transition hover:scale-105" />
             </div>
           ))}

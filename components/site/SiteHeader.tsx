@@ -161,6 +161,7 @@ export default function SiteHeader() {
             <Link
               key={link.href}
               href={link.href}
+              onClick={() => setMenuOpen(false)}
               className="font-[family-name:var(--font-playfair)] text-2xl text-foreground transition hover:text-primary"
             >
               {link.label}

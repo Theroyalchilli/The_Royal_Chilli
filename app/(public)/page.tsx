@@ -26,7 +26,7 @@ export default function HomePage() {
           Pulled up by the layout's header padding so it reaches the true top
           of the page and sits behind the fixed, transparent header; the
           matching top padding keeps content clear of it. */}
-      <section className="relative -mt-[108px] flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950 pt-[108px] md:-mt-[72px] md:pt-[72px]">
+      <section className="relative -mt-[73px] flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950 pt-[73px]">
         <div className="absolute inset-0">
           <HeroBackground images={hero.bgImages} />
           <div className="pointer-events-none absolute inset-0 bg-black/55" />

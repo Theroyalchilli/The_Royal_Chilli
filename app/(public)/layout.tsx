@@ -17,8 +17,11 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       {/* Header is now fixed (out of flow) so the homepage hero can extend
           full-bleed behind it. Every page needs this padding to avoid its
           content starting underneath the header; the homepage cancels it
-          with a matching negative margin on the hero section only. */}
-      <main className="flex-1 pt-[108px] md:pt-[72px]">{children}</main>
+          with a matching negative margin on the hero section only. Single
+          value at every breakpoint now — the header is one row everywhere
+          since mobile nav moved into the hamburger overlay instead of a
+          second row. */}
+      <main className="flex-1 pt-[73px]">{children}</main>
       <SiteFooter />
     </div>
   );

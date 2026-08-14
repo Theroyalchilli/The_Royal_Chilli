@@ -8,7 +8,7 @@ import { siteContent } from "@/lib/site-content";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/menu", label: "Kitchen Menu" },
+  { href: "/menu", label: "Menus" },
   { href: "/order", label: "Order Online" },
   { href: "/gallery", label: "Gallery" },
   { href: "/reservations", label: "Book a Table" },

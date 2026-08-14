@@ -130,9 +130,11 @@ export default function SiteHeader() {
         <Hamburger open={menuOpen} light={false} />
       </button>
 
-      {/* Full-screen menu overlay */}
+      {/* Full-screen menu overlay — a flat 50% white wash with no blur, black
+          text, plain case: the reference site's actual treatment (confirmed
+          via their live CSS), not the solid-dark version guessed earlier. */}
       <div
-        className={`fixed inset-0 z-[60] flex flex-col bg-neutral-950 transition-opacity duration-300 ${
+        className={`fixed inset-0 z-[60] flex flex-col bg-white/50 transition-opacity duration-300 ${
           menuOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
@@ -141,7 +143,7 @@ export default function SiteHeader() {
             <Link
               key={link.href}
               href={link.href}
-              className="font-[family-name:var(--font-cinzel)] text-2xl uppercase tracking-[0.1em] text-white/90 transition hover:text-primary"
+              className="font-[family-name:var(--font-playfair)] text-2xl text-foreground transition hover:text-primary"
             >
               {link.label}
             </Link>
@@ -150,7 +152,7 @@ export default function SiteHeader() {
 
         <a
           href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`}
-          className="flex items-center justify-center gap-2 border-t border-white/10 py-6 text-sm text-white/70"
+          className="flex items-center justify-center gap-2 border-t border-black/10 py-6 text-sm text-foreground/70"
         >
           <Phone size={14} />
           {siteContent.contact.phone}

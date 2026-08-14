@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
+import Reveal from "@/components/site/Reveal";
 
 export const metadata: Metadata = {
   title: "Menus — The Royal Chilli",
@@ -46,7 +47,7 @@ const MENUS: MenuBlock[] = [
 export default function MenuPage() {
   return (
     <div>
-      <div className="mx-auto max-w-4xl px-4 py-16 text-center">
+      <Reveal className="mx-auto max-w-4xl px-4 py-16 text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-primary">Our Menus</p>
         <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           Taste the <span className="italic text-primary">Royal Difference</span>
@@ -57,12 +58,12 @@ export default function MenuPage() {
         >
           Order Online
         </Link>
-      </div>
+      </Reveal>
 
       <div className="mx-auto max-w-5xl px-4 pb-20">
         <div className="grid gap-16">
           {MENUS.map((menu, i) => (
-            <div key={menu.name} className="grid items-center gap-8 md:grid-cols-2">
+            <Reveal key={menu.name} className="grid items-center gap-8 md:grid-cols-2">
               <div className={`relative aspect-[4/3] overflow-hidden rounded-2xl ${i % 2 === 1 ? "md:order-2" : ""}`}>
                 <Image src={menu.image} alt={menu.name} fill className="object-cover" />
               </div>
@@ -84,7 +85,7 @@ export default function MenuPage() {
                   </span>
                 )}
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ChevronDown } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import HeroBackground from "@/components/site/HeroBackground";
+import Reveal from "@/components/site/Reveal";
 
 export const metadata: Metadata = {
   title: "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London",
@@ -65,35 +66,35 @@ export default function HomePage() {
       {/* About */}
       <section id="about" className="mx-auto max-w-5xl px-4 py-24">
         <div className="grid gap-12 md:grid-cols-2 md:items-center">
-          <div>
+          <Reveal>
             <p className="text-xs uppercase tracking-[0.3em] text-primary">Our Story</p>
             <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
               {about.title} <span className="italic text-primary">{about.titleGold}</span>
             </h2>
             <p className="mt-6 text-muted-foreground">{about.text1}</p>
             <p className="mt-4 text-muted-foreground">{about.text2}</p>
-          </div>
-          <div className="relative aspect-[4/3] overflow-hidden rounded-2xl">
+          </Reveal>
+          <Reveal delay={150} className="relative aspect-[4/3] overflow-hidden rounded-2xl">
             <Image src={galleryImages[1]} alt="Signature dish" fill className="object-cover" />
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Gallery */}
       <section className="mx-auto max-w-6xl px-4 py-20">
-        <div className="text-center">
+        <Reveal className="text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-primary">Gallery</p>
           <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
             From Our <span className="italic text-primary">Kitchen</span>
           </h2>
-        </div>
-        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        </Reveal>
+        <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {galleryImages.map((src) => (
             <div key={src} className="relative aspect-square overflow-hidden rounded-xl">
               <Image src={src} alt="" fill className="object-cover transition hover:scale-105" />
             </div>
           ))}
-        </div>
+        </Reveal>
         <div className="mt-8 text-center">
           <Link href="/gallery" className="text-xs uppercase tracking-[0.15em] text-primary hover:underline">
             See Full Gallery
@@ -104,21 +105,21 @@ export default function HomePage() {
       {/* Testimonials */}
       <section className="bg-card px-4 py-20">
         <div className="mx-auto max-w-6xl">
-          <div className="text-center">
+          <Reveal className="text-center">
             <p className="text-xs uppercase tracking-[0.3em] text-primary">Reviews</p>
             <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
               What Our <span className="italic text-primary">Guests Say</span>
             </h2>
-          </div>
+          </Reveal>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {testimonials.map((t) => (
-              <div key={t.name} className="border border-border bg-background p-6 text-center">
+            {testimonials.map((t, i) => (
+              <Reveal key={t.name} delay={i * 80} className="border border-border bg-background p-6 text-center">
                 <div className="text-primary">{"★".repeat(t.stars)}</div>
                 <p className="mt-4 text-sm text-muted-foreground">&ldquo;{t.text}&rdquo;</p>
                 <div className="mx-auto mt-5 h-px w-8 bg-primary/30" />
                 <p className="mt-5 text-sm">{t.name}</p>
                 <p className="text-xs text-muted-foreground">{t.platform}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
           <div className="mt-8 text-center">
@@ -131,17 +132,19 @@ export default function HomePage() {
 
       {/* Reservation CTA */}
       <section className="mx-auto max-w-3xl px-4 py-24 text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-primary">{reservation.tag}</p>
-        <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
-          {reservation.title} <span className="italic text-primary">{reservation.titleGold}</span>
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-muted-foreground">{reservation.desc}</p>
-        <Link
-          href="/reservations"
-          className="mt-8 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
-        >
-          Book Now
-        </Link>
+        <Reveal>
+          <p className="text-xs uppercase tracking-[0.3em] text-primary">{reservation.tag}</p>
+          <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
+            {reservation.title} <span className="italic text-primary">{reservation.titleGold}</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-muted-foreground">{reservation.desc}</p>
+          <Link
+            href="/reservations"
+            className="mt-8 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
+          >
+            Book Now
+          </Link>
+        </Reveal>
       </section>
     </div>
   );

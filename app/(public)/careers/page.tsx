@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { siteContent } from "@/lib/site-content";
+import Reveal from "@/components/site/Reveal";
 
 export const metadata: Metadata = {
   title: "Careers — The Royal Chilli",
@@ -15,7 +16,7 @@ const roles = [
 export default function CareersPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16">
-      <div className="text-center">
+      <Reveal className="text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-primary">Join Our Team</p>
         <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           Careers at <span className="italic text-primary">The Royal Chilli</span>
@@ -23,18 +24,18 @@ export default function CareersPage() {
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
           We&apos;re a growing team bringing authentic Indian cuisine to Hounslow. If you&apos;re passionate about great food and great service, we&apos;d love to hear from you.
         </p>
-      </div>
+      </Reveal>
 
       <div className="mt-12 space-y-4">
-        {roles.map((r) => (
-          <div key={r.title} className="border border-border p-6">
+        {roles.map((r, i) => (
+          <Reveal key={r.title} delay={i * 80} className="border border-border p-6">
             <h2 className="text-lg">{r.title}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{r.desc}</p>
-          </div>
+          </Reveal>
         ))}
       </div>
 
-      <div className="mt-12 border border-border bg-card p-8 text-center">
+      <Reveal className="mt-12 border border-border bg-card p-8 text-center">
         <h2 className="font-[family-name:var(--font-playfair)] text-xl">Interested in joining us?</h2>
         <p className="mt-2 text-muted-foreground">
           Call us on{" "}
@@ -44,7 +45,7 @@ export default function CareersPage() {
           or drop your CV in at{" "}
           <span className="text-foreground">{siteContent.contact.address}</span>.
         </p>
-      </div>
+      </Reveal>
     </div>
   );
 }

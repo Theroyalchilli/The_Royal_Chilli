@@ -2,6 +2,7 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import fs from "fs";
 import path from "path";
+import Reveal from "@/components/site/Reveal";
 
 export const metadata: Metadata = {
   title: "Gallery — The Royal Chilli",
@@ -33,21 +34,21 @@ export default function GalleryPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16">
-      <div className="text-center">
+      <Reveal className="text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-primary">Gallery</p>
         <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           A Taste of <span className="italic text-primary">The Royal Chilli</span>
         </h1>
-      </div>
+      </Reveal>
 
       <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-        {photos.map(({ file, caption }) => (
-          <div key={file} className="group relative aspect-square overflow-hidden rounded-xl">
+        {photos.map(({ file, caption }, i) => (
+          <Reveal key={file} delay={(i % 8) * 60} className="group relative aspect-square overflow-hidden rounded-xl">
             <Image src={`/gallery/${file}`} alt={caption} fill className="object-cover transition group-hover:scale-105" />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100">
               <p className="text-xs font-medium text-white">{caption}</p>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
     </div>

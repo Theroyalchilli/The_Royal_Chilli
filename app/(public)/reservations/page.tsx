@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { siteContent } from "@/lib/site-content";
+import Reveal from "@/components/site/Reveal";
 
 export default function ReservationsPage() {
   return (
@@ -118,13 +119,13 @@ function ReservationsForm() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16">
-      <div className="text-center">
+      <Reveal className="text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-primary">{reservation.tag}</p>
         <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
           {reservation.title} <span className="italic text-primary">{reservation.titleGold}</span>
         </h1>
         <p className="mt-3 text-muted-foreground">{reservation.desc}</p>
-      </div>
+      </Reveal>
 
       <div className="mt-10 space-y-3">
         <input

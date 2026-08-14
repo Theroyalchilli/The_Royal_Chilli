@@ -55,14 +55,20 @@ export default function SiteHeader() {
 
   // The wash itself has no blur (confirmed on the reference site) — the
   // page content behind it is what's blurred, applied directly to <main>
-  // (a sibling of this overlay, not a blurred ancestor of it) so the menu
-  // text stays crisp. Same 20px / 0.8s easing as the reference's #content.
+  // and <footer> (siblings of this overlay, not blurred ancestors of it) so
+  // the menu text stays crisp. Blurring both means the whole background is
+  // consistently soft even if the menu's opened scrolled near the bottom of
+  // a page, where <main> alone would leave the footer sharp. Same 20px /
+  // 0.8s easing as the reference's #content.
   useEffect(() => {
-    const main = document.querySelector("main");
-    if (!main) return;
-    main.style.transition = "filter 0.8s cubic-bezier(0.25, 0.1, 0.25, 1)";
-    main.style.filter = menuOpen ? "blur(20px)" : "";
-    return () => { main.style.filter = ""; };
+    const targets = [document.querySelector("main"), document.querySelector("footer")].filter(
+      (el): el is HTMLElement => el !== null
+    );
+    for (const el of targets) {
+      el.style.transition = "filter 0.8s cubic-bezier(0.25, 0.1, 0.25, 1)";
+      el.style.filter = menuOpen ? "blur(20px)" : "";
+    }
+    return () => { for (const el of targets) el.style.filter = ""; };
   }, [menuOpen]);
 
   const floating = isHome && atTop;

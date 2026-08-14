@@ -89,7 +89,7 @@ export default function SiteHeader() {
         }`}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-4">
-          <nav className="flex items-center gap-3 text-[10px] uppercase tracking-[0.1em] sm:gap-5 sm:text-xs md:gap-8 md:tracking-[0.15em]">
+          <nav className="hidden items-center gap-8 text-xs uppercase tracking-[0.15em] md:flex">
             {navLinks.slice(0, 4).map((link) => (
               <Link
                 key={link.href}

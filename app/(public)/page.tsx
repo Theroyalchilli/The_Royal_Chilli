@@ -28,10 +28,13 @@ export default function HomePage() {
           of the page and sits behind the fixed, transparent header; the
           matching top padding keeps content clear of it. */}
       <section className="relative -mt-[49px] flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950 pt-[49px]">
-        <div className="absolute inset-0">
-          <HeroBackground images={hero.bgImages} />
-          <div className="pointer-events-none absolute inset-0 bg-black/55" />
+        <div className="absolute inset-0 md:hidden">
+          <HeroBackground images={hero.mobileBgImages} />
         </div>
+        <div className="absolute inset-0 hidden md:block">
+          <HeroBackground images={hero.bgImages} />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-black/55" />
 
         <div className="relative z-10 mx-auto max-w-3xl px-4 text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-white/80 sm:text-sm">{hero.tag}</p>

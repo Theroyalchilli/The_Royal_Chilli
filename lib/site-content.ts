@@ -14,12 +14,9 @@ export const siteContent = {
     ],
     // Separate portrait set for mobile — the desktop photos above are
     // landscape and crop badly full-bleed on a tall phone viewport.
-    // Storefront goes first so the very first thing mobile visitors see
-    // is the shopfront, not an interior detail shot.
     mobileBgImages: [
-      "/hero/mobile-storefront.jpg",
-      "/hero/mobile-table.jpg",
-      "/hero/mobile-bar.jpg",
+      "/hero/mobile-food-spread.jpg",
+      "/hero/mobile-interior.jpg",
     ],
   },
   about: {

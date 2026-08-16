@@ -17,6 +17,8 @@ export const siteContent = {
     mobileBgImages: [
       "/hero/mobile-food-spread.jpg",
       "/hero/mobile-interior.jpg",
+      "/hero/mobile-table.jpg",
+      "/hero/mobile-bar.jpg",
     ],
   },
   about: {

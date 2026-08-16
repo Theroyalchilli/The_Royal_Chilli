@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { readCart, type CartLine } from "@/lib/cart";
+import { readCart, writeCart, type CartLine } from "@/lib/cart";
 
 type ZoneCheck = { deliverable: boolean; fee?: number; min_order?: number; zone_name?: string };
 
@@ -51,6 +52,24 @@ export default function CheckoutPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [cart]);
+
+  function bumpLine(lineId: string, delta: number) {
+    setCart((prev) => {
+      const next = prev
+        .map((l) => (l.lineId === lineId ? { ...l, quantity: l.quantity + delta } : l))
+        .filter((l) => l.quantity > 0);
+      writeCart(next);
+      return next;
+    });
+  }
+
+  function removeLine(lineId: string) {
+    setCart((prev) => {
+      const next = prev.filter((l) => l.lineId !== lineId);
+      writeCart(next);
+      return next;
+    });
+  }
 
   const subtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
   const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? zoneCheck.fee || 0 : 0;
@@ -175,18 +194,29 @@ export default function CheckoutPage() {
     <div className="mx-auto max-w-lg px-4 py-16">
       <h1 className="font-[family-name:var(--font-playfair)] text-3xl">Checkout</h1>
 
-      <div className="mt-6 space-y-2 border border-border p-4">
+      <div className="mt-6 space-y-3 border border-border p-4">
         {cart.map((c) => (
-          <div key={c.lineId} className="flex justify-between text-sm">
-            <span>
-              {c.quantity} × {c.name}
+          <div key={c.lineId} className="flex items-center justify-between gap-3 text-sm">
+            <div className="min-w-0 flex-1">
+              <p>{c.name}</p>
               {c.selectedOptions.length > 0 && (
-                <span className="text-muted-foreground"> ({c.selectedOptions.map((o) => o.name).join(", ")})</span>
+                <p className="text-xs text-muted-foreground">{c.selectedOptions.map((o) => o.name).join(", ")}</p>
               )}
-            </span>
-            <span>{formatCurrency(c.unitPrice * c.quantity)}</span>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <button onClick={() => bumpLine(c.lineId, -1)} aria-label={`Decrease ${c.name} quantity`} className="h-7 w-7 rounded-full border border-border text-base leading-none hover:border-primary">−</button>
+              <span className="w-4 text-center">{c.quantity}</span>
+              <button onClick={() => bumpLine(c.lineId, 1)} aria-label={`Increase ${c.name} quantity`} className="h-7 w-7 rounded-full border border-border text-base leading-none hover:border-primary">+</button>
+            </div>
+            <span className="w-14 flex-shrink-0 text-right">{formatCurrency(c.unitPrice * c.quantity)}</span>
+            <button onClick={() => removeLine(c.lineId)} aria-label={`Remove ${c.name}`} className="flex-shrink-0 text-muted-foreground hover:text-red-500">
+              <X size={14} />
+            </button>
           </div>
         ))}
+        <Link href="/order" className="inline-block text-xs uppercase tracking-[0.15em] text-primary hover:underline">
+          + Add more items
+        </Link>
         <div className="flex justify-between border-t border-border pt-2 text-sm">
           <span>Subtotal</span>
           <span>{formatCurrency(subtotal)}</span>

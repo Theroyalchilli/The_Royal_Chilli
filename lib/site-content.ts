@@ -8,17 +8,20 @@ export const siteContent = {
     line2: "Royal in Taste, Rich in Tradition",
     desc: "Experience the rich flavours and time-honoured traditions of authentic Indian cooking — every dish crafted with love, care, and passion in the heart of London.",
     bgImages: [
-      "/hero/interior-1.jpg",
-      "/hero/interior-2.jpg",
-      "/hero/interior-3.jpg",
+      "/hero/desktop-food-spread.jpg",
+      "/hero/desktop-interior.jpg",
+      "/hero/desktop-bar.jpg",
+      "/hero/desktop-table.jpg",
     ],
     // Separate portrait set for mobile — the desktop photos above are
-    // landscape and crop badly full-bleed on a tall phone viewport.
+    // landscape and crop badly full-bleed on a tall phone viewport. Kept in
+    // the same theme order as bgImages (food, interior, bar, table) so both
+    // rotations open on the same subject.
     mobileBgImages: [
       "/hero/mobile-food-spread.jpg",
       "/hero/mobile-interior.jpg",
-      "/hero/mobile-table.jpg",
       "/hero/mobile-bar.jpg",
+      "/hero/mobile-table.jpg",
     ],
   },
   about: {

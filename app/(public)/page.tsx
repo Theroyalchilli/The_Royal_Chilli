@@ -77,8 +77,8 @@ export default function HomePage() {
             <p className="mt-6 text-muted-foreground">{about.text1}</p>
             <p className="mt-4 text-muted-foreground">{about.text2}</p>
           </Reveal>
-          <Reveal delay={150} className="relative aspect-[4/3] overflow-hidden rounded-2xl">
-            <Image src={galleryImages[1]} alt="Signature dish" fill className="object-cover" />
+          <Reveal delay={150} className="relative aspect-[4/5] overflow-hidden rounded-2xl">
+            <Image src="/gallery/Pistachio_Lamb_Chops.webp" alt="Pistachio Lamb Chops" fill className="object-cover" />
           </Reveal>
         </div>
       </section>

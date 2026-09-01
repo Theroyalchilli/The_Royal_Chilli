@@ -36,6 +36,14 @@ ALTER TABLE stock_takes      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_take_lines ENABLE ROW LEVEL SECURITY;
 -- No anon policies: server-only, same as the rest of the inventory module.
 
+-- Belt-and-braces: CREATE TABLE IF NOT EXISTS above is a no-op when
+-- stock_takes already exists (e.g. an earlier partial run of this file), so
+-- the 'submitted' status wouldn't reach an already-deployed DB without this
+-- explicit widening. Safe to run even when the constraint is already correct.
+ALTER TABLE stock_takes DROP CONSTRAINT IF EXISTS stock_takes_status_check;
+ALTER TABLE stock_takes ADD CONSTRAINT stock_takes_status_check
+  CHECK (status IN ('open', 'submitted', 'posted', 'cancelled'));
+
 -- New permission gating the submitted -> posted step (separate from
 -- manage_inventory, which covers open/count/submit). Seeded the same way
 -- schema.sql seeds every other permission, so an already-deployed DB picks

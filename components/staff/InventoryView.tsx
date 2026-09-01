@@ -10,8 +10,18 @@ type Ingredient = {
 type Supplier = { id: number; name: string; contact_name: string | null; phone: string | null; email: string | null; active: number };
 type PO = { id: number; order_number: string; supplier_id: number; supplier_name: string; status: string; order_date: string; expected_date: string | null; total_cost: number };
 type Recipe = { id: number; menu_item_id: number | null; menu_item_name: string | null; menu_item_price: number | null; name: string; yield_quantity: number; yield_unit: string; recipe_cost: number; food_cost_pct: number | null };
+type StockTake = { id: number; location: string; status: string; opened_at: string; posted_at: string | null; counted_by_name: string | null };
+type StockTakeLine = { id: number; ingredient_id: number; ingredient_name: string; unit: string; system_qty: number; counted_qty: number | null; variance_qty: number | null; reason_code: string | null };
+type ReconciliationLine = { ingredient_id: number; ingredient_name: string; unit: string; theoretical_usage: number; actual_usage: number; variance_qty: number; variance_value: number };
+type ReconciliationReport = { period: { from: string; to: string }; net_sales: number; cogs_theoretical: number; cogs_actual: number; gp_theoretical: number | null; gp_actual: number | null; gp_gap: number | null; lines: ReconciliationLine[] };
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
+
+function statusBadgeClass(status: string) {
+  if (status === "posted") return "bg-green-100 text-green-700";
+  if (status === "submitted") return "bg-blue-100 text-blue-700";
+  return "bg-amber-100 text-amber-700"; // open / cancelled
+}
 
 // ── Ingredients ──────────────────────────────────────────────────────────────
 function IngredientModal({ suppliers, onClose, onSaved }: { suppliers: Supplier[]; onClose: () => void; onSaved: () => void }) {
@@ -427,9 +437,276 @@ function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
   );
 }
 
+// ── Stock Take ───────────────────────────────────────────────────────────────
+const REASON_CODES = ["waste", "spoilage", "over_portion", "unknown", "count_error"] as const;
+
+function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stockTakeId: number; canApprove: boolean; onClose: () => void; onChanged: () => void }) {
+  const [stockTake, setStockTake] = useState<StockTake | null>(null);
+  const [lines, setLines] = useState<StockTakeLine[]>([]);
+  const [counts, setCounts] = useState<Record<number, { counted: string; reason: string }>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmingPost, setConfirmingPost] = useState(false);
+  const [confirmingReopen, setConfirmingReopen] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/stock-takes/${stockTakeId}`);
+    const data = await res.json();
+    setStockTake(data.stockTake);
+    setLines(data.lines || []);
+    setCounts((prev) => {
+      const next = { ...prev };
+      for (const l of (data.lines || []) as StockTakeLine[]) {
+        if (!(l.ingredient_id in next)) {
+          next[l.ingredient_id] = { counted: l.counted_qty != null ? String(l.counted_qty) : "", reason: l.reason_code || "" };
+        }
+      }
+      return next;
+    });
+  }, [stockTakeId]);
+  useEffect(() => { load(); }, [load]);
+
+  const isOpen = stockTake?.status === "open";
+  const isSubmitted = stockTake?.status === "submitted";
+
+  async function saveCounts() {
+    setSaving(true); setError("");
+    const payload = lines
+      .filter((l) => counts[l.ingredient_id]?.counted !== "")
+      .map((l) => ({ ingredient_id: l.ingredient_id, counted_qty: Number(counts[l.ingredient_id].counted), reason_code: counts[l.ingredient_id].reason || undefined }));
+    const res = await fetch(`/api/stock-takes/${stockTakeId}/lines`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines: payload }),
+    });
+    setSaving(false);
+    if (!res.ok) { const d = await res.json(); return setError(d.error); }
+    load();
+  }
+
+  async function submit() {
+    setSaving(true); setError("");
+    const res = await fetch(`/api/stock-takes/${stockTakeId}/submit`, { method: "POST" });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) return setError(data.error);
+    onChanged();
+    load();
+  }
+
+  async function post() {
+    const res = await fetch(`/api/stock-takes/${stockTakeId}/post`, { method: "POST" });
+    const data = await res.json();
+    setConfirmingPost(false);
+    if (!res.ok) return setError(data.error);
+    onChanged();
+    load();
+  }
+
+  async function reopen() {
+    const res = await fetch(`/api/stock-takes/${stockTakeId}/reopen`, { method: "POST" });
+    const data = await res.json();
+    setConfirmingReopen(false);
+    if (!res.ok) return setError(data.error);
+    onChanged();
+    load();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-foreground font-bold text-lg capitalize">Stock Take · {stockTake?.location} #{stockTake?.id}</h2>
+          {stockTake && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusBadgeClass(stockTake.status)}`}>{stockTake.status}</span>}
+        </div>
+        <div className="mt-4 rounded-xl border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Ingredient</th><th className="text-right px-3 py-2">System</th><th className="text-right px-3 py-2">Counted</th><th className="text-right px-3 py-2">Variance</th><th className="text-left px-3 py-2">Reason</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              {lines.map((l) => {
+                const c = counts[l.ingredient_id] || { counted: "", reason: "" };
+                const liveVariance = c.counted !== "" ? Number(c.counted) - Number(l.system_qty) : null;
+                const shown = isOpen ? liveVariance : l.variance_qty;
+                return (
+                  <tr key={l.id} className="bg-background">
+                    <td className="px-3 py-2 text-foreground font-medium">{l.ingredient_name}</td>
+                    <td className="px-3 py-2 text-right text-muted-foreground">{Number(l.system_qty).toFixed(2)} {l.unit}</td>
+                    <td className="px-3 py-2 text-right">
+                      {isOpen ? (
+                        <input type="number" step="0.001" value={c.counted} onChange={(e) => setCounts((prev) => ({ ...prev, [l.ingredient_id]: { ...c, counted: e.target.value } }))} className="w-24 bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-sm text-right" />
+                      ) : (
+                        <span className="text-foreground">{l.counted_qty != null ? Number(l.counted_qty).toFixed(2) : "—"} {l.unit}</span>
+                      )}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${(shown || 0) < 0 ? "text-red-600" : (shown || 0) > 0 ? "text-emerald-600" : "text-muted-foreground"}`}>
+                      {shown != null ? Number(shown).toFixed(2) : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {isOpen ? (
+                        <select value={c.reason} onChange={(e) => setCounts((prev) => ({ ...prev, [l.ingredient_id]: { ...c, reason: e.target.value } }))} className="bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-xs">
+                          <option value="">—</option>
+                          {REASON_CODES.map((r) => <option key={r} value={r}>{r.replace("_", " ")}</option>)}
+                        </select>
+                      ) : (l.reason_code || "—")}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {lines.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No active ingredients to count.</p>}
+        </div>
+        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+        {isSubmitted && !canApprove && (
+          <p className="mt-4 text-muted-foreground text-sm text-center">Awaiting approval from a manager before this posts.</p>
+        )}
+        {confirmingPost ? (
+          <div className="mt-4 rounded-xl border border-red-300/50 bg-red-50 p-3">
+            <p className="text-red-700 text-sm font-semibold">Approve and post this stock take?</p>
+            <p className="mt-1 text-red-700 text-xs">This writes stock adjustments to the ledger and locks the count — it can&apos;t be edited afterwards.</p>
+            <div className="mt-3 flex gap-3">
+              <button onClick={() => setConfirmingPost(false)} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
+              <button onClick={post} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Yes, Approve & Post</button>
+            </div>
+          </div>
+        ) : confirmingReopen ? (
+          <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-50 p-3">
+            <p className="text-amber-700 text-sm font-semibold">Return this stock take for a recount?</p>
+            <p className="mt-1 text-amber-700 text-xs">Sends it back to open — counted quantities stay as entered so the counting staff can review and correct them.</p>
+            <div className="mt-3 flex gap-3">
+              <button onClick={() => setConfirmingReopen(false)} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
+              <button onClick={reopen} className="flex-1 h-10 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl">Yes, Return</button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 flex gap-3">
+            <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Close</button>
+            {isOpen && <button onClick={saveCounts} disabled={saving} className="flex-1 h-10 bg-surface-hover hover:bg-elevated text-foreground font-bold rounded-xl border border-border">{saving ? "Saving…" : "Save Counts"}</button>}
+            {isOpen && <button onClick={submit} disabled={saving} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">{saving ? "Submitting…" : "Submit for Approval"}</button>}
+            {isSubmitted && canApprove && <button onClick={() => setConfirmingReopen(true)} className="flex-1 h-10 bg-surface-hover hover:bg-elevated text-foreground font-bold rounded-xl border border-border">Return for Recount</button>}
+            {isSubmitted && canApprove && <button onClick={() => setConfirmingPost(true)} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Approve & Post</button>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StockTakesTab({ canApprove }: { canApprove: boolean }) {
+  const [stockTakes, setStockTakes] = useState<StockTake[]>([]);
+  const [modal, setModal] = useState(false);
+  const [location, setLocation] = useState("all");
+  const [sheetId, setSheetId] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/stock-takes");
+    const data = await res.json();
+    setStockTakes(data.stockTakes || []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function start() {
+    const res = await fetch("/api/stock-takes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location }) });
+    const data = await res.json();
+    setModal(false);
+    await load();
+    if (res.ok) setSheetId(data.stockTake.id);
+  }
+
+  return (
+    <div>
+      <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Stock Take</button></div>
+      <div className="mt-3 space-y-2">
+        {stockTakes.map((st) => (
+          <button key={st.id} onClick={() => setSheetId(st.id)} className="w-full text-left rounded-lg border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-2 hover:bg-surface-hover">
+            <div>
+              <p className="text-foreground font-semibold capitalize">{st.location} · #{st.id}</p>
+              <p className="text-muted-foreground text-sm">Opened {new Date(st.opened_at).toLocaleString()} {st.counted_by_name ? `by ${st.counted_by_name}` : ""}</p>
+            </div>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusBadgeClass(st.status)}`}>{st.status}</span>
+          </button>
+        ))}
+        {stockTakes.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No stock takes yet.</p>}
+      </div>
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-2xl w-full max-w-sm p-5">
+            <h2 className="text-foreground font-bold text-lg">New Stock Take</h2>
+            <p className="mt-1 text-muted-foreground text-xs">Snapshots system stock for every ingredient right now — counts get checked against this frozen baseline, so sales during the count don&apos;t skew the variance.</p>
+            <select value={location} onChange={(e) => setLocation(e.target.value)} className="mt-3 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+              <option value="all">All</option>
+              <option value="dry">Dry store</option>
+              <option value="chiller">Chiller</option>
+              <option value="freezer">Freezer</option>
+            </select>
+            <div className="mt-4 flex gap-3">
+              <button onClick={() => setModal(false)} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
+              <button onClick={start} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Start</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {sheetId != null && <StockTakeSheet stockTakeId={sheetId} canApprove={canApprove} onClose={() => setSheetId(null)} onChanged={load} />}
+    </div>
+  );
+}
+
+// ── Reconciliation ───────────────────────────────────────────────────────────
+function ReconciliationTab() {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(weekAgo);
+  const [to, setTo] = useState(today);
+  const [report, setReport] = useState<ReconciliationReport | null>(null);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/reports/reconciliation?from=${from}&to=${to}`);
+    if (res.ok) setReport(await res.json());
+  }, [from, to]);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <span className="text-muted-foreground">to</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+      </div>
+
+      {report && (
+        <>
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">Net sales</p><p className="text-foreground font-bold text-lg">{fmtMoney(report.net_sales)}</p></div>
+            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">GP % (theoretical)</p><p className="text-foreground font-bold text-lg">{report.gp_theoretical != null ? `${report.gp_theoretical}%` : "—"}</p></div>
+            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">GP % (actual)</p><p className="text-foreground font-bold text-lg">{report.gp_actual != null ? `${report.gp_actual}%` : "—"}</p></div>
+            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">GP gap</p><p className={`font-bold text-lg ${(report.gp_gap ?? 0) > 2 ? "text-red-600" : "text-foreground"}`}>{report.gp_gap != null ? `${report.gp_gap} pts` : "—"}</p></div>
+          </div>
+          <p className="mt-2 text-muted-foreground text-[11px]">Stock-vs-sales — only trustworthy once a stock take has been posted for this period, so the ledger already matches the shelf.</p>
+
+          <div className="mt-4 rounded-xl border border-border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Ingredient</th><th className="text-right px-3 py-2">Theoretical</th><th className="text-right px-3 py-2">Actual</th><th className="text-right px-3 py-2">Variance</th><th className="text-right px-3 py-2">Value</th></tr></thead>
+              <tbody className="divide-y divide-border">
+                {report.lines.map((l) => (
+                  <tr key={l.ingredient_id} className="bg-background">
+                    <td className="px-3 py-2 text-foreground font-medium">{l.ingredient_name}</td>
+                    <td className="px-3 py-2 text-right text-muted-foreground">{l.theoretical_usage.toFixed(2)} {l.unit}</td>
+                    <td className="px-3 py-2 text-right text-muted-foreground">{l.actual_usage.toFixed(2)} {l.unit}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${l.variance_qty > 0 ? "text-red-600" : l.variance_qty < 0 ? "text-emerald-600" : "text-muted-foreground"}`}>{l.variance_qty > 0 ? "+" : ""}{l.variance_qty.toFixed(2)} {l.unit}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${l.variance_value > 0 ? "text-red-600" : "text-foreground"}`}>{fmtMoney(l.variance_value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {report.lines.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No usage recorded in this period.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
-export default function InventoryView() {
-  const [tab, setTab] = useState<"ingredients" | "suppliers" | "orders" | "recipes">("ingredients");
+export default function InventoryView({ canApproveStockTakes }: { canApproveStockTakes: boolean }) {
+  const [tab, setTab] = useState<"ingredients" | "suppliers" | "orders" | "recipes" | "stocktake" | "reconciliation">("ingredients");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [alerts, setAlerts] = useState<{ lowStock: Ingredient[]; expiringSoon: { ingredient_name: string; expiry_date: string }[] }>({ lowStock: [], expiringSoon: [] });
@@ -457,6 +734,8 @@ export default function InventoryView() {
     { id: "suppliers", label: "Suppliers" },
     { id: "orders", label: "Purchase Orders" },
     { id: "recipes", label: "Recipes & Food Cost" },
+    { id: "stocktake", label: "Stock Take" },
+    { id: "reconciliation", label: "Reconciliation" },
   ] as const;
 
   return (
@@ -492,6 +771,8 @@ export default function InventoryView() {
           {tab === "suppliers" && <SuppliersTab suppliers={suppliers} onChange={loadSuppliers} />}
           {tab === "orders" && <PurchaseOrdersTab suppliers={suppliers} ingredients={ingredients} />}
           {tab === "recipes" && <RecipesTab ingredients={ingredients} />}
+          {tab === "stocktake" && <StockTakesTab canApprove={canApproveStockTakes} />}
+          {tab === "reconciliation" && <ReconciliationTab />}
         </div>
       </div>
       </div>

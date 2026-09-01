@@ -13,6 +13,7 @@ export const PERMISSION_KEYS = [
   "manage_crm",
   "manage_drivers",
   "manage_finance",
+  "approve_stock_takes",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -24,6 +25,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   manage_crm: "Manage Customers (edit rewards, adjust points)",
   manage_drivers: "Manage Drivers (assign deliveries, roster)",
   manage_finance: "View Finance (P&L, VAT, cash reconciliation)",
+  approve_stock_takes: "Approve Stock Takes (post submitted counts, adjust the ledger)",
 };
 
 // Same defaults that used to be hardcoded here. Used as the safety net if the
@@ -36,6 +38,7 @@ const DEFAULTS: Record<PermissionKey, StaffRole[]> = {
   manage_crm: ["owner", "admin", "manager"],
   manage_drivers: ["owner", "admin", "manager"],
   manage_finance: ["owner", "admin", "manager", "accountant"],
+  approve_stock_takes: ["owner", "admin", "manager"],
 };
 
 function defaultsAsSets(): Record<PermissionKey, Set<StaffRole>> {
@@ -109,6 +112,10 @@ export function canManageDrivers(role: StaffRole): boolean {
 
 export function canManageFinance(role: StaffRole): boolean {
   return has("manage_finance", role);
+}
+
+export function canApproveStockTakes(role: StaffRole): boolean {
+  return has("approve_stock_takes", role);
 }
 
 // For the Settings UI: full matrix of every role x every permission, always

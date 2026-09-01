@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { Staff } from "@/lib/types";
+import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
 
 type HrDetails = {
   preferred_name: string | null; job_title: string | null; department: string | null;
@@ -184,6 +185,9 @@ function OnboardingTab({ staffId }: { staffId: number }) {
 
   if (loading) return <div className="text-muted-foreground text-center py-10 animate-pulse">Loading…</div>;
 
+  const selectedDept = DEPARTMENTS.find((d) => d.label === form.department);
+  const jobTitleOptions = selectedDept ? JOB_TITLES_BY_DEPARTMENT[selectedDept.value] : [];
+
   return (
     <div className="space-y-5">
       {staffInfo && (
@@ -194,8 +198,10 @@ function OnboardingTab({ staffId }: { staffId: number }) {
 
       <SectionHeading>Employment Details</SectionHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Text label="Job title" value={form.job_title} onChange={(v) => set("job_title", v)} placeholder="Must match the offer/contract" />
-        <Text label="Department / work area" value={form.department} onChange={(v) => set("department", v)} placeholder="FOH, Kitchen, Bar, Management…" />
+        <Select label="Department / work area" value={form.department} onChange={(v) => set("department", v)}
+          options={DEPARTMENTS.map((d) => ({ value: d.label, label: d.label }))} />
+        <Select label="Job title" value={form.job_title} onChange={(v) => set("job_title", v)}
+          options={jobTitleOptions.map((t) => ({ value: t, label: t }))} />
         <Select label="Employment status" value={form.employment_status} onChange={(v) => set("employment_status", v)}
           options={[{ value: "employee", label: "Employee" }, { value: "worker", label: "Worker" }]} />
         <Select label="Contract type" value={form.contract_type} onChange={(v) => set("contract_type", v)}

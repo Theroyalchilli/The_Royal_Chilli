@@ -34,10 +34,17 @@ export async function GET(req: NextRequest) {
     return { ...rest, staff_name: st?.name ?? null };
   });
 
-  let staffList: { id: number; name: string; role: string }[] = [];
+  let staffList: { id: number; name: string; role: string; department: string | null }[] = [];
   if (isManager) {
-    const { data } = await supabase.from("staff").select("id, name, role").eq("active", 1).order("name");
-    staffList = data || [];
+    const { data } = await supabase
+      .from("staff")
+      .select("id, name, role, staff_hr_details(department)")
+      .eq("active", 1)
+      .order("name");
+    staffList = (data || []).map((s) => {
+      const { staff_hr_details, ...rest } = s as typeof s & { staff_hr_details: { department: string | null } | null };
+      return { ...rest, department: staff_hr_details?.department ?? null };
+    });
   }
 
   return NextResponse.json({ dates, shifts: flatShifts, staff: staffList });

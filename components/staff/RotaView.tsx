@@ -211,13 +211,16 @@ function LeaveSection({ isManager }: { isManager: boolean }) {
 export default function RotaView({ isManager }: { isManager: boolean }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [shifts, setShifts] = useState<(Shift & { staff_name: string })[]>([]);
-  const [staffList, setStaffList] = useState<{ id: number; name: string; role: string }[]>([]);
+  const [staffList, setStaffList] = useState<{ id: number; name: string; role: string; department: string | null }[]>([]);
   const [modal, setModal] = useState<{ staffId: number; staffName: string; date: string } | null>(null);
   const [tab, setTab] = useState<"schedule" | "availability" | "leave">("schedule");
   const [loading, setLoading] = useState(true);
   const [copyMsg, setCopyMsg] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
 
   const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const departments = Array.from(new Set(staffList.map((s) => s.department).filter((d): d is string => !!d))).sort();
+  const visibleStaff = departmentFilter === "all" ? staffList : staffList.filter((s) => s.department === departmentFilter);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -276,7 +279,16 @@ export default function RotaView({ isManager }: { isManager: boolean }) {
                 <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground rounded-lg border border-border text-sm">Next →</button>
               </div>
               {isManager && (
-                <button onClick={copyPreviousWeek} className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground rounded-lg border border-border text-sm">📋 Copy Previous Week</button>
+                <div className="flex items-center gap-2">
+                  {departments.length > 0 && (
+                    <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}
+                      className="px-3 py-1.5 bg-surface-hover border border-border rounded-lg text-foreground text-sm">
+                      <option value="all">All departments</option>
+                      {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  )}
+                  <button onClick={copyPreviousWeek} className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground rounded-lg border border-border text-sm">📋 Copy Previous Week</button>
+                </div>
               )}
             </div>
             {copyMsg && <p className="mt-2 text-emerald-600 text-sm">{copyMsg}</p>}
@@ -293,7 +305,7 @@ export default function RotaView({ isManager }: { isManager: boolean }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {staffList.map((s) => (
+                    {visibleStaff.map((s) => (
                       <tr key={s.id} className="bg-background">
                         <td className="px-3 py-2 text-foreground font-medium sticky left-0 bg-background whitespace-nowrap">{s.name}</td>
                         {dates.map((d) => {

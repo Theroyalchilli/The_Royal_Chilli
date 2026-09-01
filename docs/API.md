@@ -470,7 +470,7 @@ Computes real hours worked per active employee from attendance data (`computeHou
 
 ---
 
-## 9. Inventory (`/api/ingredients/*`, `/api/suppliers/*`, `/api/purchase-orders/*`, `/api/recipes/*`, `/api/stock-movements`, `/api/inventory/alerts`)
+## 9. Inventory (`/api/ingredients/*`, `/api/suppliers/*`, `/api/purchase-orders/*`, `/api/recipes/*`, `/api/stock-movements`, `/api/inventory/alerts`, `/api/stock-takes/*`, `/api/reports/reconciliation`)
 
 ### `GET /api/ingredients`
 **Auth:** `canManageInventory(session.role)`
@@ -565,6 +565,41 @@ Rejects `movement_type="purchase"` and anything else outside the three allowed v
 **Auth:** `canManageInventory(session.role)`
 **Response:** `{ lowStock, expiringSoon }`
 `lowStock` = active ingredients where `current_stock <= reorder_level`. `expiringSoon` = PO line items with an `expiry_date` within the next 7 days (and not already past).
+
+### `GET /api/stock-takes`
+**Auth:** `canManageInventory(session.role)`
+**Response:** `{ stockTakes }` — counted-by staff name flattened in, newest first
+
+### `POST /api/stock-takes`
+**Auth:** `canManageInventory(session.role)`
+**Body:** `{ location?: "all"|"dry"|"chiller"|"freezer" }` — defaults to `"all"`
+**Response:** `201 { success: true, stockTake }`
+Opens a take and snapshots every active ingredient's `current_stock` into `stock_take_lines.system_qty` — frozen at this instant so sales during the count don't move the baseline.
+
+### `GET /api/stock-takes/:id`
+**Auth:** `canManageInventory(session.role)`
+**Response:** `{ stockTake, lines }` — the count sheet; `variance_qty` is a generated column (`counted_qty - system_qty`), live even before posting, `null` while `counted_qty` is unset.
+
+### `PATCH /api/stock-takes/:id/lines`
+**Auth:** `canManageInventory(session.role)`
+**Body:** `{ lines: [{ingredient_id, counted_qty, reason_code?: "waste"|"spoilage"|"over_portion"|"unknown"|"count_error"}] }`
+**Response:** `{ success: true }`
+Only while the take is `open` — `400` otherwise.
+
+### `POST /api/stock-takes/:id/post`
+**Auth:** `canManageInventory(session.role)`
+**Response:** `{ success: true, stockTake }`
+For every counted line with a non-zero variance, writes a `stock_movements` row (`movement_type: "adjustment"`, `reference_type: "stock_take"`) so the ledger balance ends up equal to the physical count, and stores `variance_value` (`variance_qty * cost_per_unit`). Locks the take to `status: "posted"`. `400` if not currently `open`. Lines never counted are left alone — no forced variance.
+
+### `GET /api/stock-takes/:id/variance`
+**Auth:** `canManageInventory(session.role)`
+**Response:** `{ stockTake, lines, totalValue, byReason }` — only non-zero-variance lines; `byReason` sums `variance_value` per `reason_code` (uncategorised lines grouped under `"uncategorised"`). Trending `unknown` value over time is the shrinkage signal.
+
+### `GET /api/reports/reconciliation`
+**Auth:** `canManageInventory(session.role)`
+**Query:** `from`, `to` (required)
+**Response:** `{ period, net_sales, cogs_theoretical, cogs_actual, gp_theoretical, gp_actual, gp_gap, lines }`
+Stock-vs-sales, distinct from a stock-take's stock-vs-stock check — only trustworthy once a stock take has posted for the period. Per ingredient: `theoretical_usage` = recipe depletion for everything actually sold in the range (same math as `depleteStockForOrder`); `actual_usage` = everything that left the ledger other than a `purchase`, negated (algebraically equivalent to opening + receipts − closing, without needing to sum the ledger from time zero). `lines` sorted by `|variance_value|` descending — biggest leak first. GP figures are `null` when `net_sales` is 0.
 
 ---
 

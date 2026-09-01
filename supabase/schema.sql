@@ -5,6 +5,8 @@
 -- DROP TABLES (clean slate)
 -- =====================
 DROP TABLE IF EXISTS role_permissions CASCADE;
+DROP TABLE IF EXISTS stock_take_lines CASCADE;
+DROP TABLE IF EXISTS stock_takes CASCADE;
 DROP TABLE IF EXISTS order_item_modifiers CASCADE;
 DROP TABLE IF EXISTS menu_item_modifier_groups CASCADE;
 DROP TABLE IF EXISTS modifier_options CASCADE;
@@ -607,6 +609,34 @@ CREATE TABLE recipe_ingredients (
   notes         TEXT
 );
 
+-- Physical stock-take + variance. system_qty is frozen at open time so sales
+-- during the count don't move the baseline; posting writes an 'adjustment'
+-- stock_movement per non-zero-variance line.
+CREATE TABLE stock_takes (
+  id          SERIAL PRIMARY KEY,
+  location    TEXT NOT NULL DEFAULT 'all',
+  -- 'submitted' sits between count entry and posting: the counting role
+  -- submits, a separate approve_stock_takes-permitted role posts (or sends
+  -- it back to 'open') — posted_by/posted_at double as the approval record.
+  status      TEXT NOT NULL CHECK (status IN ('open', 'submitted', 'posted', 'cancelled')) DEFAULT 'open',
+  opened_at   TIMESTAMPTZ DEFAULT NOW(),
+  posted_at   TIMESTAMPTZ,
+  counted_by  INT REFERENCES staff(id),
+  posted_by   INT REFERENCES staff(id)
+);
+
+CREATE TABLE stock_take_lines (
+  id             SERIAL PRIMARY KEY,
+  stock_take_id  INT REFERENCES stock_takes(id) ON DELETE CASCADE NOT NULL,
+  ingredient_id  INT REFERENCES ingredients(id) NOT NULL,
+  system_qty     NUMERIC(12,3) NOT NULL,
+  counted_qty    NUMERIC(12,3),
+  variance_qty   NUMERIC(12,3) GENERATED ALWAYS AS (counted_qty - system_qty) STORED,
+  variance_value NUMERIC(10,2),
+  reason_code    TEXT CHECK (reason_code IN ('waste', 'spoilage', 'over_portion', 'unknown', 'count_error')),
+  UNIQUE (stock_take_id, ingredient_id)
+);
+
 -- =====================
 -- LOYALTY
 -- =====================
@@ -748,6 +778,8 @@ ALTER TABLE purchase_order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_movements      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipes              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipe_ingredients   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_takes          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_take_lines     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loyalty_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loyalty_rewards      ENABLE ROW LEVEL SECURITY;
@@ -803,7 +835,7 @@ INSERT INTO app_settings (key, value) VALUES
 INSERT INTO role_permissions (role, permission, granted)
 SELECT r.role, p.permission, false
 FROM unnest(ARRAY['owner','admin','manager','supervisor','cashier','waiter','chef','kitchen','driver','inventory_manager','accountant','employee']) AS r(role)
-CROSS JOIN unnest(ARRAY['manage_staff','manage_inventory','view_crm','manage_crm','manage_drivers','manage_finance']) AS p(permission);
+CROSS JOIN unnest(ARRAY['manage_staff','manage_inventory','view_crm','manage_crm','manage_drivers','manage_finance','approve_stock_takes']) AS p(permission);
 
 UPDATE role_permissions SET granted = true WHERE permission = 'manage_staff' AND role IN ('owner','admin','manager');
 UPDATE role_permissions SET granted = true WHERE permission = 'manage_inventory' AND role IN ('owner','admin','manager','inventory_manager');
@@ -811,6 +843,7 @@ UPDATE role_permissions SET granted = true WHERE permission = 'view_crm' AND rol
 UPDATE role_permissions SET granted = true WHERE permission = 'manage_crm' AND role IN ('owner','admin','manager');
 UPDATE role_permissions SET granted = true WHERE permission = 'manage_drivers' AND role IN ('owner','admin','manager');
 UPDATE role_permissions SET granted = true WHERE permission = 'manage_finance' AND role IN ('owner','admin','manager','accountant');
+UPDATE role_permissions SET granted = true WHERE permission = 'approve_stock_takes' AND role IN ('owner','admin','manager');
 
 -- =====================
 -- SEED: Menu Categories

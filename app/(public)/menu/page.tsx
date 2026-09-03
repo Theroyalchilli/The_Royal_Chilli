@@ -24,30 +24,20 @@ const MENUS: MenuBlock[] = [
   {
     name: "Dinner Menu",
     description: "Our full evening menu — tandoori, biryani, curries, breads and more, crafted with the freshest ingredients and spices imported from India.",
-    image: "/menu-posters/dinner.jpeg",
+    image: "/gallery/Chicken_Dum_Biryani.webp",
     pdf: "/menu-posters/dinner.jpeg",
   },
   {
     name: "Breakfast Menu",
     description: "Traditional South Indian breakfast favourites — dosa, idli, combo deals and more, served fresh every morning from 8am to 12pm.",
-    image: "/menu-posters/breakfast.jpeg",
+    image: "/gallery/Masala_Wada.webp",
     pdf: "/menu-posters/breakfast.jpeg",
   },
   {
     name: "Lunch Menu",
     description: "Weekday lunch combo deals — wraps, curry boxes, biryani and more, every item £6.95, served 12 noon to 4pm.",
-    image: "/menu-posters/lunch.jpeg",
+    image: "/gallery/Gobi_65.webp",
     pdf: "/menu-posters/lunch.jpeg",
-  },
-  {
-    name: "Drinks Menu",
-    description: "Chilled coolers, fresh lassis and soft drinks, poured to cut the heat and carry every dish's spice just right.",
-    image: "/gallery/Drinks_Selection.jpg",
-  },
-  {
-    name: "Promotions",
-    description: "Seasonal offers, set menus and limited-time specials — announced here first.",
-    image: "/gallery/Samosa_Chat.webp",
   },
 ];
 

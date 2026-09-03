@@ -24,18 +24,20 @@ const MENUS: MenuBlock[] = [
   {
     name: "Dinner Menu",
     description: "Our full evening menu — tandoori, biryani, curries, breads and more, crafted with the freshest ingredients and spices imported from India.",
-    image: "/gallery/Chicken_Dum_Biryani.webp",
-    pdf: "/menu-pdf/The_Royal_Chilli_Redesigned_Full_Menu.pdf",
+    image: "/menu-posters/dinner.jpeg",
+    pdf: "/menu-posters/dinner.jpeg",
   },
   {
     name: "Breakfast Menu",
-    description: "Traditional South Indian breakfast favourites — dosa, idli and more, served fresh every morning.",
-    image: "/gallery/Masala_Dosa.webp",
+    description: "Traditional South Indian breakfast favourites — dosa, idli, combo deals and more, served fresh every morning from 8am to 12pm.",
+    image: "/menu-posters/breakfast.jpeg",
+    pdf: "/menu-posters/breakfast.jpeg",
   },
   {
     name: "Lunch Menu",
-    description: "A lighter, faster menu built for the midday sitting, without compromising on flavour.",
-    image: "/gallery/Salad.webp",
+    description: "Weekday lunch combo deals — wraps, curry boxes, biryani and more, every item £6.95, served 12 noon to 4pm.",
+    image: "/menu-posters/lunch.jpeg",
+    pdf: "/menu-posters/lunch.jpeg",
   },
   {
     name: "Drinks Menu",

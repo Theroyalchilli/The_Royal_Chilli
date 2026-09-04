@@ -21,31 +21,29 @@ type MenuBlock = {
   pdf?: string;
 };
 
-const MENUS: MenuBlock[] = [
-  {
-    name: "Dinner Menu",
-    description: "Our full evening menu — tandoori, biryani, curries, breads and more, crafted with the freshest ingredients and spices imported from India.",
-    image: "/gallery/Chicken_Dum_Biryani.webp",
-    pdf: "/menu-posters/dinner.jpeg",
-  },
-  {
-    name: "Breakfast Menu",
-    description: "Traditional South Indian breakfast favourites — dosa, idli, combo deals and more, served fresh every morning from 8am to 12pm.",
-    image: "/gallery/Masala_Wada.webp",
-    pdf: "/menu-posters/breakfast.jpeg",
-  },
-  {
-    name: "Lunch Menu",
-    description: "Weekday lunch combo deals — wraps, curry boxes, biryani and more, every item £6.95, served 12 noon to 4pm.",
-    image: "/gallery/Gobi_65.webp",
-    pdf: "/menu-posters/lunch.jpeg",
-  },
-];
-
 export default function MenuPage() {
   const { foodPhilosophy, signatureExperiences, differentiators } = siteContent;
-  const experiences = [signatureExperiences.breakfast, signatureExperiences.lunch, signatureExperiences.dinner];
   const specialities = differentiators.find((d) => d.title === "Signature Specialities");
+  const MENUS: MenuBlock[] = [
+    {
+      name: "Dinner Menu",
+      description: signatureExperiences.dinner.text,
+      image: "/gallery/Chicken_Dum_Biryani.webp",
+      pdf: "/menu-posters/dinner.jpeg",
+    },
+    {
+      name: "Breakfast Menu",
+      description: signatureExperiences.breakfast.text,
+      image: "/gallery/Masala_Wada.webp",
+      pdf: "/menu-posters/breakfast.jpeg",
+    },
+    {
+      name: "Lunch Menu",
+      description: signatureExperiences.lunch.text,
+      image: "/gallery/Gobi_65.webp",
+      pdf: "/menu-posters/lunch.jpeg",
+    },
+  ];
   const specialitiesText = specialities?.items?.join(" · ") ?? null;
 
   return (
@@ -92,25 +90,7 @@ export default function MenuPage() {
         </Reveal>
       </section>
 
-      {/* Signature Experiences */}
-      <section className="mx-auto max-w-5xl px-4 py-16">
-        <Reveal className="text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-primary">Signature Experiences</p>
-          <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl">
-            Royal <span className="italic text-primary">Breakfast, Lunch &amp; Dinner</span>
-          </h2>
-        </Reveal>
-        <div className="mt-10 grid gap-8 sm:grid-cols-3">
-          {experiences.map((e, i) => (
-            <Reveal key={e.title} delay={i * 80} className="text-center">
-              <h3 className="font-[family-name:var(--font-playfair)] text-xl text-primary">{e.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{e.text}</p>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      <div className="mx-auto max-w-5xl px-4 pb-20">
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-16">
         <div className="grid gap-16">
           {MENUS.map((menu, i) => (
             <Reveal key={menu.name} className="grid items-center gap-8 md:grid-cols-2">

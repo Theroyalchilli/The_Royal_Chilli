@@ -47,11 +47,17 @@ export default function SiteFooter() {
           >
             Instagram
           </a>
+          <Link href="/about" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            About
+          </Link>
           <Link href="/gallery" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Gallery
           </Link>
           <Link href="/reservations" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Reservations
+          </Link>
+          <Link href="/catering" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Catering &amp; Events
           </Link>
           <Link href="/careers" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Careers

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  const { hero, about, testimonials, reservation, galleryImages } = siteContent;
+  const { hero, about, differentiators, testimonials, reservation, galleryImages } = siteContent;
 
   return (
     <div>
@@ -41,7 +41,17 @@ export default function HomePage() {
           <h1 className="mt-5 font-[family-name:var(--font-cinzel)] text-5xl uppercase leading-tight tracking-[0.12em] text-white sm:text-6xl lg:text-7xl">
             The Royal Chilli
           </h1>
+          <p className="mt-6 font-[family-name:var(--font-playfair)] text-xl text-white sm:text-2xl">
+            {hero.headline} <span className="italic text-primary">{hero.headlineGold}</span>
+          </p>
+          <p className="mx-auto mt-4 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <Link
+              href="/reservations"
+              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+            >
+              Dine In
+            </Link>
             <Link
               href="/order"
               className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
@@ -53,6 +63,12 @@ export default function HomePage() {
               className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
             >
               Book a Table
+            </Link>
+            <Link
+              href="/catering"
+              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+            >
+              Catering &amp; Events
             </Link>
           </div>
         </div>
@@ -76,10 +92,33 @@ export default function HomePage() {
             </h2>
             <p className="mt-6 text-muted-foreground">{about.text1}</p>
             <p className="mt-4 text-muted-foreground">{about.text2}</p>
+            <Link href="/about" className="mt-6 inline-block text-xs uppercase tracking-[0.15em] text-primary hover:underline">
+              Read More →
+            </Link>
           </Reveal>
           <Reveal delay={150} className="relative aspect-square overflow-hidden rounded-2xl">
             <Image src="/gallery/Pistachio_Lamb_Chops_Square.jpg" alt="Pistachio Lamb Chops" fill className="object-cover" />
           </Reveal>
+        </div>
+      </section>
+
+      {/* What Makes Us Different */}
+      <section className="bg-card px-4 py-20">
+        <div className="mx-auto max-w-6xl">
+          <Reveal className="text-center">
+            <p className="text-xs uppercase tracking-[0.3em] text-primary">Why Royal Chilli</p>
+            <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
+              What Makes Us <span className="italic text-primary">Different</span>
+            </h2>
+          </Reveal>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {differentiators.map((d, i) => (
+              <Reveal key={d.title} delay={i * 60} className="border border-border bg-background p-6">
+                <h3 className="font-[family-name:var(--font-playfair)] text-lg">{d.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{d.items?.join(" · ") ?? d.text}</p>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
 

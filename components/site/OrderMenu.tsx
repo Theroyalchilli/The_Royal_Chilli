@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
+import { siteContent } from "@/lib/site-content";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { readCart, writeCart, makeLineId, type CartLine } from "@/lib/cart";
 import ModifierPickerModal from "./ModifierPickerModal";
@@ -71,6 +72,9 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
           <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
             Collection &amp; <span className="italic text-primary">Delivery</span>
           </h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground">
+            {siteContent.signatureExperiences.toGo.text}
+          </p>
         </div>
 
       </div>

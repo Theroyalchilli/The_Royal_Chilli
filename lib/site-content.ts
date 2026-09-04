@@ -3,10 +3,11 @@
 
 export const siteContent = {
   hero: {
-    tag: "Authentic Indian Cuisine · London",
-    line1: "From the Heart",
-    line2: "Royal in Taste, Rich in Tradition",
-    desc: "Experience the rich flavours and time-honoured traditions of authentic Indian cooking — every dish crafted with love, care, and passion in the heart of London.",
+    tag: "Authentic Flavours. Memorable Experiences.",
+    headline: "Authentic Indian Flavours.",
+    headlineGold: "Made to Be Remembered.",
+    description:
+      "Discover authentic Hyderabadi, South Indian and North Indian cuisine, from signature dum biryanis and regional curries to dosas, grills and house specialities.",
     bgImages: [
       "/hero/desktop-food-spread.jpg",
       "/hero/desktop-interior.jpg",
@@ -27,10 +28,74 @@ export const siteContent = {
   about: {
     title: "Where Every Dish Tells a Story of",
     titleGold: "Passion & Heritage",
+    // Short excerpt for the homepage — the full Our Story lives on /about.
     text1:
-      "The Royal Chilli was born from a deep love for authentic Indian flavours and the age-old traditions of Indian cooking. We bring you the very best of South and North Indian cuisine, using the freshest ingredients and spices imported directly from India.",
+      "The Royal Chilli is a contemporary Indian restaurant bringing together the bold flavours of Hyderabad, the traditions of South India and the richness of classic North Indian cuisine.",
     text2:
-      "Our chefs, trained in the finest culinary traditions, create dishes that transport you straight to the bustling streets and royal kitchens of India — right here in London.",
+      "From fragrant dum biryanis and regional curries to dosas, tandoori grills, breakfast favourites and modern house specials, our menu is built around authentic recipes, quality ingredients and generous hospitality.",
+  },
+  ourStory: {
+    paragraphs: [
+      "The Royal Chilli is a contemporary Indian restaurant bringing together the bold flavours of Hyderabad, the traditions of South India and the richness of classic North Indian cuisine.",
+      "From fragrant dum biryanis and regional curries to dosas, tandoori grills, breakfast favourites and modern house specials, our menu is built around authentic recipes, quality ingredients and generous hospitality.",
+      "We serve our customers throughout the day with breakfast, lunch, dine-in, takeaway, delivery, catering, private events and bar service, creating a restaurant experience that is accessible, enjoyable and consistently memorable.",
+    ],
+  },
+  mission: {
+    statement:
+      "To serve authentic, freshly prepared Indian food with consistent quality, generous hospitality and great value, while creating an experience that makes every guest want to return.",
+    commitments: ["Great Food", "Consistent Quality", "Genuine Hospitality", "Excellent Value", "Continuous Improvement"],
+  },
+  vision: {
+    statement:
+      "To build The Royal Chilli into a trusted and recognised Indian hospitality brand known for authentic regional food, exceptional customer experience and consistently high operating standards.",
+    text: "Our long-term vision is to develop a scalable restaurant model that can grow into multiple locations while protecting the taste, quality, service and character that define The Royal Chilli.",
+  },
+  principles: [
+    { title: "Taste Comes First", text: "Every dish must deliver the flavour, freshness and quality our customers expect. Recipes, ingredients and cooking methods are standardised without losing authenticity." },
+    { title: "Consistency Every Time", text: "A customer should receive the same quality whether they visit today, next week or at another Royal Chilli location in the future." },
+    { title: "Freshness Matters", text: "We believe good food starts with quality ingredients, careful preparation and disciplined kitchen practices." },
+    { title: "The Customer Is at the Centre", text: "Every decision — from menus and pricing to service and delivery — is viewed through the customer's experience." },
+    { title: "Value Without Compromise", text: "We aim to offer attractive pricing on everyday favourites while delivering premium experiences through our signature and speciality dishes." },
+    { title: "Respect the Recipe", text: "Traditional techniques, regional flavours and chef knowledge form the foundation of our food." },
+    { title: "Control the Detail", text: "Portion size, presentation, temperature, timing, cleanliness and service all matter." },
+    { title: "Improve Every Day", text: "We listen to customers, review performance and continuously improve our food, service and operations." },
+  ],
+  values: [
+    { title: "Authenticity", text: "We respect the heritage and regional character of Indian cuisine and bring genuine flavours to every plate." },
+    { title: "Quality", text: "From ingredients and recipes to presentation and service, we do not compromise on standards." },
+    { title: "Hospitality", text: "Every customer should feel welcomed, respected and looked after." },
+    { title: "Integrity", text: "We aim to be transparent and responsible in the way we work with customers, employees, suppliers and partners." },
+    { title: "Teamwork", text: "Great restaurants are created by people working together across the kitchen, front of house and management." },
+    { title: "Cleanliness & Safety", text: "Food hygiene, workplace safety and disciplined operating practices are fundamental to our business." },
+    { title: "Innovation", text: "We preserve traditional favourites while continuously developing new dishes, promotions and dining experiences." },
+    { title: "Community", text: "We want The Royal Chilli to be part of the local community — not simply a place to eat, but a place to meet, celebrate and connect." },
+  ],
+  foodPhilosophy: {
+    tag: "Authentic. Fresh. Consistent.",
+    intro:
+      "Our food philosophy is simple: start with good ingredients, respect the recipe and cook with care. We combine traditional Indian cooking techniques with disciplined recipe standards so that every dish delivers the flavour and quality expected from The Royal Chilli.",
+    focus: ["Fresh preparation", "Standard recipes", "Controlled portions", "Quality ingredients", "Taste checks", "Consistent presentation", "Responsible waste management"],
+  },
+  differentiators: [
+    { title: "Authentic Regional Cuisine", items: ["Hyderabadi", "Rayalaseema", "South Indian", "North Indian"] },
+    { title: "All-Day Dining", items: ["Breakfast", "Lunch", "Dinner", "Late Dining"] },
+    { title: "Signature Specialities", items: ["Dum Biryanis", "Regional Curries", "Tandoori Grills", "Dosas", "House Specials"] },
+    { title: "More Ways to Enjoy The Royal Chilli", items: ["Dine-In", "Takeaway", "Delivery", "Catering", "Private Events"] },
+    { title: "Freshly Prepared", text: "Our focus is on fresh preparation, standard recipes, portion control and consistent quality." },
+    { title: "Something for Everyone", text: "From affordable breakfast and lunch deals to premium signature dishes and celebration dining." },
+  ],
+  signatureExperiences: {
+    breakfast: { title: "Royal Breakfast", text: "Start the day with South Indian favourites including idli, vada, dosa, poori and our house chutneys and sambar." },
+    lunch: { title: "Royal Lunch", text: "Great-value lunch boxes, wraps, biryanis, curries and quick meals designed for a satisfying weekday lunch." },
+    dinner: { title: "Royal Dinner", text: "A richer dining experience featuring signature curries, premium grills, biryanis and regional specialities." },
+    toGo: { title: "Royal Chilli To Go", text: "Enjoy your favourites through collection, direct ordering and major delivery platforms." },
+    catering: { title: "Catering & Events", text: "From family celebrations to corporate catering, community events and private functions, our team can create menus to suit the occasion." },
+  },
+  ourPromise: {
+    tag: "Every Guest. Every Dish. Every Time.",
+    items: ["Fresh food", "Consistent taste", "Fair value", "Friendly service", "Clean surroundings", "Accurate orders", "Continuous improvement"],
+    closing: "Because at The Royal Chilli, a great meal is not only about what is on the plate — it is about the complete experience.",
   },
   contact: {
     phone: "020 8797 3044",
@@ -62,7 +127,7 @@ export const siteContent = {
     desc: "Whether it's a date night, family gathering or special celebration — we're here to make it truly memorable.",
   },
   footer: {
-    tagline: "Bringing the rich flavours and warmth of authentic Indian cuisine to the heart of London.",
+    tagline: "Authentic Flavours. Memorable Experiences.",
     copyright: "© 2026 The Royal Chilli. All rights reserved.",
   },
   galleryImages: [

@@ -131,7 +131,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.vat_rate !== undefined) setVatRate(String(s.vat_rate));
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
-        if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
+        if (s.sumup_reader_id !== undefined) setReaderId(String(s.sumup_reader_id));
         setGeofenceEnabled(!!s.geofence_enabled);
         if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
         if (s.restaurant_longitude != null) setRestaurantLng(String(s.restaurant_longitude));
@@ -163,7 +163,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         company_name: companyName, currency, week_start_day: weekStartDay, overtime_enabled: overtimeEnabled,
         vat_rate: Number(vatRate), max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
-        stripe_terminal_reader_id: readerId.trim(),
+        sumup_reader_id: readerId.trim(),
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
         restaurant_longitude: restaurantLng ? Number(restaurantLng) : null,
@@ -247,9 +247,9 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               <p className="mt-1 text-muted-foreground text-xs">0 = no deposit required. When set, new website reservations (not waitlist entries) are redirected to pay this online before confirming.</p>
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (Stripe Terminal)</label>
-              <input type="text" placeholder="tmr_..." value={readerId} onChange={(e) => setReaderId(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono" />
-              <p className="mt-1 text-muted-foreground text-xs">Leave blank to keep the manual &quot;Card Paid&quot; button (for a separate card machine). Paste the reader ID here once one is registered to enable real in-person card charges through the till.</p>
+              <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (SumUp Solo)</label>
+              <input type="text" placeholder="reader id from SumUp" value={readerId} onChange={(e) => setReaderId(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono" />
+              <p className="mt-1 text-muted-foreground text-xs">Leave blank to keep the manual &quot;Card Paid&quot; button (for a separate card machine). Pair the Solo reader (on the device: Settings → Connections → API → Connect, to generate a pairing code) and register it via SumUp&apos;s Cloud API, then paste its reader ID here to enable real in-person card charges through the till.</p>
             </div>
             <div className="flex items-center justify-between">
               <div>

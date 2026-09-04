@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
@@ -17,6 +17,8 @@ function ReservationsForm() {
   const { reservation, contact } = siteContent;
   const searchParams = useSearchParams();
   const depositRedirect = searchParams.get("deposit");
+  const depositReservationId = searchParams.get("reservation_id");
+  const [depositPaid, setDepositPaid] = useState<boolean | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -29,6 +31,17 @@ function ReservationsForm() {
   const [done, setDone] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
   const [fullMessage, setFullMessage] = useState("");
+
+  // SumUp's Hosted Checkout only has one redirect_url (no separate
+  // success/cancel destinations like Stripe had), so on return we check the
+  // real deposit status rather than assume the redirect means it was paid.
+  useEffect(() => {
+    if (depositRedirect !== "return" || !depositReservationId) return;
+    fetch(`/api/public/reservations/${depositReservationId}`)
+      .then((r) => r.json())
+      .then((d) => setDepositPaid(!!d.paid))
+      .catch(() => setDepositPaid(false));
+  }, [depositRedirect, depositReservationId]);
 
   async function submit(joinWaitlist = false) {
     setError("");
@@ -78,21 +91,23 @@ function ReservationsForm() {
     }
   }
 
-  if (depositRedirect === "paid") {
-    return (
-      <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <div className="text-5xl">✅</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Deposit Paid — Table Confirmed!</h1>
-        <p className="mt-2 text-muted-foreground">We'll see you soon. Questions? Call us on {contact.phone}.</p>
-      </div>
-    );
-  }
-
-  if (depositRedirect === "cancelled") {
+  if (depositRedirect === "return") {
+    if (depositPaid === null) {
+      return <div className="mx-auto max-w-md px-4 py-24 text-center text-muted-foreground">Checking payment status…</div>;
+    }
+    if (depositPaid) {
+      return (
+        <div className="mx-auto max-w-md px-4 py-24 text-center">
+          <div className="text-5xl">✅</div>
+          <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Deposit Paid — Table Confirmed!</h1>
+          <p className="mt-2 text-muted-foreground">We'll see you soon. Questions? Call us on {contact.phone}.</p>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <div className="text-5xl">⚠️</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Deposit Payment Cancelled</h1>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">Deposit Payment Not Completed</h1>
         <p className="mt-2 text-muted-foreground">
           Your booking request is still held, but the deposit hasn&apos;t been paid yet. Call us on {contact.phone} to sort this out, or try booking again.
         </p>

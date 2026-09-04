@@ -9,8 +9,9 @@ import { readCart, writeCart, type CartLine } from "@/lib/cart";
 type ZoneCheck = { deliverable: boolean; fee?: number; min_order?: number; zone_name?: string };
 
 // Hidden entirely (falls back to pay-on-collection/delivery only) until
-// STRIPE_SECRET_KEY + this publishable key are both configured.
-const STRIPE_ENABLED = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+// SUMUP_API_KEY + SUMUP_MERCHANT_CODE are configured server-side — this flag
+// just needs to be flipped on once that's done.
+const SUMUP_ENABLED = process.env.NEXT_PUBLIC_SUMUP_ENABLED === "true";
 
 function defaultScheduleDate() {
   return new Date().toISOString().slice(0, 10);
@@ -128,7 +129,7 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to place order");
 
-      if (payOnline && STRIPE_ENABLED) {
+      if (payOnline && SUMUP_ENABLED) {
         const sessionRes = await fetch(`/api/public/orders/${data.id}/checkout-session`, { method: "POST" });
         const sessionData = await sessionRes.json();
         if (!sessionRes.ok || !sessionData.url) throw new Error(sessionData.error || "Failed to start online payment");
@@ -325,7 +326,7 @@ export default function CheckoutPage() {
         />
       </div>
 
-      {STRIPE_ENABLED && (
+      {SUMUP_ENABLED && (
         <div className="mt-6 flex gap-3">
           {([false, true] as const).map((online) => (
             <button

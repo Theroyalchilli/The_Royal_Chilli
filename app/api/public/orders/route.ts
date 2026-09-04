@@ -6,6 +6,7 @@ import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { matchDeliveryZone } from "@/lib/delivery-zones";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { formatTicketText } from "@/lib/cloudprnt";
 
 export async function POST(req: NextRequest) {
   try {
@@ -136,6 +137,15 @@ export async function POST(req: NextRequest) {
       scheduledFor: scheduled_for || null,
       items: orderItems.map((i) => ({ name: i.item_name, quantity: i.quantity })),
     });
+
+    // Queues a ticket for the reception printer (Star mC-Print3, CloudPRNT)
+    // so staff see the order without watching any screen — see
+    // app/api/cloudprnt and lib/cloudprnt.ts.
+    formatTicketText(order.id)
+      .then(async (content) => {
+        if (content) await supabase.from("print_jobs").insert({ order_id: order.id, content });
+      })
+      .catch((err) => console.error("Failed to queue reception print job:", err));
 
     return NextResponse.json(
       { success: true, id: order.id, order_number: orderNumber, total, scheduled_for: scheduled_for || null },

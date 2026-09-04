@@ -40,6 +40,7 @@ DROP TABLE IF EXISTS clock_events CASCADE;
 DROP TABLE IF EXISTS shifts CASCADE;
 DROP TABLE IF EXISTS reservations CASCADE;
 DROP TABLE IF EXISTS payments CASCADE;
+DROP TABLE IF EXISTS print_jobs CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
 DROP TABLE IF EXISTS delivery_zones CASCADE;
@@ -165,6 +166,7 @@ CREATE TABLE orders (
   customer_postcode TEXT,
   customer_email    TEXT,
   stripe_session_id TEXT,
+  sumup_checkout_id TEXT,
   delivery_zone_id INT REFERENCES delivery_zones(id),
   status           TEXT CHECK (status IN ('open','sent_to_kitchen','ready','paid','cancelled')) DEFAULT 'open',
   staff_id         INT REFERENCES staff(id),
@@ -196,6 +198,16 @@ CREATE TABLE order_items (
   notes             TEXT,
   status            TEXT CHECK (status IN ('pending','preparing','ready','cancelled')) DEFAULT 'pending',
   created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Queue of tickets waiting to be picked up by the reception printer (Star
+-- mC-Print3) via Star's CloudPRNT protocol — see app/api/cloudprnt.
+CREATE TABLE print_jobs (
+  id          SERIAL PRIMARY KEY,
+  order_id    INT REFERENCES orders(id) ON DELETE CASCADE NOT NULL,
+  content     TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  printed_at  TIMESTAMPTZ
 );
 
 CREATE TABLE payments (
@@ -238,6 +250,7 @@ CREATE TABLE reservations (
   deposit_amount   NUMERIC(10,2) NOT NULL DEFAULT 0,
   deposit_paid_at  TIMESTAMPTZ,
   stripe_session_id TEXT,
+  sumup_checkout_id TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -752,6 +765,7 @@ ALTER TABLE restaurant_tables  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE work_periods       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE print_jobs         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reservations       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE table_requests     ENABLE ROW LEVEL SECURITY;

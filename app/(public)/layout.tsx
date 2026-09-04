@@ -14,15 +14,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   return (
     <div className={`${jost.variable} flex min-h-screen flex-col font-[family-name:var(--font-jost)]`}>
       <SiteHeader />
-      {/* Header is now fixed (out of flow) so the homepage hero can extend
-          full-bleed behind it. Every page needs this padding to avoid its
-          content starting underneath the header; the homepage cancels it
-          with a matching negative margin on the hero section only. Single
-          value at every breakpoint now — the header is one row everywhere
-          since mobile nav moved into the hamburger overlay instead of a
-          second row. Matches the header's actual rendered height (measured
-          at 48.67px after dropping the wordmark row). */}
-      <main className="flex-1 pt-[49px]">{children}</main>
+      {/* SiteHeader no longer renders a top bar — just the fixed hamburger
+          button and its full-screen overlay — so there's no header height
+          left to clear here. */}
+      <main className="flex-1">{children}</main>
       <SiteFooter />
     </div>
   );

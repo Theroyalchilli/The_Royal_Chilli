@@ -23,11 +23,8 @@ export default function HomePage() {
     <div>
       {/* Hero — full-bleed rotating photo, dark-washed for legibility, with
           the restaurant name centered as large tracked-out serif type (the
-          "wordmark as hero art" treatment) rather than a marketing headline.
-          Pulled up by the layout's header padding so it reaches the true top
-          of the page and sits behind the fixed, transparent header; the
-          matching top padding keeps content clear of it. */}
-      <section className="relative -mt-[49px] flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950 pt-[49px]">
+          "wordmark as hero art" treatment) rather than a marketing headline. */}
+      <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950">
         <div className="absolute inset-0 md:hidden">
           <HeroBackground images={hero.mobileBgImages} />
         </div>

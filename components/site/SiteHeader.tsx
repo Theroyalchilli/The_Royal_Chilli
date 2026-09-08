@@ -84,10 +84,10 @@ export default function SiteHeader() {
         href="/"
         className="fixed left-5 top-5 z-[70] flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 shadow-sm backdrop-blur"
       >
-        <ChilliIcon />
         <span className="font-[family-name:var(--font-cinzel)] text-xs uppercase tracking-[0.15em] text-foreground sm:text-sm">
           The Royal Chilli
         </span>
+        <ChilliIcon />
       </Link>
 
       {/* Sole nav trigger now — the old top bar (Home/Menus/Order Online/

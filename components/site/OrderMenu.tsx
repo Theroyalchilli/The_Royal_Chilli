@@ -186,11 +186,11 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
             </button>
           ))}
         </div>
-        <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">
-          {orderType === "delivery"
-            ? "Delivery fee and minimum order depend on your postcode — checked at checkout."
-            : `Free collection from ${siteContent.contact.address}`}
-        </p>
+        {orderType === "takeaway" && (
+          <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">
+            Free collection from {siteContent.contact.address}
+          </p>
+        )}
       </div>
 
       <CategoryNavBar

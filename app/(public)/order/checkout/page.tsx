@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { formatCurrency, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
-import { isRestaurantOpen, formatHoursForDate, getHoursInputBoundsForDate, nextValidScheduleSlot, toDateInputValue, toTimeInputValue } from "@/lib/hours";
+import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, toTimeInputValue } from "@/lib/hours";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 
@@ -82,8 +82,19 @@ export default function CheckoutPage() {
   const total = subtotal + deliveryFee;
 
   // Re-derived whenever the picked date changes, since Friday's opening
-  // time differs from every other day's.
-  const scheduleTimeBounds = getHoursInputBoundsForDate(new Date(`${scheduleDate}T00:00:00`));
+  // time differs from every other day's (and "today" also excludes any
+  // slot too soon to prepare).
+  const scheduleSlots = getScheduleSlotOptions(new Date(`${scheduleDate}T00:00:00`));
+
+  // Keep the selected time inside the current date's valid slots — e.g.
+  // switching from a day open 9am to Friday (opens 11am) could otherwise
+  // leave a 9:00/9:15/9:30/9:45 selection that Friday doesn't actually offer.
+  useEffect(() => {
+    if (scheduleSlots.length > 0 && !scheduleSlots.some((s) => s.value === scheduleTime)) {
+      setScheduleTime(scheduleSlots[0].value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleDate]);
 
   async function checkPostcode(pc: string) {
     setZoneCheck(null);
@@ -261,15 +272,23 @@ export default function CheckoutPage() {
             onChange={(e) => setScheduleDate(e.target.value)}
             className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
           />
-          <input
-            type="time"
+          <select
             value={scheduleTime}
-            min={scheduleTimeBounds.min}
-            max={scheduleTimeBounds.max}
             onChange={(e) => setScheduleTime(e.target.value)}
             className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
-          />
+          >
+            {scheduleSlots.length === 0 ? (
+              <option value="">No slots left today</option>
+            ) : (
+              scheduleSlots.map((slot) => (
+                <option key={slot.value} value={slot.value}>{slot.label}</option>
+              ))
+            )}
+          </select>
         </div>
+      )}
+      {isScheduled && scheduleSlots.length === 0 && (
+        <p className="mt-2 text-xs text-red-500">No more slots today — please choose a different date.</p>
       )}
 
       <div className="mt-6 space-y-3">
@@ -370,7 +389,7 @@ export default function CheckoutPage() {
 
       <button
         onClick={submitOrder}
-        disabled={submitting || (orderType === "delivery" && (!zoneCheck || !zoneCheck.deliverable))}
+        disabled={submitting || (orderType === "delivery" && (!zoneCheck || !zoneCheck.deliverable)) || (isScheduled && scheduleSlots.length === 0)}
         className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
       >
         {submitting ? "Placing Order…" : payOnline ? `Continue to Payment · ${formatCurrency(total)}` : `Place Order · ${formatCurrency(total)}`}

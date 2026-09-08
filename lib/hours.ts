@@ -28,12 +28,6 @@ function minutesToTimeInputValue(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-// 24h "HH:MM" strings for use as an <input type="time"> min/max.
-export function getHoursInputBoundsForDate(date: Date): { min: string; max: string } {
-  const hours = getHoursForDate(date);
-  return { min: minutesToTimeInputValue(hours.open), max: minutesToTimeInputValue(hours.close) };
-}
-
 function formatTime12h(minutes: number): string {
   const h24 = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -74,6 +68,33 @@ export function nextValidScheduleSlot(from: Date, leadMinutes = 30): Date {
     return candidate;
   }
   return candidate;
+}
+
+// Every valid quarter-hour slot for a given date, restricted to that day's
+// opening hours — used to populate a <select> for "Schedule for later" so
+// the picker can only ever offer a real, open time (an <input type="time">'s
+// min/max only affects validation state, not what the native picker lets you
+// scroll to, so it doesn't actually stop someone from choosing 2 AM). When
+// `date` is today, slots also start no earlier than `leadMinutes` from now.
+export function getScheduleSlotOptions(
+  date: Date,
+  now: Date = new Date(),
+  leadMinutes = 20,
+  intervalMinutes = 15
+): { value: string; label: string }[] {
+  const hours = getHoursForDate(date);
+  let startMinutes = hours.open;
+  const isToday = date.toDateString() === now.toDateString();
+  if (isToday) {
+    const earliestFromNow = now.getHours() * 60 + now.getMinutes() + leadMinutes;
+    const rounded = Math.ceil(earliestFromNow / intervalMinutes) * intervalMinutes;
+    startMinutes = Math.max(hours.open, rounded);
+  }
+  const options: { value: string; label: string }[] = [];
+  for (let m = startMinutes; m < hours.close; m += intervalMinutes) {
+    options.push({ value: minutesToTimeInputValue(m), label: formatTime12h(m) });
+  }
+  return options;
 }
 
 // Local (not UTC) YYYY-MM-DD / HH:MM — matches what <input type="date"/"time">

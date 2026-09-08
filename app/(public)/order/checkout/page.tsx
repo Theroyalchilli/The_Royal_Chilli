@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { formatCurrency, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
-import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, toTimeInputValue } from "@/lib/hours";
+import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, toDateTimeInputValue } from "@/lib/hours";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 
@@ -20,7 +20,7 @@ function defaultScheduleDate() {
   return toDateInputValue(nextValidScheduleSlot(new Date()));
 }
 function defaultScheduleTime() {
-  return toTimeInputValue(nextValidScheduleSlot(new Date()));
+  return toDateTimeInputValue(nextValidScheduleSlot(new Date()));
 }
 function maxScheduleDate() {
   const d = new Date();
@@ -125,7 +125,10 @@ export default function CheckoutPage() {
     let scheduledFor: string | undefined;
     if (isScheduled) {
       if (!scheduleDate || !scheduleTime) return setError("Please choose a date and time.");
-      const scheduledDate = new Date(`${scheduleDate}T${scheduleTime}:00`);
+      // scheduleTime is already a full "YYYY-MM-DDTHH:MM" (not just a time) —
+      // a post-midnight slot falls on the day after scheduleDate, and its
+      // value already reflects that correctly.
+      const scheduledDate = new Date(`${scheduleTime}:00`);
       scheduledFor = scheduledDate.toISOString();
       if (scheduledDate.getTime() - Date.now() < 20 * 60_000) {
         return setError("Please choose a time at least 20 minutes from now.");

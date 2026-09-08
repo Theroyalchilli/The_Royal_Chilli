@@ -104,10 +104,7 @@ export const siteContent = {
     mapEmbed:
       "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2485.593!2d-0.3580133!3d51.4722309!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x48760d00575f94db%3A0x374941cb29fce285!2sThe%20Royal%20Chilli!5e0!3m2!1sen!2suk!4v1718000000000!5m2!1sen!2suk",
     hours: [
-      { day: "Mon – Thu", time: "9:00 AM – 11:00 PM" },
-      { day: "Friday", time: "11:00 AM – 11:00 PM" },
-      { day: "Saturday", time: "9:00 AM – 11:00 PM" },
-      { day: "Sunday", time: "9:00 AM – 11:00 PM" },
+      { day: "Every day", time: "9:00 AM – 1:00 AM" },
     ],
     social: {
       instagram: "https://www.instagram.com/the_royal_chilli?igsh=MW12MTVzY2p0ZmUycw==",

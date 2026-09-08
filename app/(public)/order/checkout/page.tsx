@@ -5,6 +5,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { readCart, writeCart, type CartLine } from "@/lib/cart";
+import { isRestaurantOpen } from "@/lib/hours";
 
 type ZoneCheck = { deliverable: boolean; fee?: number; min_order?: number; zone_name?: string };
 
@@ -34,6 +35,7 @@ export default function CheckoutPage() {
   const [zoneCheck, setZoneCheck] = useState<ZoneCheck | null>(null);
   const [checkingZone, setCheckingZone] = useState(false);
   const [notes, setNotes] = useState("");
+  const [openNow, setOpenNow] = useState(true);
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate());
   const [scheduleTime, setScheduleTime] = useState(defaultScheduleTime());
@@ -43,6 +45,14 @@ export default function CheckoutPage() {
   const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => setCart(readCart()), []);
+
+  // Starts assuming open (matches server render) and corrects after mount —
+  // avoids a hydration mismatch from checking the real clock during render.
+  useEffect(() => {
+    const open = isRestaurantOpen();
+    setOpenNow(open);
+    if (!open) setIsScheduled(true);
+  }, []);
 
   // Cart starts empty and only populates a moment after mount, so the page's
   // height (and the order-summary box specifically) changes right after the
@@ -99,6 +109,7 @@ export default function CheckoutPage() {
     if (orderType === "delivery" && zoneCheck?.deliverable && zoneCheck.min_order && subtotal < zoneCheck.min_order) {
       return setError(`Minimum order for delivery to this area is £${zoneCheck.min_order.toFixed(2)}.`);
     }
+    if (!isScheduled && !openNow) return setError("We're closed right now — please schedule your order for later.");
 
     let scheduledFor: string | undefined;
     if (isScheduled) {
@@ -249,18 +260,27 @@ export default function CheckoutPage() {
       </div>
 
       <div className="mt-6 flex gap-3">
-        {([false, true] as const).map((scheduled) => (
-          <button
-            key={String(scheduled)}
-            onClick={() => setIsScheduled(scheduled)}
-            className={`flex-1 border px-4 py-2 text-xs uppercase tracking-[0.1em] ${
-              isScheduled === scheduled ? "border-primary bg-primary text-primary-foreground" : "border-border"
-            }`}
-          >
-            {scheduled ? "Schedule for later" : "ASAP"}
-          </button>
-        ))}
+        {([false, true] as const).map((scheduled) => {
+          const disabled = !scheduled && !openNow;
+          return (
+            <button
+              key={String(scheduled)}
+              onClick={() => !disabled && setIsScheduled(scheduled)}
+              disabled={disabled}
+              className={`flex-1 border px-4 py-2 text-xs uppercase tracking-[0.1em] disabled:cursor-not-allowed disabled:opacity-40 ${
+                isScheduled === scheduled ? "border-primary bg-primary text-primary-foreground" : "border-border"
+              }`}
+            >
+              {scheduled ? "Schedule for later" : openNow ? "ASAP" : "ASAP (closed)"}
+            </button>
+          );
+        })}
       </div>
+      {!openNow && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          We&apos;re closed right now — please choose a time to schedule your order for.
+        </p>
+      )}
       {isScheduled && (
         <div className="mt-3 grid grid-cols-2 gap-3">
           <input type="date" value={scheduleDate} min={defaultScheduleDate()} onChange={(e) => setScheduleDate(e.target.value)} className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />

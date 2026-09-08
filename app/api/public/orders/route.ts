@@ -4,6 +4,7 @@ import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { validateScheduledTime } from "@/lib/scheduling";
+import { isRestaurantOpen } from "@/lib/hours";
 import { matchDeliveryZone } from "@/lib/delivery-zones";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { formatTicketText } from "@/lib/cloudprnt";
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
     if (scheduled_for) {
       const scheduleError = validateScheduledTime(scheduled_for);
       if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
+    } else if (!isRestaurantOpen()) {
+      return NextResponse.json({ error: "We're closed right now — please schedule your order for later." }, { status: 400 });
     }
 
     let zone = null;

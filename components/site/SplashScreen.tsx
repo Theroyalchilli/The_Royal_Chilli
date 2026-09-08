@@ -50,8 +50,8 @@ export default function SplashScreen() {
         fading ? "opacity-0" : "opacity-100"
       }`}
     >
-      <img src="/splash.webp" alt="The Royal Chilli" className="w-64 max-w-[70vw] sm:w-80" />
-      <div className="mt-6 h-[3px] w-40 overflow-hidden rounded-full bg-white/10 sm:w-56">
+      <img src="/splash.webp" alt="The Royal Chilli" className="w-[85vw] max-w-sm sm:max-w-md md:max-w-lg lg:max-w-2xl" />
+      <div className="mt-8 h-[3px] w-48 overflow-hidden rounded-full bg-white/10 sm:w-64 md:w-72">
         <div className="h-full w-full origin-left scale-x-0 bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 motion-safe:animate-[splash-load_2.1s_ease-in-out_forwards] motion-reduce:scale-x-100" />
       </div>
     </div>

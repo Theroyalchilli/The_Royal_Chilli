@@ -31,19 +31,6 @@ function Hamburger({ open, light }: { open: boolean; light: boolean }) {
   );
 }
 
-// Simple drawn mark (not the photographed signboard logo, which is too busy
-// and dark-background to read at this scale) — a curved chilli with a small
-// stem leaf, line-drawn in the site's primary red.
-function ChilliIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="flex-shrink-0 text-primary">
-      <path d="M6 20c7 0 12-5 12-11 0-1.2-.3-2.4-.9-3.4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M17.1 5.6c.5-1.4 1.6-2.3 3-2.6-.3 1.5-1.2 2.6-2.6 3.1" fill="currentColor" />
-      <path d="M6 20c-1.6 0-2.9-.6-3.6-1.6 2.2.2 3.4-.6 4.2-1.8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export default function SiteHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -75,19 +62,16 @@ export default function SiteHeader() {
 
   return (
     <>
-      {/* Persistent brand mark, top-left — not a header bar (no nav links,
-          no full-width background), just the icon + name floating on the
-          page like the hamburger already does on the right, with the same
-          background chip for legibility over both the dark hero and every
-          other page's light background. */}
-      <Link
-        href="/"
-        className="fixed left-5 top-5 z-[70] flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 shadow-sm backdrop-blur"
-      >
-        <span className="font-[family-name:var(--font-cinzel)] text-xs uppercase tracking-[0.15em] text-foreground sm:text-sm">
+      {/* Brand mark, top-left — not a header bar (no nav links, no
+          full-width background) and not pinned like the hamburger: it sits
+          in normal page flow at the very top and scrolls away with the
+          rest of the page, on the plain page background (every public
+          page renders this ahead of its own content). */}
+      <Link href="/" className="relative z-10 m-5 flex w-fit items-center gap-2 rounded-full bg-neutral-950 px-4 py-2 shadow-sm sm:mx-6">
+        <span className="font-[family-name:var(--font-cinzel)] text-xs uppercase tracking-[0.15em] text-amber-400 sm:text-sm">
           The Royal Chilli
         </span>
-        <ChilliIcon />
+        <span className="text-base sm:text-lg" aria-hidden="true">🌶️</span>
       </Link>
 
       {/* Sole nav trigger now — the old top bar (Home/Menus/Order Online/

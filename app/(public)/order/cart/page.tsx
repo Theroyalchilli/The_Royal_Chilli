@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { readCart, writeCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
+import { siteContent } from "@/lib/site-content";
 
 export default function CartPage() {
   const router = useRouter();
@@ -114,7 +115,9 @@ export default function CartPage() {
               <span>Subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
-            {orderType === "delivery" && (
+            {orderType === "takeaway" ? (
+              <p className="mt-1 text-xs text-muted-foreground">Free collection from {siteContent.contact.address}</p>
+            ) : (
               <p className="mt-1 text-xs text-muted-foreground">Delivery fee and minimum order depend on your postcode — checked at checkout.</p>
             )}
             <div className="mt-2 flex justify-between border-t border-border pt-3 font-semibold text-primary">

@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ChevronDown } from "lucide-react";
+import { ArrowRight, Bike, BookOpen, ChevronDown, Clock, MapPin } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
+import TodayHours from "@/components/site/TodayHours";
 
 export const metadata: Metadata = {
   title: "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London",
@@ -46,36 +47,44 @@ export default function HomePage() {
           <span className="text-base sm:text-lg" aria-hidden="true">🌶️</span>
         </Link>
 
-        <div className="relative z-10 mx-auto max-w-3xl px-4 text-center">
-          <h1 className="font-[family-name:var(--font-playfair)] text-4xl text-white sm:text-5xl lg:text-6xl">
-            {hero.headline} <span className="italic text-primary">{hero.headlineGold}</span>
+        <div className="relative z-10 mx-auto w-full max-w-3xl px-6 sm:px-10">
+          <h1 className="font-[family-name:var(--font-playfair)] text-4xl leading-tight text-white sm:text-5xl lg:text-6xl">
+            <span className="block">{hero.headline}</span>
+            <span className="block italic text-primary">{hero.headlineGold}</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          <p className="mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
+
+          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               href="/reservations"
-              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+              className="flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground shadow-lg transition hover:opacity-90"
             >
-              Dine In
+              Book a Table <ArrowRight size={16} />
             </Link>
-            <Link
-              href="/order"
-              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
-            >
-              Order Online
-            </Link>
-            <Link
-              href="/reservations"
-              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
-            >
-              Book a Table
-            </Link>
-            <Link
-              href="/catering"
-              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
-            >
-              Catering &amp; Events
-            </Link>
+            <div className="flex w-full gap-3 sm:w-auto">
+              <Link
+                href="/order"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/50 px-5 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20 sm:flex-none"
+              >
+                <Bike size={16} /> Order Online
+              </Link>
+              <Link
+                href="/menu"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/50 px-5 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20 sm:flex-none"
+              >
+                <BookOpen size={16} /> View Menu
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-white/80">
+            <span className="flex items-center gap-1.5">
+              <MapPin size={14} /> Located in Hounslow
+            </span>
+            <span className="text-white/30">|</span>
+            <span className="flex items-center gap-1.5">
+              <Clock size={14} /> Open today: <TodayHours />
+            </span>
           </div>
         </div>
 

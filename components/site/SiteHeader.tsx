@@ -62,18 +62,6 @@ export default function SiteHeader() {
 
   return (
     <>
-      {/* Brand mark, top-left — not a header bar (no nav links, no
-          full-width background) and not pinned like the hamburger: it sits
-          in normal page flow at the very top and scrolls away with the
-          rest of the page, on the plain page background (every public
-          page renders this ahead of its own content). */}
-      <Link href="/" className="relative z-10 m-5 flex w-fit items-center gap-2 rounded-full bg-neutral-950 px-4 py-2 shadow-sm sm:mx-6">
-        <span className="font-[family-name:var(--font-cinzel)] text-xs uppercase tracking-[0.15em] text-amber-400 sm:text-sm">
-          The Royal Chilli
-        </span>
-        <span className="text-base sm:text-lg" aria-hidden="true">🌶️</span>
-      </Link>
-
       {/* Sole nav trigger now — the old top bar (Home/Menus/Order Online/
           Gallery links, phone number, Book a Table) was removed entirely.
           Always visible, on every breakpoint; opens the full-screen overlay

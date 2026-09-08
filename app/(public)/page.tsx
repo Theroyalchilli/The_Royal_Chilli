@@ -22,8 +22,11 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero — full-bleed rotating photo, dark-washed for legibility, with
-          the marketing headline as the primary content (the persistent
-          top-left brand mark in SiteHeader now carries the wordmark). */}
+          the marketing headline as the primary content. The brand mark
+          overlays the photo itself (top-left, homepage only) rather than
+          living in the shared header — it scrolls away with the hero
+          since it's positioned within this section, not fixed to the
+          viewport, and isn't a separate bar pushing content down. */}
       <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950">
         <div className="absolute inset-0 md:hidden">
           <HeroBackground images={hero.mobileBgImages} />
@@ -32,6 +35,16 @@ export default function HomePage() {
           <HeroBackground images={hero.bgImages} />
         </div>
         <div className="pointer-events-none absolute inset-0 bg-black/55" />
+
+        <Link
+          href="/"
+          className="absolute left-5 top-5 z-10 flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 shadow-sm backdrop-blur sm:left-6 sm:top-6"
+        >
+          <span className="font-[family-name:var(--font-cinzel)] text-xs uppercase tracking-[0.15em] text-foreground sm:text-sm">
+            The Royal Chilli
+          </span>
+          <span className="text-base sm:text-lg" aria-hidden="true">🌶️</span>
+        </Link>
 
         <div className="relative z-10 mx-auto max-w-3xl px-4 text-center">
           <h1 className="font-[family-name:var(--font-playfair)] text-4xl text-white sm:text-5xl lg:text-6xl">

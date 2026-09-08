@@ -196,7 +196,14 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
         </p>
       </div>
 
-      <div className="lg:hidden">
+      <div className="sticky top-0 z-30 lg:hidden">
+        <div className="flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+          <span className="font-[family-name:var(--font-playfair)] text-lg">The Royal Chilli</span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className={`h-2 w-2 rounded-full ${openNow ? "bg-green-500" : "bg-amber-500"}`} />
+            {openNow ? "Open now" : "Closed"}
+          </span>
+        </div>
         <CategoryNavBar
           categories={categories}
           activeCategory={isNarrow ? narrowActiveCategory : activeCategory}

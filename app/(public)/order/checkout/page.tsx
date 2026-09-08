@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { readCart, writeCart, type CartLine } from "@/lib/cart";
+import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
 import { isRestaurantOpen } from "@/lib/hours";
 
 type ZoneCheck = { deliverable: boolean; fee?: number; min_order?: number; zone_name?: string };
@@ -25,7 +25,7 @@ function defaultScheduleTime() {
 
 export default function CheckoutPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [orderType, setOrderType] = useState<"takeaway" | "delivery">("takeaway");
+  const [orderType, setOrderType] = useState<OrderType>("takeaway");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -44,7 +44,10 @@ export default function CheckoutPage() {
   const [confirmation, setConfirmation] = useState<{ orderNumber: string; total: number; scheduledFor: string | null }>({ orderNumber: "", total: 0, scheduledFor: null });
   const [confirmed, setConfirmed] = useState(false);
 
-  useEffect(() => setCart(readCart()), []);
+  useEffect(() => {
+    setCart(readCart());
+    setOrderType(readOrderType());
+  }, []);
 
   // Starts assuming open (matches server render) and corrects after mount —
   // avoids a hydration mismatch from checking the real clock during render.
@@ -64,22 +67,9 @@ export default function CheckoutPage() {
     window.scrollTo(0, 0);
   }, [cart]);
 
-  function bumpLine(lineId: string, delta: number) {
-    setCart((prev) => {
-      const next = prev
-        .map((l) => (l.lineId === lineId ? { ...l, quantity: l.quantity + delta } : l))
-        .filter((l) => l.quantity > 0);
-      writeCart(next);
-      return next;
-    });
-  }
-
-  function removeLine(lineId: string) {
-    setCart((prev) => {
-      const next = prev.filter((l) => l.lineId !== lineId);
-      writeCart(next);
-      return next;
-    });
+  function selectOrderType(type: OrderType) {
+    setOrderType(type);
+    writeOrderType(type);
   }
 
   const subtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
@@ -134,7 +124,7 @@ export default function CheckoutPage() {
           customer_postcode: orderType === "delivery" ? postcode.trim() : undefined,
           notes: notes.trim() || undefined,
           scheduled_for: scheduledFor,
-          items: cart.map((c) => ({ menu_item_id: c.menu_item_id, quantity: c.quantity, selected_options: c.selectedOptions.map((o) => o.id) })),
+          items: cart.map((c) => ({ menu_item_id: c.menu_item_id, quantity: c.quantity, selected_options: c.selectedOptions.map((o) => o.id), notes: c.notes })),
         }),
       });
       const data = await res.json();
@@ -204,52 +194,18 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16">
-      <h1 className="font-[family-name:var(--font-playfair)] text-3xl">Checkout</h1>
-
-      <div className="mt-6 space-y-3 border border-border p-4">
-        {cart.map((c) => (
-          <div key={c.lineId} className="flex items-center justify-between gap-3 text-sm">
-            <div className="min-w-0 flex-1">
-              <p>{c.name}</p>
-              {c.selectedOptions.length > 0 && (
-                <p className="text-xs text-muted-foreground">{c.selectedOptions.map((o) => o.name).join(", ")}</p>
-              )}
-            </div>
-            <div className="flex flex-shrink-0 items-center gap-2">
-              <button onClick={() => bumpLine(c.lineId, -1)} aria-label={`Decrease ${c.name} quantity`} className="h-7 w-7 rounded-full border border-border text-base leading-none hover:border-primary">−</button>
-              <span className="w-4 text-center">{c.quantity}</span>
-              <button onClick={() => bumpLine(c.lineId, 1)} aria-label={`Increase ${c.name} quantity`} className="h-7 w-7 rounded-full border border-border text-base leading-none hover:border-primary">+</button>
-            </div>
-            <span className="w-14 flex-shrink-0 text-right">{formatCurrency(c.unitPrice * c.quantity)}</span>
-            <button onClick={() => removeLine(c.lineId)} aria-label={`Remove ${c.name}`} className="flex-shrink-0 text-muted-foreground hover:text-red-500">
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-        <Link href="/order" className="inline-block text-xs uppercase tracking-[0.15em] text-primary hover:underline">
-          + Add more items
+      <div className="flex items-center gap-3">
+        <Link href="/order/cart" aria-label="Back to your order" className="flex h-8 w-8 items-center justify-center rounded-full border border-border hover:border-primary">
+          <ChevronLeft size={18} />
         </Link>
-        <div className="flex justify-between border-t border-border pt-2 text-sm">
-          <span>Subtotal</span>
-          <span>{formatCurrency(subtotal)}</span>
-        </div>
-        {orderType === "delivery" && zoneCheck?.deliverable && (
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Delivery fee ({zoneCheck.zone_name})</span>
-            <span>{formatCurrency(deliveryFee)}</span>
-          </div>
-        )}
-        <div className="flex justify-between border-t border-border pt-2 font-semibold text-primary">
-          <span>Total</span>
-          <span>{formatCurrency(total)}</span>
-        </div>
+        <h1 className="font-[family-name:var(--font-playfair)] text-3xl">Checkout</h1>
       </div>
 
       <div className="mt-6 flex gap-3">
         {(["takeaway", "delivery"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setOrderType(t)}
+            onClick={() => selectOrderType(t)}
             className={`flex-1 border px-4 py-2 text-xs uppercase tracking-[0.1em] ${
               orderType === t ? "border-primary bg-primary text-primary-foreground" : "border-border"
             }`}
@@ -361,6 +317,23 @@ export default function CheckoutPage() {
           ))}
         </div>
       )}
+
+      <div className="mt-6 space-y-1 border-t border-border pt-4 text-sm">
+        <div className="flex justify-between">
+          <span>Subtotal</span>
+          <span>{formatCurrency(subtotal)}</span>
+        </div>
+        {orderType === "delivery" && zoneCheck?.deliverable && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Delivery fee ({zoneCheck.zone_name})</span>
+            <span>{formatCurrency(deliveryFee)}</span>
+          </div>
+        )}
+        <div className="flex justify-between border-t border-border pt-2 font-semibold text-primary">
+          <span>Total</span>
+          <span>{formatCurrency(total)}</span>
+        </div>
+      </div>
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 

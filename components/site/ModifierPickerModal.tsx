@@ -8,12 +8,16 @@ export default function ModifierPickerModal({
   item,
   onClose,
   onConfirm,
+  withQuantityAndNotes = false,
 }: {
   item: MenuItem;
   onClose: () => void;
-  onConfirm: (selectedOptionIds: number[], unitPrice: number) => void;
+  onConfirm: (selectedOptionIds: number[], unitPrice: number, quantity: number, notes: string) => void;
+  withQuantityAndNotes?: boolean;
 }) {
   const [selectedByGroup, setSelectedByGroup] = useState<Record<number, number[]>>({});
+  const [quantity, setQuantity] = useState(1);
+  const [notes, setNotes] = useState("");
 
   function toggle(groupId: number, optionId: number, single: boolean, max: number | null) {
     setSelectedByGroup((prev) => {
@@ -77,14 +81,37 @@ export default function ModifierPickerModal({
           ))}
         </div>
 
+        {withQuantityAndNotes && (
+          <>
+            <div className="mt-4">
+              <p className="text-sm font-semibold">Special instructions</p>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. no onion, extra spicy"
+                rows={2}
+                className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+            <div className="mt-4">
+              <p className="text-sm font-semibold">Quantity</p>
+              <div className="mt-2 inline-flex items-center gap-3 rounded-lg border border-border px-2 py-1">
+                <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity" className="h-8 w-8 text-lg leading-none">−</button>
+                <span className="w-4 text-center">{quantity}</span>
+                <button onClick={() => setQuantity((q) => q + 1)} aria-label="Increase quantity" className="h-8 w-8 text-lg leading-none">+</button>
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="mt-5 flex gap-3">
           <button onClick={onClose} className="flex-1 border border-border py-2.5 text-xs uppercase tracking-[0.1em]">Cancel</button>
           <button
-            onClick={() => canConfirm && onConfirm(allSelectedIds, unitPrice)}
+            onClick={() => canConfirm && onConfirm(allSelectedIds, unitPrice, quantity, notes.trim())}
             disabled={!canConfirm}
             className="flex-1 bg-primary py-2.5 text-xs uppercase tracking-[0.15em] text-primary-foreground disabled:opacity-50"
           >
-            Add · {formatCurrency(unitPrice)}
+            Add · {formatCurrency(unitPrice * (withQuantityAndNotes ? quantity : 1))}
           </button>
         </div>
       </div>

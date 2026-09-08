@@ -7,6 +7,21 @@ export function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
+// Mobile-first: assumes narrow (matches the majority of ordering traffic and
+// the server-rendered markup) until corrected after mount once the real
+// viewport is known — matches the Tailwind `lg` breakpoint (1024px).
+export function useIsNarrow() {
+  const [narrow, setNarrow] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setNarrow(!mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 export function useCategoryNav(categories: MenuCategory[]) {
   const [activeCategory, setActiveCategory] = useState<number | null>(categories[0]?.id ?? null);
   const sectionRefs = useRef<Record<number, HTMLElement | null>>({});

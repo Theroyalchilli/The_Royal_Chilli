@@ -166,10 +166,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
     <div className="pb-28 lg:pb-16">
       <div className="mx-auto max-w-4xl px-4 py-16">
         <div className="text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</p>
-          <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
-            Collection &amp; <span className="italic text-primary">Delivery</span>
-          </h1>
+          <h1 className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</h1>
           <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
             <span className={`h-2 w-2 rounded-full ${openNow ? "bg-green-500" : "bg-amber-500"}`} />
             {openNow ? "Open now" : "Closed right now — you can still order for later"}
@@ -196,14 +193,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
         </p>
       </div>
 
-      <div className="sticky top-0 z-30 lg:hidden">
-        <div className="flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-          <span className="font-[family-name:var(--font-playfair)] text-lg">The Royal Chilli</span>
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className={`h-2 w-2 rounded-full ${openNow ? "bg-green-500" : "bg-amber-500"}`} />
-            {openNow ? "Open now" : "Closed"}
-          </span>
-        </div>
+      <div className="lg:hidden">
         <CategoryNavBar
           categories={categories}
           activeCategory={isNarrow ? narrowActiveCategory : activeCategory}

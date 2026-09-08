@@ -1,10 +1,12 @@
+import { isRestaurantOpen, formatHoursForDate } from "./hours";
+
 const MIN_LEAD_MINUTES = 20;
 const MAX_ADVANCE_DAYS = 7;
 
-// Validates a customer-requested pickup/delivery time. Deliberately doesn't try to
-// parse the website's informal opening-hours text (e.g. "Mon – Thu 9AM–11PM") against
-// it — that's free-text copy, not structured data. Out-of-hours slots are rare edge
-// cases staff can catch and call the customer about, same as any other business today.
+// Validates a customer-requested pickup/delivery time: far enough ahead, not
+// too far in the future, and within the restaurant's actual opening hours
+// for that day (via lib/hours.ts's structured hours) — a scheduled order
+// outside hours is rejected outright rather than left for staff to catch.
 export function validateScheduledTime(scheduledFor: string): string | null {
   const time = new Date(scheduledFor);
   if (isNaN(time.getTime())) return "Invalid scheduled time";
@@ -18,5 +20,10 @@ export function validateScheduledTime(scheduledFor: string): string | null {
   if (daysAhead > MAX_ADVANCE_DAYS) {
     return `Please choose a time within the next ${MAX_ADVANCE_DAYS} days`;
   }
+  if (!isRestaurantOpen(time)) {
+    return `We're closed at that time — opening hours that day are ${formatHoursForDate(time)}`;
+  }
   return null;
 }
+
+export { MIN_LEAD_MINUTES, MAX_ADVANCE_DAYS };

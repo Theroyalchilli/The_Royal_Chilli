@@ -84,11 +84,20 @@ export function CategoryNavBar({
   navScrollerRef: React.RefObject<HTMLDivElement | null>;
   jumpTo: (id: number) => void;
 }) {
+  // `lg:hidden` lives on this same sticky element rather than on a wrapping
+  // div around it — a sticky element can only stay stuck while its own
+  // parent hasn't fully scrolled past, so wrapping it in a div with no other
+  // content (just this nav's own height) gave it almost no room to remain
+  // stuck, and it unstuck again after a few dozen pixels of scroll. This
+  // element's real parent is now the page's own tall content column, so it
+  // stays pinned for the full scroll. (Sticky + overflow-x-auto are still
+  // split across two elements — a real WebKit quirk when combined on one.)
   return (
-    <nav
-      ref={navScrollerRef}
-      className="sticky top-0 z-30 flex w-full gap-2 overflow-x-auto whitespace-nowrap border-y border-border bg-background/95 px-4 py-3 text-sm backdrop-blur [scrollbar-width:none] md:flex-wrap md:justify-center md:overflow-visible md:whitespace-normal [&::-webkit-scrollbar]:hidden"
-    >
+    <div className="sticky top-0 z-30 border-y border-border bg-background/95 backdrop-blur lg:hidden">
+      <nav
+        ref={navScrollerRef}
+        className="flex w-full gap-2 overflow-x-auto whitespace-nowrap px-4 py-3 text-sm [scrollbar-width:none] md:flex-wrap md:justify-center md:overflow-visible md:whitespace-normal [&::-webkit-scrollbar]:hidden"
+      >
       {categories.map((category) => {
         const isActive = activeCategory === category.id;
         return (
@@ -110,7 +119,8 @@ export function CategoryNavBar({
           </a>
         );
       })}
-    </nav>
+      </nav>
+    </div>
   );
 }
 

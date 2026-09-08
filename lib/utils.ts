@@ -9,6 +9,12 @@ export function formatCurrency(amount: number): string {
   return `£${amount.toFixed(2)}`;
 }
 
+// UK mobile numbers only: starts with 07, 11 digits total (e.g. 07123456789).
+// Strips spaces/dashes before checking, so "07123 456789" also passes.
+export function isValidUkMobile(phone: string): boolean {
+  return /^07\d{9}$/.test(phone.replace(/[\s-]/g, ""));
+}
+
 export function isHappyHour(): boolean {
   const now = new Date();
   const hours = now.getHours();

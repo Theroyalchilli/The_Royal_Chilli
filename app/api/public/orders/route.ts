@@ -5,7 +5,8 @@ import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen } from "@/lib/hours";
-import { matchDeliveryZone } from "@/lib/delivery-zones";
+import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
+import { isValidUkMobile } from "@/lib/utils";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { formatTicketText } from "@/lib/cloudprnt";
 
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
     if (!customer_name || !customer_phone) {
       return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
     }
+    if (!isValidUkMobile(customer_phone)) {
+      return NextResponse.json({ error: "Please enter a valid UK mobile number (starts with 07, 11 digits)" }, { status: 400 });
+    }
     if (order_type === "delivery" && (!customer_address || !customer_postcode)) {
       return NextResponse.json({ error: "Delivery address and postcode are required" }, { status: 400 });
     }
@@ -43,11 +47,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "We're closed right now — please schedule your order for later." }, { status: 400 });
     }
 
-    let zone = null;
+    let deliverable = false;
     if (order_type === "delivery") {
-      zone = await matchDeliveryZone(customer_postcode);
-      if (!zone) {
-        return NextResponse.json({ error: "Sorry, we don't currently deliver to that postcode" }, { status: 400 });
+      const eligibility = await checkDeliveryEligibility(customer_postcode);
+      deliverable = eligibility.deliverable;
+      if (!deliverable) {
+        return NextResponse.json({ error: "Sorry, we don't deliver there — we deliver within 5 miles of the restaurant" }, { status: 400 });
       }
     }
 
@@ -69,13 +74,13 @@ export async function POST(req: NextRequest) {
     );
 
     const subtotal = orderItems.reduce((sum, i) => sum + i.item_price * i.quantity, 0);
-    if (zone && subtotal < zone.min_order) {
+    if (deliverable && subtotal < MIN_DELIVERY_ORDER) {
       return NextResponse.json(
-        { error: `Minimum order for delivery to this area is £${zone.min_order.toFixed(2)} (currently £${subtotal.toFixed(2)})` },
+        { error: `Minimum order for delivery is £${MIN_DELIVERY_ORDER.toFixed(2)} (currently £${subtotal.toFixed(2)})` },
         { status: 400 }
       );
     }
-    const deliveryFee = zone ? zone.fee : 0;
+    const deliveryFee = deliverable ? computeDeliveryFee(subtotal) : 0;
     const total = Math.round((subtotal + deliveryFee) * 100) / 100;
 
     const { data: workPeriod } = await supabase
@@ -100,7 +105,7 @@ export async function POST(req: NextRequest) {
         customer_email: customer_email || null,
         customer_address: order_type === "delivery" ? customer_address : null,
         customer_postcode: order_type === "delivery" ? customer_postcode.trim().toUpperCase() : null,
-        delivery_zone_id: zone?.id ?? null,
+        delivery_zone_id: null, // no more named zones — eligibility is a live 5-mile radius check
         status: "sent_to_kitchen",
         scheduled_for: scheduled_for || null,
         work_period_id: workPeriod?.id || null,
@@ -108,7 +113,7 @@ export async function POST(req: NextRequest) {
         discount: 0,
         tax: 0,
         total,
-        notes: [notes, zone ? `Delivery fee: £${deliveryFee.toFixed(2)} (${zone.name})` : null]
+        notes: [notes, deliverable ? `Delivery fee: £${deliveryFee.toFixed(2)}` : null]
           .filter(Boolean)
           .join("\n") || null,
       })

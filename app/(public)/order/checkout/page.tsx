@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
-import { isRestaurantOpen } from "@/lib/hours";
+import { isRestaurantOpen, formatHoursForDate, getHoursInputBoundsForDate, nextValidScheduleSlot, toDateInputValue, toTimeInputValue } from "@/lib/hours";
+import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
+import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 
-type ZoneCheck = { deliverable: boolean; fee?: number; min_order?: number; zone_name?: string };
+type ZoneCheck = { deliverable: boolean };
 
 // Hidden entirely (falls back to pay-on-collection/delivery only) until
 // SUMUP_API_KEY + SUMUP_MERCHANT_CODE are configured server-side — this flag
@@ -15,12 +17,15 @@ type ZoneCheck = { deliverable: boolean; fee?: number; min_order?: number; zone_
 const SUMUP_ENABLED = process.env.NEXT_PUBLIC_SUMUP_ENABLED === "true";
 
 function defaultScheduleDate() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateInputValue(nextValidScheduleSlot(new Date()));
 }
 function defaultScheduleTime() {
-  const d = new Date(Date.now() + 30 * 60_000);
-  d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-  return d.toTimeString().slice(0, 5);
+  return toTimeInputValue(nextValidScheduleSlot(new Date()));
+}
+function maxScheduleDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + MAX_ADVANCE_DAYS);
+  return toDateInputValue(d);
 }
 
 export default function CheckoutPage() {
@@ -73,8 +78,12 @@ export default function CheckoutPage() {
   }
 
   const subtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
-  const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? zoneCheck.fee || 0 : 0;
+  const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? computeDeliveryFee(subtotal) : 0;
   const total = subtotal + deliveryFee;
+
+  // Re-derived whenever the picked date changes, since Friday's opening
+  // time differs from every other day's.
+  const scheduleTimeBounds = getHoursInputBoundsForDate(new Date(`${scheduleDate}T00:00:00`));
 
   async function checkPostcode(pc: string) {
     setZoneCheck(null);
@@ -94,19 +103,24 @@ export default function CheckoutPage() {
     setError("");
     if (cart.length === 0) return setError("Your cart is empty.");
     if (!name.trim() || !phone.trim()) return setError("Please enter your name and phone number.");
+    if (!isValidUkMobile(phone)) return setError("Please enter a valid UK mobile number (starts with 07, 11 digits).");
     if (orderType === "delivery" && (!address.trim() || !postcode.trim())) return setError("Please enter a delivery address and postcode.");
-    if (orderType === "delivery" && zoneCheck && !zoneCheck.deliverable) return setError("Sorry, we don't currently deliver to that postcode.");
-    if (orderType === "delivery" && zoneCheck?.deliverable && zoneCheck.min_order && subtotal < zoneCheck.min_order) {
-      return setError(`Minimum order for delivery to this area is £${zoneCheck.min_order.toFixed(2)}.`);
+    if (orderType === "delivery" && zoneCheck && !zoneCheck.deliverable) return setError("Sorry, we don't currently deliver to that postcode — we deliver within 5 miles of the restaurant.");
+    if (orderType === "delivery" && zoneCheck?.deliverable && subtotal < MIN_DELIVERY_ORDER) {
+      return setError(`Minimum order for delivery is £${MIN_DELIVERY_ORDER.toFixed(2)}.`);
     }
     if (!isScheduled && !openNow) return setError("We're closed right now — please schedule your order for later.");
 
     let scheduledFor: string | undefined;
     if (isScheduled) {
       if (!scheduleDate || !scheduleTime) return setError("Please choose a date and time.");
-      scheduledFor = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
-      if (new Date(scheduledFor).getTime() - Date.now() < 20 * 60_000) {
+      const scheduledDate = new Date(`${scheduleDate}T${scheduleTime}:00`);
+      scheduledFor = scheduledDate.toISOString();
+      if (scheduledDate.getTime() - Date.now() < 20 * 60_000) {
         return setError("Please choose a time at least 20 minutes from now.");
+      }
+      if (!isRestaurantOpen(scheduledDate)) {
+        return setError(`We're closed at that time — opening hours that day are ${formatHoursForDate(scheduledDate)}.`);
       }
     }
 
@@ -239,8 +253,22 @@ export default function CheckoutPage() {
       )}
       {isScheduled && (
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <input type="date" value={scheduleDate} min={defaultScheduleDate()} onChange={(e) => setScheduleDate(e.target.value)} className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />
-          <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary" />
+          <input
+            type="date"
+            value={scheduleDate}
+            min={defaultScheduleDate()}
+            max={maxScheduleDate()}
+            onChange={(e) => setScheduleDate(e.target.value)}
+            className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          />
+          <input
+            type="time"
+            value={scheduleTime}
+            min={scheduleTimeBounds.min}
+            max={scheduleTimeBounds.max}
+            onChange={(e) => setScheduleTime(e.target.value)}
+            className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+          />
         </div>
       )}
 
@@ -254,7 +282,10 @@ export default function CheckoutPage() {
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone number"
+          placeholder="Mobile number (07…)"
+          type="tel"
+          inputMode="numeric"
+          maxLength={11}
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <input
@@ -284,11 +315,11 @@ export default function CheckoutPage() {
             {!checkingZone && zoneCheck && (
               zoneCheck.deliverable ? (
                 <p className="text-xs text-primary">
-                  ✓ We deliver here ({zoneCheck.zone_name}) · {formatCurrency(zoneCheck.fee || 0)} delivery fee
-                  {zoneCheck.min_order ? ` · £${zoneCheck.min_order.toFixed(2)} minimum order` : ""}
+                  ✓ We deliver here · {formatCurrency(computeDeliveryFee(subtotal))} delivery fee (free over £{FREE_DELIVERY_THRESHOLD})
+                  · £{MIN_DELIVERY_ORDER.toFixed(2)} minimum order
                 </p>
               ) : (
-                <p className="text-xs text-red-500">Sorry, we don&apos;t currently deliver to that postcode.</p>
+                <p className="text-xs text-red-500">Sorry, we don&apos;t deliver there — we deliver within 5 miles of the restaurant.</p>
               )
             )}
           </>
@@ -325,8 +356,8 @@ export default function CheckoutPage() {
         </div>
         {orderType === "delivery" && zoneCheck?.deliverable && (
           <div className="flex justify-between text-muted-foreground">
-            <span>Delivery fee ({zoneCheck.zone_name})</span>
-            <span>{formatCurrency(deliveryFee)}</span>
+            <span>Delivery fee</span>
+            <span>{deliveryFee > 0 ? formatCurrency(deliveryFee) : "Free"}</span>
           </div>
         )}
         <div className="flex justify-between border-t border-border pt-2 font-semibold text-primary">

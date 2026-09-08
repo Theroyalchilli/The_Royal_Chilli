@@ -164,7 +164,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
 
   return (
     <div className="pb-28 lg:pb-16">
-      <div className="mx-auto max-w-4xl px-4 py-16">
+      <div className="mx-auto max-w-4xl px-4 pt-16 pb-6">
         <div className="text-center">
           <h1 className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</h1>
           <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
@@ -193,15 +193,13 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
         </p>
       </div>
 
-      <div className="lg:hidden">
-        <CategoryNavBar
-          categories={categories}
-          activeCategory={isNarrow ? narrowActiveCategory : activeCategory}
-          navRefs={navRefs}
-          navScrollerRef={navScrollerRef}
-          jumpTo={selectNarrowCategory}
-        />
-      </div>
+      <CategoryNavBar
+        categories={categories}
+        activeCategory={isNarrow ? narrowActiveCategory : activeCategory}
+        navRefs={navRefs}
+        navScrollerRef={navScrollerRef}
+        jumpTo={selectNarrowCategory}
+      />
 
       <div className="mx-auto max-w-7xl px-4 lg:grid lg:grid-cols-[220px_1fr_320px] lg:items-start lg:gap-10">
         <div className="hidden lg:sticky lg:top-6 lg:block">

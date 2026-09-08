@@ -1,6 +1,7 @@
 import { Jost } from "next/font/google";
 import SiteHeader from "@/components/site/SiteHeader";
 import SiteFooter from "@/components/site/SiteFooter";
+import SplashScreen from "@/components/site/SplashScreen";
 
 // Public-site-only body/nav font, styled after tamarindrestaurant.com's light,
 // wide-tracked look. Their actual typeface (Domaine Sans) is a paid font
@@ -13,6 +14,7 @@ const jost = Jost({ subsets: ["latin"], weight: ["300", "400", "500", "600"], va
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={`${jost.variable} flex min-h-screen flex-col font-[family-name:var(--font-jost)]`}>
+      <SplashScreen />
       <SiteHeader />
       {/* SiteHeader no longer renders a top bar — just the fixed hamburger
           button and its full-screen overlay — so there's no header height

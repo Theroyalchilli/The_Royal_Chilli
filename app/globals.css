@@ -129,3 +129,9 @@ html {
 .kitchen-new {
   animation: pulse-yellow 2s infinite;
 }
+
+/* Splash screen loading-line fill */
+@keyframes splash-load {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}

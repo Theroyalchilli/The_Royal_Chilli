@@ -22,8 +22,8 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero — full-bleed rotating photo, dark-washed for legibility, with
-          the restaurant name centered as large tracked-out serif type (the
-          "wordmark as hero art" treatment) rather than a marketing headline. */}
+          the marketing headline as the primary content (the persistent
+          top-left brand mark in SiteHeader now carries the wordmark). */}
       <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950">
         <div className="absolute inset-0 md:hidden">
           <HeroBackground images={hero.mobileBgImages} />
@@ -34,14 +34,10 @@ export default function HomePage() {
         <div className="pointer-events-none absolute inset-0 bg-black/55" />
 
         <div className="relative z-10 mx-auto max-w-3xl px-4 text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-white/80 sm:text-sm">{hero.tag}</p>
-          <h1 className="mt-5 font-[family-name:var(--font-cinzel)] text-5xl uppercase leading-tight tracking-[0.12em] text-white sm:text-6xl lg:text-7xl">
-            The Royal Chilli
-          </h1>
-          <p className="mt-6 font-[family-name:var(--font-playfair)] text-xl text-white sm:text-2xl">
+          <h1 className="font-[family-name:var(--font-playfair)] text-4xl text-white sm:text-5xl lg:text-6xl">
             {hero.headline} <span className="italic text-primary">{hero.headlineGold}</span>
-          </p>
-          <p className="mx-auto mt-4 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
+          </h1>
+          <p className="mx-auto mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/reservations"

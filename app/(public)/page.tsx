@@ -54,25 +54,25 @@ export default function HomePage() {
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/reservations"
-              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
             >
               Dine In
             </Link>
             <Link
               href="/order"
-              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
             >
               Order Online
             </Link>
             <Link
               href="/reservations"
-              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
             >
               Book a Table
             </Link>
             <Link
               href="/catering"
-              className="border border-white/50 bg-white/10 px-8 py-3 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
+              className="w-48 border border-white/50 bg-white/10 px-4 py-3 text-center text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
             >
               Catering &amp; Events
             </Link>

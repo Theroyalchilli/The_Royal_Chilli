@@ -7,7 +7,7 @@ import { siteContent } from "@/lib/site-content";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { readCart, writeCart, makeLineId, type CartLine } from "@/lib/cart";
 import ModifierPickerModal from "./ModifierPickerModal";
-import { CategoryHeading, CategoryNavBar, slugify, useCategoryNav } from "./CategoryNav";
+import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav } from "./CategoryNav";
 
 export default function OrderMenu({ categories }: { categories: MenuCategory[] }) {
   const router = useRouter();
@@ -65,7 +65,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   const itemCount = cart.reduce((sum, l) => sum + l.quantity, 0);
 
   return (
-    <div className="pb-28">
+    <div className="pb-28 lg:pb-16">
       <div className="mx-auto max-w-4xl px-4 py-16">
         <div className="text-center">
           <p className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</p>
@@ -79,16 +79,22 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
 
       </div>
 
-      <CategoryNavBar
-        categories={categories}
-        activeCategory={activeCategory}
-        navRefs={navRefs}
-        navScrollerRef={navScrollerRef}
-        jumpTo={jumpTo}
-      />
+      <div className="lg:hidden">
+        <CategoryNavBar
+          categories={categories}
+          activeCategory={activeCategory}
+          navRefs={navRefs}
+          navScrollerRef={navScrollerRef}
+          jumpTo={jumpTo}
+        />
+      </div>
 
-      <div className="mx-auto max-w-4xl px-4">
-        <div className="mt-10 space-y-14">
+      <div className="mx-auto max-w-7xl px-4 lg:grid lg:grid-cols-[220px_1fr_320px] lg:items-start lg:gap-10">
+        <div className="hidden lg:sticky lg:top-6 lg:block">
+          <CategoryRail categories={categories} activeCategory={activeCategory} jumpTo={jumpTo} />
+        </div>
+
+        <div className="mt-10 space-y-14 lg:mt-0">
           {categories.map((category) => (
             <section
               key={category.id}
@@ -151,10 +157,50 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
             </section>
           ))}
         </div>
+
+        <div className="hidden lg:sticky lg:top-6 lg:block">
+          <div className="rounded-lg border border-border bg-card p-5">
+            <h2 className="font-[family-name:var(--font-playfair)] text-lg text-primary">Your Order</h2>
+            {cart.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">Your cart is empty.</p>
+            ) : (
+              <>
+                <div className="mt-4 max-h-[50vh] space-y-4 overflow-y-auto pr-1">
+                  {cart.map((l) => (
+                    <div key={l.lineId} className="text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-medium">{l.name}</span>
+                        <span className="text-muted-foreground">{formatCurrency(l.unitPrice * l.quantity)}</span>
+                      </div>
+                      {l.selectedOptions.length > 0 && (
+                        <p className="text-xs text-muted-foreground">{l.selectedOptions.map((o) => o.name).join(", ")}</p>
+                      )}
+                      <div className="mt-1 flex items-center gap-2">
+                        <button onClick={() => bumpLine(l.lineId, -1)} className="h-7 w-7 rounded-full border border-border text-sm leading-none hover:border-primary">−</button>
+                        <span className="w-4 text-center text-xs">{l.quantity}</span>
+                        <button onClick={() => bumpLine(l.lineId, 1)} className="h-7 w-7 rounded-full border border-border text-sm leading-none hover:border-primary">+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-sm">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-semibold text-primary">{formatCurrency(total)}</span>
+                </div>
+                <button
+                  onClick={() => router.push("/order/checkout")}
+                  className="mt-4 w-full bg-primary py-2.5 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90"
+                >
+                  Checkout
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {itemCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
             <span className="text-sm text-muted-foreground">
               {itemCount} item{itemCount > 1 ? "s" : ""} · {formatCurrency(total)}

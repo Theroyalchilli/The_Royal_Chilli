@@ -99,6 +99,37 @@ export function CategoryNavBar({
   );
 }
 
+export function CategoryRail({
+  categories,
+  activeCategory,
+  jumpTo,
+}: {
+  categories: MenuCategory[];
+  activeCategory: number | null;
+  jumpTo: (id: number) => void;
+}) {
+  return (
+    <nav className="flex flex-col gap-1">
+      {categories.map((category) => {
+        const isActive = activeCategory === category.id;
+        return (
+          <button
+            key={category.id}
+            onClick={() => jumpTo(category.id)}
+            className={`rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+            }`}
+          >
+            {category.name}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function CategoryHeading({ name, count }: { name: string; count: number }) {
   return (
     <div className="flex items-center gap-3 border-b-2 border-primary/30 pb-2">

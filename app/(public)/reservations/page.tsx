@@ -2,8 +2,38 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { MessageCircle } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
+
+// wa.me only opens a pre-filled draft — the customer still has to tap Send
+// themselves — since actually auto-sending would need a WhatsApp Business
+// API account we don't have set up. This is the no-setup stand-in for that:
+// one tap, right after they've already engaged with the booking flow.
+function buildWhatsAppReservationLink({
+  waitlisted, name, phone, guests, date, time, notes,
+}: { waitlisted: boolean; name: string; phone: string; guests: number; date: string; time: string; notes: string }) {
+  let dateLabel = date;
+  let timeLabel = time;
+  try {
+    const d = new Date(`${date}T${time}:00`);
+    dateLabel = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    timeLabel = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true });
+  } catch {
+    // keep the raw strings if parsing fails
+  }
+  const lines = [
+    waitlisted ? "⏳ Waitlist Request — The Royal Chilli" : "🍽️ New Reservation Request — The Royal Chilli",
+    "",
+    `👤 Name: ${name}`,
+    `📞 Phone: ${phone}`,
+    `👥 Party size: ${guests}`,
+    `📅 Date: ${dateLabel}`,
+    `🕐 Time: ${timeLabel}`,
+  ];
+  if (notes.trim()) lines.push(`📝 Notes: ${notes.trim()}`);
+  return `https://wa.me/${siteContent.contact.waNumber}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
 
 export default function ReservationsPage() {
   return (
@@ -127,6 +157,19 @@ function ReservationsForm() {
             ? `We'll call you at ${phone} if a table opens up for ${date} at ${time}.`
             : `We'll call you at ${phone} to confirm your table for ${date} at ${time}.`}
         </p>
+
+        <a
+          href={buildWhatsAppReservationLink({ waitlisted, name, phone, guests, date, time, notes })}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 inline-flex items-center justify-center gap-2 bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90"
+        >
+          <MessageCircle size={16} /> Send Us These Details on WhatsApp
+        </a>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Speeds up your confirmation — opens WhatsApp with your booking details ready to send.
+        </p>
+
         <p className="mt-4 text-sm text-muted-foreground">Questions? Call us on {contact.phone}.</p>
       </div>
     );

@@ -48,9 +48,9 @@ export default function HomePage() {
         </Link>
 
         <div className="relative z-10 mx-auto w-full max-w-3xl px-6 sm:px-10">
-          <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-bold leading-tight text-white sm:text-6xl lg:text-7xl">
+          <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-semibold leading-tight text-white/90 sm:text-6xl lg:text-7xl">
             <span className="block">{hero.headline}</span>
-            <span className="block italic text-primary">{hero.headlineGold}</span>
+            <span className="block italic text-primary/90">{hero.headlineGold}</span>
           </h1>
           <p className="mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
 

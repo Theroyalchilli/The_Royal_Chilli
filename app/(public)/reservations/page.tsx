@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { MessageCircle } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
 
@@ -58,8 +57,6 @@ function ReservationsForm() {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
-  const [waitlisted, setWaitlisted] = useState(false);
   const [fullMessage, setFullMessage] = useState("");
 
   // SumUp's Hosted Checkout only has one redirect_url (no separate
@@ -112,8 +109,14 @@ function ReservationsForm() {
         }
       }
 
-      setWaitlisted(!!data.waitlisted);
-      setDone(true);
+      // Instant same-tab redirect straight into WhatsApp, message pre-filled
+      // — not a new tab, since a popup opened after this async request would
+      // likely get blocked as no longer tied to the click that started it.
+      // No confirmation screen shown here: the customer never sees one
+      // before leaving for WhatsApp, per explicit instruction.
+      window.location.href = buildWhatsAppReservationLink({
+        waitlisted: !!data.waitlisted, name, phone, guests, date, time, notes,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -141,36 +144,6 @@ function ReservationsForm() {
         <p className="mt-2 text-muted-foreground">
           Your booking request is still held, but the deposit hasn&apos;t been paid yet. Call us on {contact.phone} to sort this out, or try booking again.
         </p>
-      </div>
-    );
-  }
-
-  if (done) {
-    return (
-      <div className="mx-auto max-w-md px-4 py-24 text-center">
-        <div className="text-5xl">{waitlisted ? "⏳" : "✅"}</div>
-        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">
-          {waitlisted ? "You're on the Waitlist" : "Request Received!"}
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          {waitlisted
-            ? `We'll call you at ${phone} if a table opens up for ${date} at ${time}.`
-            : `We'll call you at ${phone} to confirm your table for ${date} at ${time}.`}
-        </p>
-
-        <a
-          href={buildWhatsAppReservationLink({ waitlisted, name, phone, guests, date, time, notes })}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-6 inline-flex items-center justify-center gap-2 bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90"
-        >
-          <MessageCircle size={16} /> Send Us These Details on WhatsApp
-        </a>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Speeds up your confirmation — opens WhatsApp with your booking details ready to send.
-        </p>
-
-        <p className="mt-4 text-sm text-muted-foreground">Questions? Call us on {contact.phone}.</p>
       </div>
     );
   }

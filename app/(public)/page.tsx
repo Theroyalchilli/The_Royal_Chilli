@@ -129,7 +129,7 @@ export default function HomePage() {
             </Link>
           </Reveal>
           <Reveal delay={150} className="relative aspect-square overflow-hidden rounded-2xl">
-            <Image src="/gallery/Chicken_Malai_Tikka.webp" alt="Chicken Malai Tikka" fill className="object-cover" />
+            <Image src="/gallery/Tandoori_Sizzler.webp" alt="Tandoori Sizzler" fill className="object-cover" />
           </Reveal>
         </div>
       </section>

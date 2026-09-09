@@ -4,14 +4,11 @@ import supabase from "@/lib/supabase";
 
 export const metadata: Metadata = { robots: { index: false } };
 
-// Landing page after a SumUp Hosted Checkout redirect. SumUp only gives a
-// single redirect_url (no separate success/cancel destinations the way
-// Stripe Checkout did), so this page can't assume payment succeeded just
-// because the customer landed here — it checks amount_paid against total
-// itself. The webhook (not this page) is what actually marks the order
-// paid; in practice that's already landed by the time the customer's
-// browser gets redirected back, but if they abandoned the SumUp page
-// instead of completing payment, amount_paid will still be short.
+// Landing page for the Stripe Checkout success_url. The webhook
+// (app/api/stripe/webhook), not this page, is what actually marks the order
+// paid — usually already landed by the time the browser redirects back — so
+// this page still checks amount_paid against total itself rather than
+// assuming success from the redirect alone.
 export default async function OrderConfirmationPage({
   searchParams,
 }: {

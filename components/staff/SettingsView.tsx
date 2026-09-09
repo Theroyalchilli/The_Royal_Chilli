@@ -110,6 +110,11 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [maxEmployees, setMaxEmployees] = useState("20");
   const [depositAmount, setDepositAmount] = useState("0");
   const [readerId, setReaderId] = useState("");
+  const [regCode, setRegCode] = useState("");
+  const [readerName, setReaderName] = useState("Reception");
+  const [pairing, setPairing] = useState(false);
+  const [pairError, setPairError] = useState("");
+  const [pairedStatus, setPairedStatus] = useState("");
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
   const [restaurantLat, setRestaurantLat] = useState("");
   const [restaurantLng, setRestaurantLng] = useState("");
@@ -131,7 +136,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.vat_rate !== undefined) setVatRate(String(s.vat_rate));
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
-        if (s.sumup_reader_id !== undefined) setReaderId(String(s.sumup_reader_id));
+        if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
         setGeofenceEnabled(!!s.geofence_enabled);
         if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
         if (s.restaurant_longitude != null) setRestaurantLng(String(s.restaurant_longitude));
@@ -154,6 +159,25 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
     );
   }
 
+  async function pairReader() {
+    setPairing(true);
+    setPairError("");
+    setPairedStatus("");
+    try {
+      const res = await fetch("/api/pos/terminal/pair", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ registration_code: regCode.trim(), label: readerName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setPairError(data.error || "Failed to pair reader"); return; }
+      setReaderId(data.reader.id);
+      setPairedStatus(`Paired — status: ${data.reader.status ?? "registered"}. Click Save below to store it.`);
+      setRegCode("");
+    } finally {
+      setPairing(false);
+    }
+  }
+
   async function save() {
     setSaving(true);
     setSaved(false);
@@ -163,7 +187,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         company_name: companyName, currency, week_start_day: weekStartDay, overtime_enabled: overtimeEnabled,
         vat_rate: Number(vatRate), max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
-        sumup_reader_id: readerId.trim(),
+        stripe_terminal_reader_id: readerId.trim(),
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
         restaurant_longitude: restaurantLng ? Number(restaurantLng) : null,
@@ -247,9 +271,39 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               <p className="mt-1 text-muted-foreground text-xs">0 = no deposit required. When set, new website reservations (not waitlist entries) are redirected to pay this online before confirming.</p>
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (SumUp Solo)</label>
-              <input type="text" placeholder="reader id from SumUp" value={readerId} onChange={(e) => setReaderId(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono" />
-              <p className="mt-1 text-muted-foreground text-xs">Leave blank to keep the manual &quot;Card Paid&quot; button (for a separate card machine). Pair the Solo reader (on the device: Settings → Connections → API → Connect, to generate a pairing code) and register it via SumUp&apos;s Cloud API, then paste its reader ID here to enable real in-person card charges through the till.</p>
+              <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (Stripe Terminal)</label>
+              <input type="text" placeholder="tmr_… (from pairing below)" value={readerId} onChange={(e) => setReaderId(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono" />
+              <p className="mt-1 text-muted-foreground text-xs">Leave blank to keep the manual &quot;Card Paid&quot; button (for a separate card machine). Set it to drive a Stripe Reader from the till.</p>
+            </div>
+
+            <div className="rounded-lg border border-border bg-surface-hover p-3">
+              <p className="text-xs font-semibold text-foreground">Pair a new Stripe Reader</p>
+              <p className="mt-1 text-muted-foreground text-xs">
+                On the reader, open its settings and choose to connect / generate a pairing code — it shows a
+                short registration code (e.g. <span className="font-mono">quick-brown-fox</span>). Enter it here
+                within a few minutes. This registers the reader and fills in the Card Reader ID field above.
+              </p>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text" placeholder="Registration code from the reader" value={regCode}
+                  onChange={(e) => setRegCode(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono"
+                />
+                <input
+                  type="text" placeholder="Label (e.g. Reception)" value={readerName}
+                  onChange={(e) => setReaderName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+                />
+              </div>
+              <button
+                onClick={pairReader}
+                disabled={pairing || !regCode.trim() || !readerName.trim()}
+                className="mt-3 px-4 py-2 bg-elevated hover:bg-elevated-hover disabled:opacity-50 text-foreground text-xs font-semibold rounded-lg border border-elevated"
+              >
+                {pairing ? "Pairing…" : "Pair Reader"}
+              </button>
+              {pairError && <p className="mt-2 text-red-600 text-xs">{pairError}</p>}
+              {pairedStatus && <p className="mt-2 text-emerald-600 text-xs">{pairedStatus}</p>}
             </div>
             <div className="flex items-center justify-between">
               <div>

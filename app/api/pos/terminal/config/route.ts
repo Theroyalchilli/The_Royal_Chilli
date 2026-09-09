@@ -8,7 +8,11 @@ export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "sumup_reader_id").maybeSingle();
+  const { data } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "stripe_terminal_reader_id")
+    .maybeSingle();
   const readerId = data ? String(data.value || "") : "";
   return NextResponse.json({ enabled: readerId.trim().length > 0 });
 }

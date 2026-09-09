@@ -12,9 +12,9 @@ import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from 
 type ZoneCheck = { deliverable: boolean };
 
 // Hidden entirely (falls back to pay-on-collection/delivery only) until
-// SUMUP_API_KEY + SUMUP_MERCHANT_CODE are configured server-side — this flag
-// just needs to be flipped on once that's done.
-const SUMUP_ENABLED = process.env.NEXT_PUBLIC_SUMUP_ENABLED === "true";
+// STRIPE_SECRET_KEY + the Stripe webhook are configured server-side — this
+// flag just needs to be flipped on once that's done.
+const STRIPE_ENABLED = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
 
 function defaultScheduleDate() {
   return toDateInputValue(nextValidScheduleSlot(new Date()));
@@ -158,7 +158,7 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to place order");
 
-      if (payOnline && SUMUP_ENABLED) {
+      if (payOnline && STRIPE_ENABLED) {
         const sessionRes = await fetch(`/api/public/orders/${data.id}/checkout-session`, { method: "POST" });
         const sessionData = await sessionRes.json();
         if (!sessionRes.ok || !sessionData.url) throw new Error(sessionData.error || "Failed to start online payment");
@@ -355,7 +355,7 @@ export default function CheckoutPage() {
         />
       </div>
 
-      {SUMUP_ENABLED && (
+      {STRIPE_ENABLED && (
         <div className="mt-6 flex gap-3">
           {([false, true] as const).map((online) => (
             <button

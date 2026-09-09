@@ -35,7 +35,7 @@ export async function formatTicketText(orderId: number): Promise<string | null> 
   // Printed the moment the order lands, which can be seconds before an
   // online payment (a separate follow-up step) actually completes — so
   // this can't assert "unpaid" as fact, just what to do either way.
-  lines.push(isPaid ? "STATUS: PAID ONLINE" : `IF NOT ALREADY PAID ONLINE, CHARGE GBP ${(Number(order.total) - Number(order.amount_paid)).toFixed(2)} ON SUMUP`);
+  lines.push(isPaid ? "STATUS: PAID ONLINE" : `IF NOT ALREADY PAID ONLINE, CHARGE GBP ${(Number(order.total) - Number(order.amount_paid)).toFixed(2)} ON THE CARD MACHINE`);
   lines.push(divider);
   lines.push(`Printed ${new Date().toLocaleTimeString("en-GB")}`);
   lines.push("");

@@ -77,9 +77,8 @@ function ReservationsForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  // SumUp's Hosted Checkout only has one redirect_url (no separate
-  // success/cancel destinations like Stripe had), so on return we check the
-  // real deposit status rather than assume the redirect means it was paid.
+  // On return from Stripe Checkout we re-check the real deposit status from
+  // the webhook-updated record rather than trusting the redirect itself.
   // (Dormant while bookings aren't saved to the database — see submit().)
   useEffect(() => {
     if (depositRedirect !== "return" || !depositReservationId) return;

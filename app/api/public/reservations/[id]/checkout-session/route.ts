@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
-import { sumupConfigured, sumupMerchantCode, sumupFetch, siteUrl } from "@/lib/sumup";
+import { stripe, siteUrl } from "@/lib/stripe";
 
-type SumUpCheckout = { id: string; hosted_checkout_url: string };
-
-// Creates a SumUp Hosted Checkout for a reservation's deposit. Only
+// Creates a Stripe Checkout Session for a reservation's deposit. Only
 // meaningful when reservation_deposit_amount > 0 in Settings — the reservation
-// itself already exists and is held either way.
+// itself already exists and is held either way. app/api/stripe/webhook marks
+// the deposit paid off the metadata set here.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!sumupConfigured) {
+    if (!stripe) {
       return NextResponse.json({ error: "Online payment is not configured yet" }, { status: 503 });
     }
 
@@ -25,22 +24,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Deposit already paid" }, { status: 400 });
     }
 
-    const checkout = await sumupFetch<SumUpCheckout>("/v0.1/checkouts", {
-      method: "POST",
-      body: JSON.stringify({
-        amount: Number(reservation.deposit_amount),
-        currency: "GBP",
-        merchant_code: sumupMerchantCode,
-        checkout_reference: `reservation:${reservation.id}`,
-        description: `The Royal Chilli — Reservation deposit (${reservation.reservation_date})`,
-        redirect_url: `${siteUrl()}/reservations?deposit=return&reservation_id=${reservation.id}`,
-        hosted_checkout: { enabled: true },
-      }),
+    const checkout = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "gbp",
+            unit_amount: Math.round(Number(reservation.deposit_amount) * 100),
+            product_data: { name: `The Royal Chilli — Reservation deposit (${reservation.reservation_date})` },
+          },
+        },
+      ],
+      metadata: { type: "reservation", reservation_id: String(reservation.id) },
+      success_url: `${siteUrl()}/reservations?deposit=return&reservation_id=${reservation.id}`,
+      cancel_url: `${siteUrl()}/reservations`,
+      ...(reservation.customer_email ? { customer_email: reservation.customer_email } : {}),
     });
 
-    await supabase.from("reservations").update({ sumup_checkout_id: checkout.id }).eq("id", id);
+    await supabase.from("reservations").update({ stripe_session_id: checkout.id }).eq("id", id);
 
-    return NextResponse.json({ url: checkout.hosted_checkout_url });
+    return NextResponse.json({ url: checkout.url });
   } catch (error) {
     console.error("Reservation checkout session create error:", error);
     return NextResponse.json({ error: "Failed to start deposit payment" }, { status: 500 });

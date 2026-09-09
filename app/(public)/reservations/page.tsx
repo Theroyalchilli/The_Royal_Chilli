@@ -142,18 +142,27 @@ function ReservationsForm() {
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <div className="grid grid-cols-2 gap-3">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
-          />
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
-          />
+          {/* Native date/time inputs ignore the placeholder attribute on
+              mobile, so an empty box gives no hint of the expected format
+              until tapped — a plain text label above each fixes that. */}
+          <label className="block text-left">
+            <span className="text-xs text-muted-foreground">Date</span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+            />
+          </label>
+          <label className="block text-left">
+            <span className="text-xs text-muted-foreground">Time</span>
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+            />
+          </label>
         </div>
         <div className="flex items-center justify-between border border-border px-4 py-2.5">
           <span className="text-sm text-muted-foreground">Number of guests</span>

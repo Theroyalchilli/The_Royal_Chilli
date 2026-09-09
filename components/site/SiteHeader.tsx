@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Phone } from "lucide-react";
+import { MessageCircle, Phone } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 
 const navLinks = [
@@ -100,10 +100,19 @@ export default function SiteHeader() {
 
         <a
           href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`}
-          className="flex items-center justify-center gap-2 border-t border-black/10 py-6 text-sm text-foreground/70"
+          className="flex items-center justify-center gap-2 border-t border-black/10 pt-6 text-sm text-foreground/70"
         >
           <Phone size={14} />
           {siteContent.contact.phone}
+        </a>
+        <a
+          href={`https://wa.me/${siteContent.contact.waNumber}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 pb-6 pt-3 text-sm text-foreground/70"
+        >
+          <MessageCircle size={14} />
+          WhatsApp: {siteContent.contact.waDisplay}
         </a>
       </div>
     </>

@@ -41,8 +41,12 @@ export default function CareersPage() {
           Call us on{" "}
           <a href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`} className="text-primary hover:underline">
             {siteContent.contact.phone}
-          </a>{" "}
-          or drop your CV in at{" "}
+          </a>
+          , message us on WhatsApp at{" "}
+          <a href={`https://wa.me/${siteContent.contact.waNumber}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            {siteContent.contact.waDisplay}
+          </a>
+          , or drop your CV in at{" "}
           <a href={siteContent.contact.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
             {siteContent.contact.address}
           </a>.

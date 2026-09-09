@@ -25,12 +25,20 @@ export default function SiteFooter() {
           href={contact.googleMapsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block text-sm hover:underline"
+          className="block text-sm hover:underline"
         >
           {contact.address}
         </a>
-        <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-1 inline-block text-sm hover:underline">
+        <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-1 block text-sm hover:underline">
           {contact.phone}
+        </a>
+        <a
+          href={`https://wa.me/${contact.waNumber}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 block text-sm hover:underline"
+        >
+          WhatsApp: {contact.waDisplay}
         </a>
 
         <Divider />

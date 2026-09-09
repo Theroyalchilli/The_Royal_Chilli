@@ -99,7 +99,11 @@ export const siteContent = {
   },
   contact: {
     phone: "020 8797 3044",
-    waNumber: "442087973044",
+    // Separate mobile line for WhatsApp click-to-chat — deliberately not the
+    // landline above, per explicit instruction to keep both as distinct
+    // contact methods rather than merging them.
+    waNumber: "447766177108",
+    waDisplay: "+44 7766 177108",
     address: "43 Kingsley Road, Hounslow, London, TW3 1PA",
     mapEmbed:
       "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2485.593!2d-0.3580133!3d51.4722309!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x48760d00575f94db%3A0x374941cb29fce285!2sThe%20Royal%20Chilli!5e0!3m2!1sen!2suk!4v1718000000000!5m2!1sen!2suk",

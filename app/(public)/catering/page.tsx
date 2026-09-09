@@ -26,8 +26,12 @@ export default function CateringPage() {
           Call us on{" "}
           <a href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`} className="text-primary hover:underline">
             {siteContent.contact.phone}
-          </a>{" "}
-          to talk through your catering or event needs.
+          </a>
+          {" "}or message us on WhatsApp at{" "}
+          <a href={`https://wa.me/${siteContent.contact.waNumber}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            {siteContent.contact.waDisplay}
+          </a>
+          {" "}to talk through your catering or event needs.
         </p>
       </Reveal>
     </div>

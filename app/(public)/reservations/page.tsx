@@ -55,13 +55,12 @@ function ReservationsForm() {
   const [time, setTime] = useState("");
   const [guests, setGuests] = useState(2);
   const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [fullMessage, setFullMessage] = useState("");
 
   // SumUp's Hosted Checkout only has one redirect_url (no separate
   // success/cancel destinations like Stripe had), so on return we check the
   // real deposit status rather than assume the redirect means it was paid.
+  // (Dormant while bookings aren't saved to the database — see submit().)
   useEffect(() => {
     if (depositRedirect !== "return" || !depositReservationId) return;
     fetch(`/api/public/reservations/${depositReservationId}`)
@@ -70,58 +69,22 @@ function ReservationsForm() {
       .catch(() => setDepositPaid(false));
   }, [depositRedirect, depositReservationId]);
 
-  async function submit(joinWaitlist = false) {
+  // Nothing is saved to the database for now (per explicit instruction, until
+  // told otherwise) — so there's no deposit check and no fully-booked/waitlist
+  // check either, since both depend on a stored reservation. This just
+  // validates the form client-side and redirects straight into WhatsApp.
+  function submit() {
     setError("");
-    setFullMessage("");
     if (!name.trim() || !phone.trim() || !date || !time) {
       setError("Please fill in your name, phone, date and time.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/public/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer_name: name.trim(),
-          customer_phone: phone.trim(),
-          customer_email: email.trim() || undefined,
-          reservation_date: date,
-          reservation_time: time,
-          party_size: guests,
-          notes: notes.trim() || undefined,
-          join_waitlist: joinWaitlist || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to book");
-      if (data.full) {
-        setFullMessage(data.message);
-        return;
-      }
-
-      if (data.deposit_amount > 0) {
-        const sessionRes = await fetch(`/api/public/reservations/${data.id}/checkout-session`, { method: "POST" });
-        const sessionData = await sessionRes.json();
-        if (sessionRes.ok && sessionData.url) {
-          window.location.href = sessionData.url;
-          return;
-        }
-      }
-
-      // Instant same-tab redirect straight into WhatsApp, message pre-filled
-      // — not a new tab, since a popup opened after this async request would
-      // likely get blocked as no longer tied to the click that started it.
-      // No confirmation screen shown here: the customer never sees one
-      // before leaving for WhatsApp, per explicit instruction.
-      window.location.href = buildWhatsAppReservationLink({
-        waitlisted: !!data.waitlisted, name, phone, guests, date, time, notes,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setSubmitting(false);
-    }
+    // Instant same-tab redirect straight into WhatsApp, message pre-filled
+    // — not a new tab, since a popup opened outside a direct click handler
+    // would likely get blocked. No confirmation screen shown here.
+    window.location.href = buildWhatsAppReservationLink({
+      waitlisted: false, name, phone, guests, date, time, notes,
+    });
   }
 
   if (depositRedirect === "return") {
@@ -211,26 +174,12 @@ function ReservationsForm() {
 
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
 
-      {fullMessage ? (
-        <div className="mt-6 border border-amber-500/40 bg-amber-500/10 p-4 text-center">
-          <p className="text-sm text-amber-600">{fullMessage}</p>
-          <button
-            onClick={() => submit(true)}
-            disabled={submitting}
-            className="mt-3 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
-          >
-            {submitting ? "Joining…" : "Join Waitlist"}
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => submit(false)}
-          disabled={submitting}
-          className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
-        >
-          {submitting ? "Booking…" : "Book Table"}
-        </button>
-      )}
+      <button
+        onClick={submit}
+        className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90"
+      >
+        Book Table
+      </button>
     </div>
   );
 }

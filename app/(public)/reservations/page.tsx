@@ -167,12 +167,17 @@ function ReservationsForm() {
               until tapped — a plain text label above each fixes that. */}
           <label className="block text-left">
             <span className="text-xs text-muted-foreground">Date</span>
+            {/* iOS Safari renders type="date" with its own native chrome —
+                ignoring our border/padding/height and following the OS's
+                color scheme — unless appearance is reset and color-scheme is
+                pinned to light. Without this it can render as a blank,
+                oddly-sized box, which is exactly the broken layout reported. */}
             <input
               type="date"
               value={date}
               min={toDateInputValue(new Date())}
               onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
+              className="mt-1 h-11 w-full appearance-none border border-border bg-background px-4 text-sm outline-none focus:border-primary [color-scheme:light]"
             />
           </label>
           <label className="block text-left">
@@ -181,7 +186,7 @@ function ReservationsForm() {
               value={time}
               onChange={(e) => setTime(e.target.value)}
               disabled={!date}
-              className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary disabled:opacity-50"
+              className="mt-1 h-11 w-full border border-border bg-background px-4 text-sm outline-none focus:border-primary disabled:opacity-50 [color-scheme:light]"
             >
               {!date ? (
                 <option value="">Pick a date first</option>

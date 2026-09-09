@@ -4,22 +4,26 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
+import { getScheduleSlotOptions, toDateInputValue } from "@/lib/hours";
 
 // wa.me only opens a pre-filled draft — the customer still has to tap Send
 // themselves — since actually auto-sending would need a WhatsApp Business
 // API account we don't have set up. This is the no-setup stand-in for that:
 // one tap, right after they've already engaged with the booking flow.
 function buildWhatsAppReservationLink({
-  waitlisted, name, phone, guests, date, time, notes,
-}: { waitlisted: boolean; name: string; phone: string; guests: number; date: string; time: string; notes: string }) {
-  let dateLabel = date;
+  waitlisted, name, phone, guests, time, notes,
+}: { waitlisted: boolean; name: string; phone: string; guests: number; time: string; notes: string }) {
+  // `time` is already a full local "YYYY-MM-DDTHH:MM" from the slot <select>
+  // — not just a time — since a post-midnight slot actually falls on the day
+  // after the date the customer picked (see getScheduleSlotOptions).
+  let dateLabel = time;
   let timeLabel = time;
   try {
-    const d = new Date(`${date}T${time}:00`);
+    const d = new Date(`${time}:00`);
     dateLabel = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
     timeLabel = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true });
   } catch {
-    // keep the raw strings if parsing fails
+    // keep the raw string if parsing fails
   }
   const lines = [
     waitlisted ? "⏳ Waitlist Request — The Royal Chilli" : "🍽️ New Reservation Request — The Royal Chilli",
@@ -57,6 +61,22 @@ function ReservationsForm() {
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
+  // Every valid quarter-hour slot for the chosen date, restricted to that
+  // day's real opening hours (9am–1am) — same helper the checkout page uses
+  // for "Schedule for later", so a customer can never pick a time we're shut.
+  const timeSlots = date ? getScheduleSlotOptions(new Date(`${date}T00:00:00`)) : [];
+
+  // Keep the selected time inside the current date's valid slots — e.g.
+  // changing the date could otherwise leave a stale slot the new day doesn't offer.
+  useEffect(() => {
+    if (timeSlots.length > 0 && !timeSlots.some((s) => s.value === time)) {
+      setTime(timeSlots[0].value);
+    } else if (timeSlots.length === 0 && time) {
+      setTime("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
   // SumUp's Hosted Checkout only has one redirect_url (no separate
   // success/cancel destinations like Stripe had), so on return we check the
   // real deposit status rather than assume the redirect means it was paid.
@@ -83,7 +103,7 @@ function ReservationsForm() {
     // — not a new tab, since a popup opened outside a direct click handler
     // would likely get blocked. No confirmation screen shown here.
     window.location.href = buildWhatsAppReservationLink({
-      waitlisted: false, name, phone, guests, date, time, notes,
+      waitlisted: false, name, phone, guests, time, notes,
     });
   }
 
@@ -150,20 +170,34 @@ function ReservationsForm() {
             <input
               type="date"
               value={date}
+              min={toDateInputValue(new Date())}
               onChange={(e) => setDate(e.target.value)}
               className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
             />
           </label>
           <label className="block text-left">
             <span className="text-xs text-muted-foreground">Time</span>
-            <input
-              type="time"
+            <select
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
-            />
+              disabled={!date}
+              className="mt-1 w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary disabled:opacity-50"
+            >
+              {!date ? (
+                <option value="">Pick a date first</option>
+              ) : timeSlots.length === 0 ? (
+                <option value="">No slots left that day</option>
+              ) : (
+                timeSlots.map((slot) => (
+                  <option key={slot.value} value={slot.value}>{slot.label}</option>
+                ))
+              )}
+            </select>
           </label>
         </div>
+        {date && timeSlots.length === 0 && (
+          <p className="text-xs text-red-500">No more slots that day — please choose a different date.</p>
+        )}
         <div className="flex items-center justify-between border border-border px-4 py-2.5">
           <span className="text-sm text-muted-foreground">Number of guests</span>
           <div className="flex items-center gap-3">

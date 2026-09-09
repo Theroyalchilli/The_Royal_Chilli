@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  const { hero, about, differentiators, testimonials, reservation, galleryImages } = siteContent;
+  const { hero, about, differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
 
   return (
     <div>
@@ -95,6 +95,23 @@ export default function HomePage() {
           Explore Royal Chilli
           <ChevronDown size={16} className="animate-bounce" />
         </a>
+      </section>
+
+      {/* Most Popular Dishes */}
+      <section className="mx-auto max-w-5xl px-4 pb-12 pt-24">
+        <Reveal className="text-center">
+          <h2 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
+            {popularDishes.title}
+          </h2>
+          <p className="mx-auto mt-6 max-w-2xl text-muted-foreground">{popularDishes.story}</p>
+        </Reveal>
+        <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
+          {popularDishes.images.map((src) => (
+            <div key={src} className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950">
+              <Image src={src} alt="" fill className="object-contain transition hover:scale-105" />
+            </div>
+          ))}
+        </Reveal>
       </section>
 
       {/* About */}

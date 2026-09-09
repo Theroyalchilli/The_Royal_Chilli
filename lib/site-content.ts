@@ -127,6 +127,19 @@ export const siteContent = {
     tagline: "Authentic Flavours. Memorable Experiences.",
     copyright: "© 2026 The Royal Chilli. All rights reserved.",
   },
+  // These 6 designed promo posters (logo, taglines, callouts baked in) used
+  // to lead the /gallery page — moved to their own homepage section instead
+  // (right after the hero), and excluded entirely from /gallery now so they
+  // don't show up twice (see POPULAR_DISH_FILES there).
+  popularDishes: {
+    title: "Most Popular Dishes",
+    story:
+      "From slow-cooked dum biryanis to sizzling tandoori grills, these are the dishes our guests keep coming back for — prepared the traditional way, with real spices and recipes passed down through generations.",
+    images: [
+      "Where_Hounslow_Meets_Indian_Soul", "Nalli_Gosht_Biryani_Special", "Bheja_Fry_Special",
+      "Volcano_Garlic_Prawns", "Chilli_Chicken_Special", "Pistachio_Lamb_Chops",
+    ].map(name => `/gallery/${name}.webp`),
+  },
   galleryImages: [
     "Royal_Mixed_Platter", "Chicken_Dum_Biryani", "Lamb_Dum_Biryani", "Tandoori_Sizzler",
     "Chicken_Lollipop", "Paneer", "Masala_Dosa", "Haleem",

@@ -11,6 +11,8 @@ export async function GET() {
 
     if (catError) throw catError;
 
+    // This endpoint feeds the POS till menu, so it serves the in-house `price`
+    // and only items flagged pos_available.
     const { data: items, error: itemError } = await supabase
       .from("menu_items")
       .select(`
@@ -18,6 +20,7 @@ export async function GET() {
         menu_categories!inner(name, color)
       `)
       .eq("active", 1)
+      .eq("pos_available", 1)
       .order("category_id")
       .order("display_order");
 

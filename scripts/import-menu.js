@@ -1,6 +1,11 @@
 // Imports the restaurant's menu spreadsheet into menu_categories/menu_items.
 // Usage: node scripts/import-menu.js <path-to-xlsx>
 //
+// NOTE: this is the original full-rebuild importer from a single sheet. Routine
+// price/menu updates now go through scripts/import-menu-prices.js instead, which
+// syncs the two per-channel sheets (online + offline) into price/online_price
+// and the pos_available/online_available flags without dropping any rows.
+//
 // Full-replace import: clears existing menu_categories/menu_items and
 // reloads from the spreadsheet. Safe as long as no live orders reference
 // the current menu_item ids yet (order_items stores its own item_name/

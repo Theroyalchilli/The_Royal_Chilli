@@ -9,14 +9,9 @@ export const metadata: Metadata = {
   description: "Order authentic Indian food online for collection or delivery from The Royal Chilli, Hounslow.",
 };
 
-// Breakfast, Lunch Combos and Combos stay as PDF menus only (see /menu) — the
-// online order/collection flow only offers the RC_online_order.xlsx dinner
-// menu. getActiveMenu() itself stays unfiltered since it's shared with the
-// POS till and the dine-in table-ordering page, which do need those categories.
-const ONLINE_ORDER_EXCLUDED_CATEGORIES = ["Breakfast", "Lunch Combos", "Combos"];
-
 export default async function OrderPage() {
-  const allCategories = await getActiveMenu();
-  const categories = allCategories.filter((c) => !ONLINE_ORDER_EXCLUDED_CATEGORIES.includes(c.name));
+  // "online" channel: website prices, and only items flagged online_available
+  // (Breakfast / Lunch Combos / Combos are off the website by that flag).
+  const categories = await getActiveMenu("online");
   return <OrderMenu categories={categories} />;
 }

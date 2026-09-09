@@ -4,9 +4,10 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
 const EDITABLE_FIELDS = [
-  "category_id", "name", "description", "price", "is_veg", "active", "display_order",
-  "allergens", "calories", "protein_g", "carbs_g", "fat_g",
+  "category_id", "name", "description", "price", "online_price", "is_veg", "active", "display_order",
+  "allergens", "calories", "protein_g", "carbs_g", "fat_g", "pos_available", "online_available",
 ];
+const INT_BOOL_FIELDS = ["is_veg", "active", "pos_available", "online_available"];
 
 export async function PATCH(
   req: NextRequest,
@@ -21,10 +22,9 @@ export async function PATCH(
     const body = await req.json();
     const updates: Record<string, unknown> = {};
     for (const field of EDITABLE_FIELDS) if (field in body) updates[field] = body[field];
-    // is_veg/active are INT (0/1) columns — a JS boolean from the client would
-    // hit Postgres as the literal string "true"/"false" and fail with 22P02.
-    if ("is_veg" in updates) updates.is_veg = updates.is_veg ? 1 : 0;
-    if ("active" in updates) updates.active = updates.active ? 1 : 0;
+    // These are INT (0/1) columns — a JS boolean from the client would hit
+    // Postgres as the literal string "true"/"false" and fail with 22P02.
+    for (const field of INT_BOOL_FIELDS) if (field in updates) updates[field] = updates[field] ? 1 : 0;
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
     const { data, error } = await supabase.from("menu_items").update(updates).eq("id", id).select().single();

@@ -29,7 +29,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const body = await req.json();
-    const { category_id, name, description, price, is_veg, allergens, calories, protein_g, carbs_g, fat_g } = body;
+    const {
+      category_id, name, description, price, online_price, is_veg, allergens,
+      calories, protein_g, carbs_g, fat_g, pos_available, online_available,
+    } = body;
     if (!category_id || !name || price === undefined) {
       return NextResponse.json({ error: "category_id, name and price are required" }, { status: 400 });
     }
@@ -38,7 +41,10 @@ export async function POST(req: NextRequest) {
       .from("menu_items")
       .insert({
         category_id, name, description: description || null, price,
+        online_price: online_price ?? null,
         is_veg: is_veg ? 1 : 0,
+        pos_available: pos_available === undefined ? 1 : pos_available ? 1 : 0,
+        online_available: online_available === undefined ? 1 : online_available ? 1 : 0,
         allergens: allergens || [],
         calories: calories || null, protein_g: protein_g || null, carbs_g: carbs_g || null, fat_g: fat_g || null,
       })

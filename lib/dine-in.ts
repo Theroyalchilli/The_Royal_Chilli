@@ -73,7 +73,7 @@ export async function addItemsToTable(
 ) {
   const itemRows = await Promise.all(
     rawItems.map(async (item) => {
-      const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || []);
+      const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || [], "pos");
       const quantity = Math.max(1, Number(item.quantity) || 1);
       return {
         menu_item_id: resolved.menuItemId,

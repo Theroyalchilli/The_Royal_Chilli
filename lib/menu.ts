@@ -16,11 +16,13 @@ export type MenuItemModifierGroup = {
   options: MenuItemModifierOption[];
 };
 
+export type MenuChannel = "pos" | "online";
+
 export type MenuItem = {
   id: number;
   name: string;
   description: string | null;
-  price: number;
+  price: number; // the price for the requested channel (see getActiveMenu)
   is_veg: number;
   display_order: number;
   allergens: string[];
@@ -38,7 +40,12 @@ export type MenuCategory = {
   items: MenuItem[];
 };
 
-export async function getActiveMenu(): Promise<MenuCategory[]> {
+// channel decides which price and which availability flag each item is read
+// through: "pos" (default) is the in-house till / dine-in menu, "online" is the
+// website collection/delivery menu. The returned `price` is already the correct
+// one for that channel, and categories with no items for the channel are
+// dropped.
+export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuCategory[]> {
   const { data: categories, error: catErr } = await supabase
     .from("menu_categories")
     .select("id, name, display_order")
@@ -46,10 +53,12 @@ export async function getActiveMenu(): Promise<MenuCategory[]> {
     .order("display_order");
   if (catErr) throw catErr;
 
+  const availabilityCol = channel === "online" ? "online_available" : "pos_available";
   const { data: items, error: itemErr } = await supabase
     .from("menu_items")
-    .select("id, category_id, name, description, price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g")
+    .select("id, category_id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g")
     .eq("active", 1)
+    .eq(availabilityCol, 1)
     .order("display_order");
   if (itemErr) throw itemErr;
 
@@ -82,18 +91,22 @@ export async function getActiveMenu(): Promise<MenuCategory[]> {
     modifierGroupsByItem.set(a.menu_item_id, list);
   }
 
-  return (categories || []).map((c) => ({
-    ...c,
-    items: (items || [])
-      .filter((i) => i.category_id === c.id)
-      .map(({ id, name, description, price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g }) => ({
-        id, name, description, price: Number(price), is_veg, display_order,
-        allergens: allergens || [],
-        calories: calories ?? null,
-        protein_g: protein_g !== null ? Number(protein_g) : null,
-        carbs_g: carbs_g !== null ? Number(carbs_g) : null,
-        fat_g: fat_g !== null ? Number(fat_g) : null,
-        modifierGroups: modifierGroupsByItem.get(id) || [],
-      })),
-  }));
+  return (categories || [])
+    .map((c) => ({
+      ...c,
+      items: (items || [])
+        .filter((i) => i.category_id === c.id)
+        .map(({ id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g }) => ({
+          id, name, description,
+          price: channel === "online" ? Number(online_price ?? price) : Number(price),
+          is_veg, display_order,
+          allergens: allergens || [],
+          calories: calories ?? null,
+          protein_g: protein_g !== null ? Number(protein_g) : null,
+          carbs_g: carbs_g !== null ? Number(carbs_g) : null,
+          fat_g: fat_g !== null ? Number(fat_g) : null,
+          modifierGroups: modifierGroupsByItem.get(id) || [],
+        })),
+    }))
+    .filter((c) => c.items.length > 0);
 }

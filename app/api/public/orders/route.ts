@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const orderItems = await Promise.all(
       items.map(async (item: { menu_item_id: number; quantity: number; notes?: string; selected_options?: number[] }) => {
-        const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || []);
+        const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || [], "online");
         const quantity = Math.max(1, Number(item.quantity) || 1);
         return {
           menu_item_id: resolved.menuItemId,

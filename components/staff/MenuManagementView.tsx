@@ -6,7 +6,8 @@ import { ALLERGENS } from "@/lib/allergens";
 
 type Item = {
   id: number; category_id: number; category_name: string; name: string; description: string | null;
-  price: number; is_veg: number; active: number; allergens: string[];
+  price: number; online_price: number | null; is_veg: number; active: number; allergens: string[];
+  pos_available: number; online_available: number;
   calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null;
 };
 type ModifierOption = { id?: number; name: string; price_delta: number };
@@ -74,6 +75,9 @@ function ItemModal({ item, categoryOptions, allGroups, onClose, onSaved }: {
     name: isNew ? "" : item.name,
     description: isNew ? "" : item.description || "",
     price: isNew ? "" : String(item.price),
+    online_price: isNew ? "" : item.online_price != null ? String(item.online_price) : "",
+    pos_available: isNew ? true : !!item.pos_available,
+    online_available: isNew ? true : !!item.online_available,
     is_veg: isNew ? false : !!item.is_veg,
     allergens: isNew ? [] : item.allergens,
     calories: isNew ? "" : item.calories !== null ? String(item.calories) : "",
@@ -89,10 +93,14 @@ function ItemModal({ item, categoryOptions, allGroups, onClose, onSaved }: {
   }
 
   async function save() {
-    if (!form.name.trim() || !form.price) return setError("Name and price are required.");
+    if (!form.name.trim() || !form.price) return setError("Name and till price are required.");
     const payload = {
       category_id: form.category_id, name: form.name.trim(), description: form.description.trim() || null,
-      price: Number(form.price), is_veg: form.is_veg ? 1 : 0, allergens: form.allergens,
+      price: Number(form.price),
+      online_price: form.online_price ? Number(form.online_price) : null,
+      pos_available: form.pos_available ? 1 : 0,
+      online_available: form.online_available ? 1 : 0,
+      is_veg: form.is_veg ? 1 : 0, allergens: form.allergens,
       calories: form.calories ? Number(form.calories) : null,
       protein_g: form.protein_g ? Number(form.protein_g) : null,
       carbs_g: form.carbs_g ? Number(form.carbs_g) : null,
@@ -124,8 +132,19 @@ function ItemModal({ item, categoryOptions, allGroups, onClose, onSaved }: {
           </select>
           <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
           <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-          <div className="flex items-center gap-3">
-            <input type="number" step="0.01" placeholder="Price" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-muted-foreground text-xs">Till price (dine-in)</label>
+              <input type="number" step="0.01" placeholder="0.00" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="mt-1 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            </div>
+            <div>
+              <label className="text-muted-foreground text-xs">Website price</label>
+              <input type="number" step="0.01" placeholder="same as till" value={form.online_price} onChange={(e) => setForm({ ...form, online_price: e.target.value })} className="mt-1 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 pt-1">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={form.pos_available} onChange={(e) => setForm({ ...form, pos_available: e.target.checked })} /> On till menu</label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={form.online_available} onChange={(e) => setForm({ ...form, online_available: e.target.checked })} /> On website menu</label>
             <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={form.is_veg} onChange={(e) => setForm({ ...form, is_veg: e.target.checked })} /> Veg</label>
           </div>
 
@@ -297,10 +316,15 @@ export default function MenuManagementView() {
                       <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
                         <div>
                           <span className="text-foreground font-medium">{i.name}</span>
+                          {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-blue-600">Till only</span>}
+                          {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-purple-600">Website only</span>}
                           {i.allergens.length > 0 && <span className="ml-2 text-amber-600 text-xs">⚠ {i.allergens.join(", ")}</span>}
                           {!i.active && <span className="ml-2 text-muted-foreground text-xs">(inactive)</span>}
                         </div>
-                        <span className="text-foreground whitespace-nowrap">{fmtMoney(i.price)}</span>
+                        <span className="text-foreground whitespace-nowrap text-sm">
+                          {fmtMoney(i.price)}
+                          <span className="text-muted-foreground"> · web {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
+                        </span>
                       </button>
                     ))}
                   </div>

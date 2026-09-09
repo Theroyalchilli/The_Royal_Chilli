@@ -12,12 +12,23 @@ export type ResolvedItem = {
 // Looks up the real menu item + validates the client's modifier selections against
 // what's actually attached to that item — quantities, names, and prices are never trusted
 // from the client, same principle as menu item pricing elsewhere in the ordering flow.
+//
+// channel picks the base price: "online" uses online_price (falling back to
+// price), "pos" (default, also dine-in QR ordering) uses price.
 export async function resolveItemWithModifiers(
   menuItemId: number,
-  selectedOptionIds: number[]
+  selectedOptionIds: number[],
+  channel: "pos" | "online" = "pos"
 ): Promise<ResolvedItem> {
-  const { data: menuItem } = await supabase.from("menu_items").select("id, name, price").eq("id", menuItemId).eq("active", 1).single();
+  const { data: menuItem } = await supabase
+    .from("menu_items")
+    .select("id, name, price, online_price")
+    .eq("id", menuItemId)
+    .eq("active", 1)
+    .single();
   if (!menuItem) throw new Error(`Menu item ${menuItemId} is no longer available`);
+
+  const basePrice = channel === "online" ? Number(menuItem.online_price ?? menuItem.price) : Number(menuItem.price);
 
   const { data: attachments } = await supabase
     .from("menu_item_modifier_groups")
@@ -65,7 +76,7 @@ export async function resolveItemWithModifiers(
     return { id: opt.id, name: opt.name, price_delta: Number(opt.price_delta) };
   });
 
-  const unitPrice = Math.round((Number(menuItem.price) + selectedModifiers.reduce((s, m) => s + m.price_delta, 0)) * 100) / 100;
+  const unitPrice = Math.round((basePrice + selectedModifiers.reduce((s, m) => s + m.price_delta, 0)) * 100) / 100;
 
   return { menuItemId, itemName: menuItem.name, unitPrice, selectedModifiers };
 }

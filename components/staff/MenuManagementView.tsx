@@ -12,6 +12,7 @@ type Item = {
 };
 type ModifierOption = { id?: number; name: string; price_delta: number };
 type ModifierGroup = { id: number; name: string; selection_type: "single" | "multiple"; min_select: number; max_select: number | null; options: ModifierOption[] };
+type Category = { id: number; name: string; color: string; display_order: number; active: number; item_count: number };
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 
@@ -255,10 +256,118 @@ function GroupModal({ group, onClose, onSaved }: { group: ModifierGroup | "new";
   );
 }
 
+function CategoriesTab({ categories, onChanged }: { categories: Category[]; onChanged: () => void }) {
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const sorted = [...categories].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
+
+  async function call(url: string, method: string, body?: unknown) {
+    setBusy(true); setError("");
+    try {
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Something went wrong"); return false; }
+      onChanged();
+      return true;
+    } finally { setBusy(false); }
+  }
+
+  async function add() {
+    if (!newName.trim()) return;
+    if (await call("/api/menu-categories", "POST", { name: newName.trim() })) setNewName("");
+  }
+  async function rename(id: number) {
+    if (!editName.trim()) return;
+    if (await call(`/api/menu-categories/${id}`, "PATCH", { name: editName.trim() })) setEditingId(null);
+  }
+  async function move(cat: Category, dir: -1 | 1) {
+    const idx = sorted.findIndex((c) => c.id === cat.id);
+    const swap = sorted[idx + dir];
+    if (!swap) return;
+    // Swap display_order with the neighbour.
+    await call(`/api/menu-categories/${cat.id}`, "PATCH", { display_order: swap.display_order });
+    await call(`/api/menu-categories/${swap.id}`, "PATCH", { display_order: cat.display_order });
+  }
+
+  return (
+    <div className="mt-4">
+      <div className="flex gap-2">
+        <input
+          placeholder="New category name…" value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+        />
+        <button onClick={add} disabled={busy || !newName.trim()} className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">+ Add</button>
+      </div>
+      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+
+      <p className="mt-4 text-muted-foreground text-xs">
+        Order here is the order dishes appear on both the till and the website. A category shows on a
+        menu only while it has at least one item switched on for that menu.
+      </p>
+
+      <div className="mt-3 space-y-1.5">
+        {sorted.map((c, i) => (
+          <div key={c.id} className={`rounded-lg border border-border bg-surface px-3 py-2.5 flex items-center gap-3 ${!c.active ? "opacity-50" : ""}`}>
+            <div className="flex flex-col">
+              <button onClick={() => move(c, -1)} disabled={busy || i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
+              <button onClick={() => move(c, 1)} disabled={busy || i === sorted.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
+            </div>
+
+            {editingId === c.id ? (
+              <input
+                autoFocus value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") rename(c.id); if (e.key === "Escape") setEditingId(null); }}
+                className="flex-1 bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-sm"
+              />
+            ) : (
+              <span className="flex-1 text-foreground font-medium text-sm">
+                {c.name}
+                <span className="ml-2 text-muted-foreground text-xs font-normal">{c.item_count} item{c.item_count === 1 ? "" : "s"}</span>
+                {!c.active && <span className="ml-2 text-muted-foreground text-xs">(hidden)</span>}
+              </span>
+            )}
+
+            {editingId === c.id ? (
+              <>
+                <button onClick={() => rename(c.id)} disabled={busy} className="text-xs font-semibold text-red-600">Save</button>
+                <button onClick={() => setEditingId(null)} className="text-xs text-muted-foreground">Cancel</button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => { setEditingId(c.id); setEditName(c.name); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Rename</button>
+                <button onClick={() => call(`/api/menu-categories/${c.id}`, "PATCH", { active: c.active ? 0 : 1 })} disabled={busy} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+                  {c.active ? "Hide" : "Show"}
+                </button>
+                <button
+                  onClick={() => { if (confirm(`Delete "${c.name}"?`)) call(`/api/menu-categories/${c.id}`, "DELETE"); }}
+                  disabled={busy || c.item_count > 0}
+                  title={c.item_count > 0 ? "Move or delete its items first" : "Delete category"}
+                  className="text-xs font-semibold text-red-600 disabled:text-muted-foreground disabled:opacity-40"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+        {sorted.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No categories yet.</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function MenuManagementView() {
-  const [tab, setTab] = useState<"items" | "modifiers">("items");
+  const [tab, setTab] = useState<"items" | "categories" | "modifiers">("items");
   const [items, setItems] = useState<Item[]>([]);
   const [groups, setGroups] = useState<ModifierGroup[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [modal, setModal] = useState<Item | "new" | null>(null);
   const [groupModal, setGroupModal] = useState<ModifierGroup | "new" | null>(null);
   const [search, setSearch] = useState("");
@@ -273,12 +382,25 @@ export default function MenuManagementView() {
     const data = await res.json();
     setGroups(data.groups || []);
   }, []);
-  useEffect(() => { loadItems(); loadGroups(); }, [loadItems, loadGroups]);
+  const loadCategories = useCallback(async () => {
+    const res = await fetch("/api/menu-categories");
+    const data = await res.json();
+    setCategories(data.categories || []);
+  }, []);
+  useEffect(() => { loadItems(); loadGroups(); loadCategories(); }, [loadItems, loadGroups, loadCategories]);
 
-  const categoryOptions = Array.from(new Map(items.map((i) => [i.category_id, i.category_name])).entries()).map(([id, name]) => ({ id, name }));
+  // Real category list (includes categories with no items yet); fall back to
+  // the set referenced by items until the categories request lands.
+  const categoryOptions = categories.length > 0
+    ? [...categories].sort((a, b) => a.display_order - b.display_order).map((c) => ({ id: c.id, name: c.name }))
+    : Array.from(new Map(items.map((i) => [i.category_id, i.category_name])).entries()).map(([id, name]) => ({ id, name }));
   const filtered = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
   const grouped = new Map<string, Item[]>();
+  // Seed the map in category display order so the Items tab matches the
+  // Categories tab (and the live menus).
+  for (const c of categoryOptions) grouped.set(c.name, []);
   for (const i of filtered) grouped.set(i.category_name, [...(grouped.get(i.category_name) || []), i]);
+  for (const [name, list] of grouped) if (list.length === 0) grouped.delete(name);
 
   return (
     <>
@@ -293,6 +415,7 @@ export default function MenuManagementView() {
 
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
             <button onClick={() => setTab("items")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "items" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Items</button>
+            <button onClick={() => setTab("categories")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "categories" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Categories</button>
             <button onClick={() => setTab("modifiers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "modifiers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Modifier Groups</button>
           </div>
         </div>
@@ -335,6 +458,10 @@ export default function MenuManagementView() {
           </>
         )}
 
+        {tab === "categories" && (
+          <CategoriesTab categories={categories} onChanged={() => { loadCategories(); loadItems(); }} />
+        )}
+
         {tab === "modifiers" && (
           <div className="mt-4">
             <div className="flex justify-end"><button onClick={() => setGroupModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Group</button></div>
@@ -351,7 +478,7 @@ export default function MenuManagementView() {
         )}
       </div>
 
-      {modal && <ItemModal item={modal} categoryOptions={categoryOptions} allGroups={groups} onClose={() => setModal(null)} onSaved={loadItems} />}
+      {modal && <ItemModal item={modal} categoryOptions={categoryOptions} allGroups={groups} onClose={() => setModal(null)} onSaved={() => { loadItems(); loadCategories(); }} />}
       {groupModal && <GroupModal group={groupModal} onClose={() => setGroupModal(null)} onSaved={loadGroups} />}
       </div>
     </>

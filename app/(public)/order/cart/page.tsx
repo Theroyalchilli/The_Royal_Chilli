@@ -116,7 +116,12 @@ export default function CartPage() {
               <span>{formatCurrency(subtotal)}</span>
             </div>
             {orderType === "takeaway" ? (
-              <p className="mt-1 text-xs text-muted-foreground">Free collection from {siteContent.contact.address}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Free collection from{" "}
+                <a href={siteContent.contact.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                  {siteContent.contact.address}
+                </a>
+              </p>
             ) : (
               <p className="mt-1 text-xs text-muted-foreground">Delivery fee and minimum order depend on your postcode — checked at checkout.</p>
             )}

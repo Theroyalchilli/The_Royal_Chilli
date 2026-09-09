@@ -78,9 +78,14 @@ export default function HomePage() {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-white/80">
-            <span className="flex items-center gap-1.5">
+            <a
+              href={siteContent.contact.googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-white hover:underline"
+            >
               <MapPin size={14} /> Located in Hounslow
-            </span>
+            </a>
             <span className="text-white/30">|</span>
             <span className="flex items-center gap-1.5">
               <Clock size={14} /> Open today: <TodayHours />
@@ -197,9 +202,14 @@ export default function HomePage() {
             ))}
           </div>
           <div className="mt-8 text-center">
-            <Link href="/reviews" className="text-xs uppercase tracking-[0.15em] text-primary hover:underline">
+            <a
+              href={siteContent.contact.googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs uppercase tracking-[0.15em] text-primary hover:underline"
+            >
               See All Reviews
-            </Link>
+            </a>
           </div>
         </div>
       </section>

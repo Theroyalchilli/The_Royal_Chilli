@@ -21,7 +21,14 @@ export default function SiteFooter() {
 
         <Divider />
 
-        <p className="text-sm">{contact.address}</p>
+        <a
+          href={contact.googleMapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block text-sm hover:underline"
+        >
+          {contact.address}
+        </a>
         <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-1 inline-block text-sm hover:underline">
           {contact.phone}
         </a>

@@ -188,7 +188,10 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
         </div>
         {orderType === "takeaway" ? (
           <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">
-            Free collection from {siteContent.contact.address}
+            Free collection from{" "}
+            <a href={siteContent.contact.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+              {siteContent.contact.address}
+            </a>
           </p>
         ) : (
           <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">

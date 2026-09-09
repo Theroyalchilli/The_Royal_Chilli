@@ -43,7 +43,9 @@ export default function CareersPage() {
             {siteContent.contact.phone}
           </a>{" "}
           or drop your CV in at{" "}
-          <span className="text-foreground">{siteContent.contact.address}</span>.
+          <a href={siteContent.contact.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            {siteContent.contact.address}
+          </a>.
         </p>
       </Reveal>
     </div>

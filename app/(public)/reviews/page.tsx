@@ -37,7 +37,8 @@ export default function ReviewsPage() {
         <p className="mt-2 text-muted-foreground">
           We&apos;d love to hear from you — leave us a review on{" "}
           <a href={contact.social.instagram} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Instagram</a>
-          {" "}or Google.
+          {" "}or{" "}
+          <a href={contact.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google</a>.
         </p>
       </Reveal>
     </div>

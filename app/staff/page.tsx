@@ -16,6 +16,7 @@ export default async function StaffHubPage() {
     { href: "/staff/rota", label: "Rota", icon: "📅", desc: "Schedule, availability, leave", visible: true },
     { href: "/staff/hr", label: "HR", icon: "🪪", desc: "Employee directory, onboarding, right-to-work, new-starter checklist", visible: isManager },
     { href: "/staff/menu", label: "Menu Management", icon: "🍽️", desc: "Items, prices, allergens, nutrition", visible: isManager },
+    { href: "/staff/tables", label: "Tables", icon: "🪑", desc: "Add tables, set numbers and capacity", visible: isManager },
     { href: "/staff/payroll", label: "Payroll", icon: "💷", desc: "Pay periods, payslips, payments", visible: isManager },
     { href: "/staff/inventory", label: "Inventory", icon: "📦", desc: "Ingredients, suppliers, recipes", visible: isInventoryManager },
     { href: "/staff/customers", label: "Customers & Loyalty", icon: "❤️", desc: "CRM, points, rewards", visible: canSeeCrm },

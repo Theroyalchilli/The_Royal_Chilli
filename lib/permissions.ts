@@ -98,15 +98,17 @@ refreshPermissionsCache();
 
 /** Can this role open the given Staff Hub tab? admin: always. employee: never. */
 export function canAccess(role: StaffRole, tab: TabKey): boolean {
-  if (role === "admin") return true;
+  // transition safety net: pre-migration-032 accounts may still be "owner"
+  if (role === "admin" || (role as string) === "owner") return true;
   if (role === "employee") return false;
   const set = cache?.[tab];
   return set ? set.has(role) : DEFAULTS[tab].includes(role);
 }
 
-/** Management-level at all (Staff Hub layout gate). */
+/** Management-level at all (Staff Hub layout gate). Excludes the front-line
+ *  roles under both the new (employee) and pre-migration-032 role names. */
 export function isStaffManagement(role: StaffRole): boolean {
-  return role !== "employee";
+  return !["employee", "cashier", "waiter", "chef", "kitchen", "driver"].includes(role as string);
 }
 
 // --- back-compat shims: existing API routes still import these -------------

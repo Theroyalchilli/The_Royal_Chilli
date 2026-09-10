@@ -67,6 +67,10 @@ export function getSessionCookieOptions() {
       sameSite: "lax" as const,
       maxAge: 60 * 60 * 12, // 12 hours
       path: "/",
+      // Set COOKIE_DOMAIN=.royalchilli.com in BOTH this app and
+      // royal-chilli-attendance once they're on the subdomains — a manager
+      // login in either then signs them into the other.
+      ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
     },
   };
 }

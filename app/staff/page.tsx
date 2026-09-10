@@ -1,34 +1,28 @@
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import { getSession } from "@/lib/auth";
-import { canManageStaff, canManageInventory, canViewCrm, canManageDrivers, canManageFinance } from "@/lib/permissions";
+import { canAccess } from "@/lib/permissions";
 
 export default async function StaffHubPage() {
   const session = await getSession();
-  const isManager = session ? canManageStaff(session.role) : false;
-  const isInventoryManager = session ? canManageInventory(session.role) : false;
-  const canSeeCrm = session ? canViewCrm(session.role) : false;
-  const canSeeDrivers = session ? canManageDrivers(session.role) || session.role === "driver" : false;
-  const canSeeFinance = session ? canManageFinance(session.role) : false;
+  const role = session?.role;
+  const see = (tab: Parameters<typeof canAccess>[1]) => (role ? canAccess(role, tab) : false);
 
   // Attendance + rota moved to the dedicated attendance app (royal-chilli-
-  // attendance). Phase 8: point NEXT_PUBLIC_ATTENDANCE_URL at attendance.royalchilli.com.
+  // attendance). Set NEXT_PUBLIC_ATTENDANCE_URL to attendance.royalchilli.com later.
   const attendanceUrl = process.env.NEXT_PUBLIC_ATTENDANCE_URL || "https://royal-chilli-attendance.vercel.app";
 
   const links = [
-    { href: `${attendanceUrl}/admin`, label: "Attendance & Rota", icon: "🕐", desc: "Clock-ins, timesheets, corrections, rota", visible: isManager, external: true },
-    { href: "/staff/hr", label: "HR", icon: "🪪", desc: "Employee directory, onboarding, right-to-work, new-starter checklist", visible: isManager },
-    { href: "/staff/menu", label: "Menu Management", icon: "🍽️", desc: "Items, prices, allergens, nutrition", visible: isManager },
-    { href: "/staff/tables", label: "Tables", icon: "🪑", desc: "Add tables, set numbers and capacity", visible: isManager },
-    { href: "/staff/payroll", label: "Payroll", icon: "💷", desc: "Pay periods, payslips, payments", visible: isManager },
-    { href: "/staff/inventory", label: "Inventory", icon: "📦", desc: "Ingredients, suppliers, recipes", visible: isInventoryManager },
-    { href: "/staff/customers", label: "Customers & Loyalty", icon: "❤️", desc: "CRM, points, rewards", visible: canSeeCrm },
-    { href: "/staff/drivers", label: "Drivers", icon: "🚗", desc: "Assign deliveries, track status", visible: canSeeDrivers },
-    { href: "/staff/finance", label: "Finance", icon: "💰", desc: "P&L, VAT, cash reconciliation", visible: canSeeFinance },
-    { href: "/staff/analytics", label: "Analytics", icon: "📈", desc: "Sales, menu, staff, inventory trends", visible: isManager },
-    { href: "/staff/reports", label: "Reports", icon: "📊", desc: "Hours, labour cost, exports", visible: isManager },
-    { href: "/staff/audit-log", label: "Audit Log", icon: "🧾", desc: "Who changed what, and when", visible: isManager },
-    { href: "/staff/settings", label: "Settings", icon: "⚙️", desc: "Company, currency, payroll rules", visible: isManager },
+    { href: `${attendanceUrl}/admin`, label: "Attendance & Rota", icon: "🕐", desc: "Clock-ins, timesheets, corrections, rota", visible: see("attendance"), external: true },
+    { href: "/staff/hr", label: "HR Management", icon: "🪪", desc: "Employee records, onboarding, right-to-work, payroll", visible: see("hr") },
+    { href: "/staff/menu", label: "Menu Management", icon: "🍽️", desc: "Items, prices, allergens, nutrition", visible: see("menu") },
+    { href: "/staff/tables", label: "Tables", icon: "🪑", desc: "Add tables, set numbers and capacity", visible: see("tables") },
+    { href: "/staff/inventory", label: "Inventory", icon: "📦", desc: "Ingredients, suppliers, recipes", visible: see("inventory") },
+    { href: "/staff/finance", label: "Finance", icon: "💰", desc: "P&L, VAT, cash reconciliation", visible: see("finance") },
+    { href: "/staff/analytics", label: "Analytics", icon: "📈", desc: "Sales, menu, staff, inventory trends", visible: see("analytics") },
+    { href: "/staff/reports", label: "Reports", icon: "📊", desc: "Hours, labour cost, exports", visible: see("reports") },
+    { href: "/staff/audit-log", label: "Audit Log", icon: "🧾", desc: "Who changed what, and when", visible: see("audit") },
+    { href: "/staff/settings", label: "Settings", icon: "⚙️", desc: "Company, roles & permissions, payroll rules", visible: see("settings") },
   ];
 
   return (

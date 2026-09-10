@@ -3,46 +3,39 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type PermissionKey = "manage_staff" | "manage_inventory" | "view_crm" | "manage_crm" | "manage_drivers" | "manage_finance";
-type Matrix = Record<PermissionKey, Record<string, boolean>>;
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Owner", admin: "Admin", manager: "Manager", supervisor: "Supervisor",
-  cashier: "Cashier", waiter: "Waiter", chef: "Chef", kitchen: "Kitchen",
-  driver: "Driver", inventory_manager: "Inventory Mgr", accountant: "Accountant", employee: "Employee",
-};
+type Matrix = Record<string, Record<string, boolean>>;
+const FIXED = new Set(["admin", "employee"]); // admin always on, employee always off
 
 function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   const [matrix, setMatrix] = useState<Matrix | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
-  const [permissions, setPermissions] = useState<PermissionKey[]>([]);
-  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [tabs, setTabs] = useState<string[]>([]);
+  const [tabLabels, setTabLabels] = useState<Record<string, string>>({});
+  const [roleLabels, setRoleLabels] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   function load() {
     fetch("/api/permissions").then((r) => r.json()).then((d) => {
       setMatrix(d.matrix);
       setRoles(d.roles || []);
-      setPermissions(d.permissions || []);
-      setLabels(d.labels || {});
+      setTabs(d.tabs || []);
+      setTabLabels(d.tabLabels || {});
+      setRoleLabels(d.roleLabels || {});
     });
   }
 
   useEffect(() => { load(); }, []);
 
-  async function toggle(role: string, permission: PermissionKey, current: boolean) {
-    if (!canEdit || role === "owner") return;
-    const cellKey = `${role}:${permission}`;
+  async function toggle(role: string, tab: string, current: boolean) {
+    if (!canEdit || FIXED.has(role)) return;
+    const cellKey = `${role}:${tab}`;
     setSaving(cellKey);
-    setMatrix((m) => (m ? { ...m, [permission]: { ...m[permission], [role]: !current } } : m));
+    setMatrix((m) => (m ? { ...m, [tab]: { ...m[tab], [role]: !current } } : m));
     const res = await fetch("/api/permissions", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, permission, granted: !current }),
+      body: JSON.stringify({ role, permission: tab, granted: !current }),
     });
-    if (!res.ok) {
-      // revert on failure (e.g. session expired mid-edit)
-      setMatrix((m) => (m ? { ...m, [permission]: { ...m[permission], [role]: current } } : m));
-    }
+    if (!res.ok) setMatrix((m) => (m ? { ...m, [tab]: { ...m[tab], [role]: current } } : m));
     setSaving(null);
   }
 
@@ -52,39 +45,39 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
     <div className="rounded-2xl border border-border bg-surface p-5">
       <h2 className="text-foreground font-bold text-lg">Roles &amp; Permissions</h2>
       <p className="mt-1 text-muted-foreground text-xs">
-        Controls which roles can access each area of the system. Owner always has full access and cannot be changed here.
-        {!canEdit && " Only Owner/Admin can edit this — you can view it read-only."}
+        Which roles can open each Staff Hub tab. Admin always has everything; employees never see Staff Hub — neither is editable.
+        {!canEdit && " Only an Admin can change this."}
       </p>
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>
-              <th className="text-left text-muted-foreground font-semibold p-2 sticky left-0 bg-surface">Permission</th>
+              <th className="text-left text-muted-foreground font-semibold p-2 sticky left-0 bg-surface">Tab</th>
               {roles.map((role) => (
                 <th key={role} className="text-muted-foreground font-semibold p-2 text-center whitespace-nowrap">
-                  {ROLE_LABELS[role] || role}
+                  {roleLabels[role] || role}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {permissions.map((perm) => (
-              <tr key={perm} className="border-t border-border">
-                <td className="p-2 text-foreground sticky left-0 bg-surface max-w-[220px]">{labels[perm] || perm}</td>
+            {tabs.map((tab) => (
+              <tr key={tab} className="border-t border-border">
+                <td className="p-2 text-foreground sticky left-0 bg-surface max-w-[220px]">{tabLabels[tab] || tab}</td>
                 {roles.map((role) => {
-                  const granted = matrix[perm]?.[role] ?? false;
-                  const isOwner = role === "owner";
-                  const cellKey = `${role}:${perm}`;
+                  const granted = matrix[tab]?.[role] ?? false;
+                  const fixed = FIXED.has(role);
+                  const cellKey = `${role}:${tab}`;
                   return (
                     <td key={role} className="p-2 text-center">
                       <button
-                        disabled={!canEdit || isOwner || saving === cellKey}
-                        onClick={() => toggle(role, perm, granted)}
+                        disabled={!canEdit || fixed || saving === cellKey}
+                        onClick={() => toggle(role, tab, granted)}
                         className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors ${
                           granted ? "bg-red-600 border-red-500 text-white" : "bg-surface-hover border-border text-transparent"
-                        } ${!canEdit || isOwner ? "opacity-60 cursor-not-allowed" : "hover:border-red-500 cursor-pointer"}`}
-                        title={isOwner ? "Owner always has full access" : undefined}
+                        } ${!canEdit || fixed ? "opacity-60 cursor-not-allowed" : "hover:border-red-500 cursor-pointer"}`}
+                        title={fixed ? `${roleLabels[role]} access is fixed` : undefined}
                       >
                         {granted ? "✓" : ""}
                       </button>

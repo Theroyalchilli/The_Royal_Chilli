@@ -568,10 +568,10 @@ function EmployeePicker({
 
 // ── New Employee modal ──────────────────────────────────────────────────────
 const ROLES: { value: string; label: string }[] = [
-  { value: "employee", label: "Employee" }, { value: "waiter", label: "Waiter" }, { value: "chef", label: "Chef" },
-  { value: "kitchen", label: "Kitchen Staff" }, { value: "cashier", label: "Cashier" }, { value: "driver", label: "Driver" },
-  { value: "supervisor", label: "Supervisor" }, { value: "inventory_manager", label: "Inventory Manager" },
-  { value: "accountant", label: "Accountant" }, { value: "manager", label: "Manager" }, { value: "admin", label: "Admin" }, { value: "owner", label: "Owner" },
+  { value: "employee", label: "Employee — POS + kitchen only" },
+  { value: "manager", label: "Manager — operations, no HR/Settings" },
+  { value: "hr", label: "HR — attendance, HR, payroll, finance, reports" },
+  { value: "admin", label: "Admin — full access" },
 ];
 
 function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (staff: Staff) => void }) {
@@ -827,6 +827,9 @@ export default function HrView() {
             <p className="text-muted-foreground text-sm">Employee directory, onboarding, right-to-work verification and new-starter checklist</p>
           </div>
           <div className="flex gap-2">
+            <Link href="/staff/payroll" className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg">
+              💷 Payroll
+            </Link>
             <button onClick={() => setShowPrivacy(true)} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
               Privacy &amp; Retention
             </button>

@@ -7,7 +7,7 @@ export default async function DriversPage() {
   return (
     <DriversView
       isManager={session ? canManageDrivers(session.role) : false}
-      isDriver={session?.role === "driver"}
+      isDriver={(session?.role as string) === "driver"}
     />
   );
 }

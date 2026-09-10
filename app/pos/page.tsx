@@ -110,7 +110,7 @@ export default function POSPage() {
 
   const happyHour = isHappyHour();
   const breakfastTime = isBreakfastTime();
-  const isManager = session?.role === "owner" || session?.role === "manager";
+  const isManager = session?.role === "admin" || session?.role === "manager";
 
   // Computed totals — exclude voided items
   const subtotal = cartItems.filter(i => !i.voided).reduce(

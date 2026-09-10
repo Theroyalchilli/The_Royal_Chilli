@@ -1,59 +1,66 @@
-// These exercise the hardcoded DEFAULTS fallback in lib/permissions.ts, which is
-// what's actually in effect here since there's no live Supabase to load real
-// role_permissions rows from in a unit test. The DB-backed path (grant/revoke
-// taking effect live) was verified against the real database when the Roles &
-// Permissions feature was built — see that verification for the live-cache path.
+// Exercises the hardcoded DEFAULTS fallback in lib/permissions.ts — there's no
+// live Supabase in a unit test, so the role_permissions cache stays empty and
+// canAccess() falls back to the built-in matrix. The DB-backed grant/revoke
+// path is verified against the real database.
 jest.mock("../supabase", () => ({
   __esModule: true,
-  default: { from: () => ({ select: () => Promise.resolve({ data: null, error: new Error("no db in unit tests") }) }) },
+  default: {
+    from: () => ({
+      select: () => Promise.resolve({ data: null, error: new Error("no db in unit tests") }),
+    }),
+  },
 }));
 
-import {
-  canManageStaff,
-  canManageInventory,
-  canViewCrm,
-  canManageCrm,
-  canManageDrivers,
-  canManageFinance,
-} from "@/lib/permissions";
+import { canAccess, isStaffManagement, canManageFinance, canManageInventory } from "@/lib/permissions";
 
-describe("permission defaults", () => {
-  it("manage_staff: owner, admin, manager only", () => {
-    expect(canManageStaff("owner")).toBe(true);
-    expect(canManageStaff("admin")).toBe(true);
-    expect(canManageStaff("manager")).toBe(true);
-    expect(canManageStaff("cashier")).toBe(false);
-    expect(canManageStaff("employee")).toBe(false);
+describe("canAccess — default matrix", () => {
+  it("admin sees every tab", () => {
+    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "finance", "analytics", "reports", "audit", "settings"] as const) {
+      expect(canAccess("admin", t)).toBe(true);
+    }
   });
 
-  it("manage_inventory: adds inventory_manager on top of staff managers", () => {
-    expect(canManageInventory("inventory_manager")).toBe(true);
+  it("employee sees no tab", () => {
+    expect(canAccess("employee", "menu")).toBe(false);
+    expect(canAccess("employee", "attendance")).toBe(false);
+    expect(canAccess("employee", "settings")).toBe(false);
+  });
+
+  it("manager: operations + attendance/finance/reports, not hr/audit/settings", () => {
+    expect(canAccess("manager", "menu")).toBe(true);
+    expect(canAccess("manager", "tables")).toBe(true);
+    expect(canAccess("manager", "inventory")).toBe(true);
+    expect(canAccess("manager", "attendance")).toBe(true);
+    expect(canAccess("manager", "finance")).toBe(true);
+    expect(canAccess("manager", "reports")).toBe(true);
+    expect(canAccess("manager", "hr")).toBe(false);
+    expect(canAccess("manager", "audit")).toBe(false);
+    expect(canAccess("manager", "settings")).toBe(false);
+  });
+
+  it("hr: attendance, hr, finance, reports only", () => {
+    expect(canAccess("hr", "attendance")).toBe(true);
+    expect(canAccess("hr", "hr")).toBe(true);
+    expect(canAccess("hr", "finance")).toBe(true);
+    expect(canAccess("hr", "reports")).toBe(true);
+    expect(canAccess("hr", "menu")).toBe(false);
+    expect(canAccess("hr", "inventory")).toBe(false);
+    expect(canAccess("hr", "analytics")).toBe(false);
+    expect(canAccess("hr", "settings")).toBe(false);
+  });
+});
+
+describe("helpers", () => {
+  it("isStaffManagement excludes employee", () => {
+    expect(isStaffManagement("employee")).toBe(false);
+    expect(isStaffManagement("manager")).toBe(true);
+    expect(isStaffManagement("hr")).toBe(true);
+    expect(isStaffManagement("admin")).toBe(true);
+  });
+
+  it("legacy shims map to tabs", () => {
+    expect(canManageFinance("hr")).toBe(true);
+    expect(canManageInventory("hr")).toBe(false);
     expect(canManageInventory("manager")).toBe(true);
-    expect(canManageInventory("cashier")).toBe(false);
-  });
-
-  it("view_crm: front-of-house roles can view, but not kitchen/driver", () => {
-    expect(canViewCrm("cashier")).toBe(true);
-    expect(canViewCrm("waiter")).toBe(true);
-    expect(canViewCrm("supervisor")).toBe(true);
-    expect(canViewCrm("kitchen")).toBe(false);
-    expect(canViewCrm("driver")).toBe(false);
-  });
-
-  it("manage_crm: management only, narrower than view_crm", () => {
-    expect(canManageCrm("manager")).toBe(true);
-    expect(canManageCrm("cashier")).toBe(false);
-    expect(canManageCrm("waiter")).toBe(false);
-  });
-
-  it("manage_drivers: management only", () => {
-    expect(canManageDrivers("manager")).toBe(true);
-    expect(canManageDrivers("driver")).toBe(false);
-  });
-
-  it("manage_finance: adds accountant on top of management", () => {
-    expect(canManageFinance("accountant")).toBe(true);
-    expect(canManageFinance("manager")).toBe(true);
-    expect(canManageFinance("cashier")).toBe(false);
   });
 });

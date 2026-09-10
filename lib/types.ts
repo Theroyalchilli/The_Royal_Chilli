@@ -1,16 +1,7 @@
-export type StaffRole =
-  | "owner"
-  | "admin"
-  | "manager"
-  | "supervisor"
-  | "cashier"
-  | "waiter"
-  | "chef"
-  | "kitchen"
-  | "driver"
-  | "inventory_manager"
-  | "accountant"
-  | "employee";
+// Roles were consolidated 12 → 4 (migration 032). employee = front line
+// (POS + kitchen, no Staff Hub); manager = operations; hr = people & pay;
+// admin = everything.
+export type StaffRole = "employee" | "manager" | "hr" | "admin";
 
 export interface Staff {
   id: number;

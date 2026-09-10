@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { canAccess } from "@/lib/permissions";
 import SettingsView from "@/components/staff/SettingsView";
 
 export default async function SettingsPage() {
   const session = await getSession();
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !canAccess(session.role, "settings")) {
     redirect("/staff");
   }
-  return <SettingsView canEditPermissions={session.role === "owner" || session.role === "admin"} />;
+  return <SettingsView canEditPermissions={session.role === "admin"} />;
 }

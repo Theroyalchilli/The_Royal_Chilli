@@ -124,9 +124,9 @@ export default function PayrollView() {
     <>
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between flex-wrap gap-3">
-          <h1 className="text-foreground font-bold text-2xl">Payroll</h1>
+          <h1 className="text-foreground font-bold text-2xl">Payroll <span className="text-muted-foreground text-sm font-normal">· HR Management</span></h1>
           <div className="flex items-center gap-2">
-            <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← Staff Hub</Link>
+            <Link href="/staff/hr" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← HR Management</Link>
           </div>
         </div>
       </div>

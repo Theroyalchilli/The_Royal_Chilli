@@ -4,9 +4,9 @@ import { getSession } from "@/lib/auth";
 
 export const metadata: Metadata = { robots: { index: false } };
 
-// Login is required for the whole Staff Hub, but not every page needs
-// canManageStaff — Attendance/clock-in is for every employee, not just managers.
-// Pages that need the stricter check (Employees, Payroll) enforce it themselves.
+// Login is required for the whole Staff Hub; individual pages enforce their own
+// role check (most need canManageStaff). Employee clock-in/out is no longer here
+// — it lives in the dedicated attendance app's kiosk.
 export default async function StaffHubLayout({
   children,
 }: {

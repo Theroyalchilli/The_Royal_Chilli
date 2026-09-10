@@ -21,11 +21,11 @@ export async function GET(req: NextRequest) {
   const hoursByStaff = await computeHoursForPeriod(from, to);
 
   const { data: lateCounts } = await supabase
-    .from("clock_events")
-    .select("staff_id, late_minutes")
-    .gte("clock_in", `${from}T00:00:00.000Z`)
-    .lte("clock_in", `${to}T23:59:59.999Z`)
-    .gt("late_minutes", 0);
+    .from("attendance")
+    .select("staff_id, late_seconds")
+    .gte("work_date", from)
+    .lte("work_date", to)
+    .gt("late_seconds", 0);
   const lateByStaff = new Map<number, number>();
   for (const l of lateCounts || []) lateByStaff.set(l.staff_id, (lateByStaff.get(l.staff_id) || 0) + 1);
 

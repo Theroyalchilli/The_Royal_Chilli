@@ -11,9 +11,12 @@ export default async function StaffHubPage() {
   const canSeeDrivers = session ? canManageDrivers(session.role) || session.role === "driver" : false;
   const canSeeFinance = session ? canManageFinance(session.role) : false;
 
+  // Attendance + rota moved to the dedicated attendance app (royal-chilli-
+  // attendance). Phase 8: point NEXT_PUBLIC_ATTENDANCE_URL at attendance.royalchilli.com.
+  const attendanceUrl = process.env.NEXT_PUBLIC_ATTENDANCE_URL || "https://royal-chilli-attendance.vercel.app";
+
   const links = [
-    { href: "/staff/attendance", label: "Attendance", icon: "🕐", desc: "Clock in/out, view your hours", visible: true },
-    { href: "/staff/rota", label: "Rota", icon: "📅", desc: "Schedule, availability, leave", visible: true },
+    { href: `${attendanceUrl}/admin`, label: "Attendance & Rota", icon: "🕐", desc: "Clock-ins, timesheets, corrections, rota", visible: isManager, external: true },
     { href: "/staff/hr", label: "HR", icon: "🪪", desc: "Employee directory, onboarding, right-to-work, new-starter checklist", visible: isManager },
     { href: "/staff/menu", label: "Menu Management", icon: "🍽️", desc: "Items, prices, allergens, nutrition", visible: isManager },
     { href: "/staff/tables", label: "Tables", icon: "🪑", desc: "Add tables, set numbers and capacity", visible: isManager },
@@ -45,13 +48,24 @@ export default async function StaffHubPage() {
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          {links.filter((l) => l.visible).map((l) => (
-            <Link key={l.href} href={l.href} className="rounded-2xl border border-border bg-surface p-5 hover:border-red-600 transition-colors">
-              <div className="text-3xl">{l.icon}</div>
-              <div className="mt-2 text-foreground font-bold">{l.label}</div>
-              <div className="text-muted-foreground text-sm mt-1">{l.desc}</div>
-            </Link>
-          ))}
+          {links.filter((l) => l.visible).map((l) => {
+            const cls = "rounded-2xl border border-border bg-surface p-5 hover:border-red-600 transition-colors";
+            const body = (
+              <>
+                <div className="text-3xl">{l.icon}</div>
+                <div className="mt-2 text-foreground font-bold">
+                  {l.label}
+                  {l.external && <span className="text-muted-foreground text-xs font-normal"> ↗</span>}
+                </div>
+                <div className="text-muted-foreground text-sm mt-1">{l.desc}</div>
+              </>
+            );
+            return l.external ? (
+              <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className={cls}>{body}</a>
+            ) : (
+              <Link key={l.href} href={l.href} className={cls}>{body}</Link>
+            );
+          })}
         </div>
       </div>
     </div>

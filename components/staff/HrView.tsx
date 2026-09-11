@@ -823,7 +823,7 @@ export default function HrView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-6xl flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-foreground font-bold text-2xl">HR</h1>
+            <h1 className="text-foreground font-semibold text-lg">HR</h1>
             <p className="text-muted-foreground text-sm">Employee directory, onboarding, right-to-work verification and new-starter checklist</p>
           </div>
           <div className="flex gap-2">

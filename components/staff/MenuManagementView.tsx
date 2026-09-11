@@ -407,7 +407,10 @@ export default function MenuManagementView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h1 className="text-foreground font-bold text-2xl">Menu Management</h1>
+            <div>
+              <h1 className="text-foreground font-semibold text-lg">Menu Management</h1>
+              <p className="text-muted-foreground text-sm">Menu items, categories, pricing and channel availability.</p>
+            </div>
             <div className="flex items-center gap-2">
               <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← Staff Hub</Link>
             </div>
@@ -439,8 +442,8 @@ export default function MenuManagementView() {
                       <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
                         <div>
                           <span className="text-foreground font-medium">{i.name}</span>
-                          {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-blue-600">Till only</span>}
-                          {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-purple-600">Website only</span>}
+                          {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Till only</span>}
+                          {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Website only</span>}
                           {i.allergens.length > 0 && <span className="ml-2 text-amber-600 text-xs">⚠ {i.allergens.join(", ")}</span>}
                           {!i.active && <span className="ml-2 text-muted-foreground text-xs">(inactive)</span>}
                         </div>

@@ -743,7 +743,10 @@ export default function InventoryView({ canApproveStockTakes }: { canApproveStoc
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-5xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h1 className="text-foreground font-bold text-2xl">Inventory</h1>
+            <div>
+              <h1 className="text-foreground font-semibold text-lg">Inventory</h1>
+              <p className="text-muted-foreground text-sm">Stock levels, purchase orders and supplier deliveries.</p>
+            </div>
             <div className="flex items-center gap-2">
               <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← Staff Hub</Link>
             </div>

@@ -99,7 +99,7 @@ export default function TableManagementView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-2xl flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-foreground font-bold text-2xl">Tables</h1>
+            <h1 className="text-foreground font-semibold text-lg">Tables</h1>
             <p className="text-muted-foreground text-xs mt-0.5">
               {tables.length} table{tables.length === 1 ? "" : "s"} · {totalSeats} seats
             </p>

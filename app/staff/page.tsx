@@ -30,7 +30,7 @@ export default async function StaffHubPage() {
       <div className="mx-auto max-w-3xl">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-foreground font-bold text-2xl">Staff Hub</h1>
+            <h1 className="text-foreground font-semibold text-lg">Staff Hub</h1>
             <p className="text-muted-foreground text-sm mt-1">Welcome, {session?.name}</p>
           </div>
           <div className="flex items-center gap-2">

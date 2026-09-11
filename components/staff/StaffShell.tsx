@@ -42,7 +42,7 @@ export default function StaffShell({
           <p style={{ fontFamily: "var(--font-playfair)" }} className="mt-1 truncate text-[10.5px] font-bold italic leading-none tracking-widest text-yellow-500">
             Dil Se Desi
           </p>
-          <p className="mt-1.5 truncate text-[11px] text-neutral-400">{ROLE_LABEL[user.role] ?? user.role}</p>
+          <p className="mt-1.5 truncate text-[11px] text-neutral-400">{user.name} · {ROLE_LABEL[user.role] ?? user.role}</p>
         </div>
       </div>
 
@@ -73,10 +73,6 @@ export default function StaffShell({
       </nav>
 
       <div className="border-t border-white/10 px-3 py-3">
-        <div className="px-2.5 pb-2">
-          <p className="truncate text-[13.5px] font-medium text-white">{user.name}</p>
-          <p className="text-[11.5px] text-neutral-400">{ROLE_LABEL[user.role] ?? user.role}</p>
-        </div>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"

@@ -46,7 +46,7 @@ export default async function StaffHubPage() {
     { href: "/staff/inventory", label: "Inventory", icon: "📦", desc: "Ingredients, suppliers, recipes", visible: see("inventory"), tone: "stone" },
     { href: "/staff/finance", label: "Finance", icon: "💰", desc: "P&L, VAT, cash reconciliation", visible: see("finance"), tone: "rose" },
     { href: "/staff/analytics", label: "Analytics", icon: "📈", desc: "Sales, menu, staff, inventory trends", visible: see("analytics"), tone: "amber" },
-    { href: "/staff/reports", label: "Reports", icon: "📊", desc: "Hours, labour cost, exports", visible: see("reports"), tone: "red" },
+    { href: "/staff/reports", label: "Reports", icon: "📊", desc: "Sales, hours, labour cost, exports", visible: see("reports"), tone: "red" },
     { href: "/staff/audit-log", label: "Audit Log", icon: "🧾", desc: "Who changed what, and when", visible: see("audit"), tone: "stone" },
     { href: "/staff/settings", label: "Settings", icon: "⚙️", desc: "Company, roles & permissions, payroll rules", visible: see("settings"), tone: "stone" },
   ];

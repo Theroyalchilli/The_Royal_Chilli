@@ -753,7 +753,7 @@ export default function POSPage() {
               📅 Reservations
             </button>
             {isManager && (
-              <button onClick={() => router.push("/pos/reports")}
+              <button onClick={() => router.push("/staff/reports")}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
                 📊 Reports
               </button>
@@ -806,7 +806,7 @@ export default function POSPage() {
                     📅 Reservations
                   </button>
                   {isManager && (
-                    <button onClick={() => { setShowMobileMenu(false); router.push("/pos/reports"); }}
+                    <button onClick={() => { setShowMobileMenu(false); router.push("/staff/reports"); }}
                       className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                       📊 Reports
                     </button>

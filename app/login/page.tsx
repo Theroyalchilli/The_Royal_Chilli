@@ -34,7 +34,9 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        router.push("/pos");
+        // Employees work the till; manager/hr/admin land straight on the
+        // role-based Staff Hub welcome screen instead of going via /pos.
+        router.push(data.user?.role === "employee" ? "/pos" : "/staff");
       } else {
         setError(data.error || "Invalid username or password");
         setPassword("");

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins, Playfair_Display, Cinzel, Work_Sans } from "next/font/google";
+import { Poppins, Playfair_Display, Cinzel, Work_Sans, Space_Grotesk } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
 import "./globals.css";
 
@@ -24,6 +24,15 @@ const workSans = Work_Sans({
   variable: "--font-worksans",
 });
 
+// Reserved for the Staff Hub welcome screen's headings/stat numbers only —
+// same "one signature purpose" treatment as Cinzel on the brand wordmark,
+// not a general body font.
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-space-grotesk",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app"),
   title: "The Royal Chilli - POS System",
@@ -42,7 +51,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${poppins.variable} ${playfair.variable} ${cinzel.variable} ${workSans.variable} ${poppins.className} antialiased`}>
+      <body className={`${poppins.variable} ${playfair.variable} ${cinzel.variable} ${workSans.variable} ${spaceGrotesk.variable} ${poppins.className} antialiased`}>
         <PwaRegister />
         {children}
       </body>

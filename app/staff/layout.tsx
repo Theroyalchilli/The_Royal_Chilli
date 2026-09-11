@@ -20,7 +20,6 @@ export default async function StaffHubLayout({
   if (!isStaffManagement(session.role)) redirect("/pos");
 
   const see = (tab: Parameters<typeof canAccess>[1]) => canAccess(session.role, tab);
-  const attendanceUrl = process.env.NEXT_PUBLIC_ATTENDANCE_URL || "https://royal-chilli-attendance.vercel.app";
 
   const nav: NavGroup[] = [
     { label: "Overview", items: [{ href: "/staff", label: "Dashboard", icon: "◧" }] },
@@ -36,7 +35,7 @@ export default async function StaffHubLayout({
     {
       label: "People",
       items: [
-        ...(see("attendance") ? [{ href: `${attendanceUrl}/admin`, label: "Attendance & Rota", icon: "🕐", external: true }] : []),
+        ...(see("attendance") ? [{ href: "/api/sso/attendance", label: "Attendance & Rota", icon: "🕐" }] : []),
         ...(see("hr") ? [{ href: "/staff/hr", label: "HR Management", icon: "🪪" }] : []),
       ],
     },

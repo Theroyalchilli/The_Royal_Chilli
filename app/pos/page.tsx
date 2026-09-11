@@ -753,12 +753,6 @@ export default function POSPage() {
               📅 Reservations
             </button>
             {isManager && (
-              <button onClick={() => router.push("/staff/reports")}
-                className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
-                📊 Reports
-              </button>
-            )}
-            {isManager && (
               <button onClick={openEndOfDay}
                 className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-300 transition-colors">
                 🌙 End of Day
@@ -805,12 +799,6 @@ export default function POSPage() {
                     className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                     📅 Reservations
                   </button>
-                  {isManager && (
-                    <button onClick={() => { setShowMobileMenu(false); router.push("/staff/reports"); }}
-                      className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
-                      📊 Reports
-                    </button>
-                  )}
                   {isManager && (
                     <button onClick={() => { setShowMobileMenu(false); openEndOfDay(); }}
                       className="w-full text-left px-3 py-2 text-indigo-700 text-xs font-semibold hover:bg-surface-hover">

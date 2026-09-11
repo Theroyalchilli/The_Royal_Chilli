@@ -9,6 +9,7 @@ import MenuPanel from "@/components/pos/MenuPanel";
 import OrderTicket from "@/components/pos/OrderTicket";
 import PaymentModal from "@/components/pos/PaymentModal";
 import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
+import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import type {
   MenuCategory,
   MenuItem,
@@ -46,6 +47,13 @@ export default function POSPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Dine-in: must pick a table before adding items. Takeaway/delivery: items
+  // come first, customer details are asked for when sending/paying.
+  const [showTablePopup, setShowTablePopup] = useState(false);
+  const [showCustomerPopup, setShowCustomerPopup] = useState(false);
+  const [customerDetailsCollected, setCustomerDetailsCollected] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"kitchen" | "payment" | null>(null);
 
   // Payment state
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -292,7 +300,11 @@ export default function POSPage() {
     setCurrentOrderNumber("");
     setAllOrderIds([]);
     setShowCustomerForm(type !== "dine_in" && type !== "online");
-    setMobileTab(type === "online" ? "order" : "floor");
+    setShowTablePopup(false);
+    setShowCustomerPopup(false);
+    setCustomerDetailsCollected(false);
+    setPendingAction(null);
+    setMobileTab(type === "online" ? "order" : type === "dine_in" ? "floor" : "menu");
   };
 
   const recallOrderForTable = useCallback(async (tableId: number) => {
@@ -430,6 +442,41 @@ export default function POSPage() {
     refreshTables();
   };
 
+  // Takeaway/delivery: items come first. The first time either action button
+  // is pressed on one of these order types, ask for customer details instead
+  // of proceeding straight away — then continue once they're confirmed.
+  const requestSendToKitchen = () => {
+    if ((orderType === "takeaway" || orderType === "delivery") && !customerDetailsCollected) {
+      setPendingAction("kitchen");
+      setShowCustomerPopup(true);
+      return;
+    }
+    handleSendToKitchen();
+  };
+
+  const requestPayment = () => {
+    if ((orderType === "takeaway" || orderType === "delivery") && !customerDetailsCollected) {
+      setPendingAction("payment");
+      setShowCustomerPopup(true);
+      return;
+    }
+    handlePayment();
+  };
+
+  const handleCustomerDetailsConfirm = () => {
+    setCustomerDetailsCollected(true);
+    setShowCustomerPopup(false);
+    const action = pendingAction;
+    setPendingAction(null);
+    if (action === "kitchen") handleSendToKitchen();
+    else if (action === "payment") handlePayment();
+  };
+
+  const handleCustomerDetailsCancel = () => {
+    setShowCustomerPopup(false);
+    setPendingAction(null);
+  };
+
   const handlePaymentClose = () => {
     setPaymentOpen(false);
     if (currentOrderId) {
@@ -450,6 +497,9 @@ export default function POSPage() {
     setCurrentOrderNumber("");
     setAllOrderIds([]);
     setStatus("");
+    setShowCustomerPopup(false);
+    setCustomerDetailsCollected(false);
+    setPendingAction(null);
     setMobileTab("floor");
     refreshTables();
   };
@@ -614,13 +664,13 @@ export default function POSPage() {
         </div>
       )}
       {cartItems.some(i => !i.sent) && (
-        <button onClick={handleSendToKitchen} disabled={loading}
+        <button onClick={requestSendToKitchen} disabled={loading}
           className="pos-btn no-select w-full h-12 bg-red-600 hover:bg-red-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2">
           {loading ? <span className="opacity-60">Processing…</span> : <><span>🍳</span><span>Send to Kitchen</span></>}
         </button>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={handlePayment} disabled={loading || cartItems.length === 0}
+        <button onClick={requestPayment} disabled={loading || cartItems.length === 0}
           className="pos-btn no-select h-12 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white rounded-xl transition-all flex flex-col items-center justify-center leading-tight">
           <span className="text-[10px] font-semibold opacity-80">Pay Now</span>
           <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(total) : "—"}</span>
@@ -822,17 +872,17 @@ export default function POSPage() {
             </div>
           )}
 
-          {(orderType === "takeaway" || orderType === "delivery") && (
-            <div className="px-3 pb-3 flex-shrink-0 space-y-2">
-              <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer Name"
-                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
-              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone Number"
-                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
-              {orderType === "delivery" && (
-                <textarea value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="Delivery Address" rows={2}
-                  className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none" />
-              )}
-              <div className="border-t border-border/80" />
+          {(orderType === "takeaway" || orderType === "delivery") && customerDetailsCollected && (
+            <div className="px-3 pb-3 flex-shrink-0">
+              <div className="flex items-center justify-between gap-2 bg-surface-hover/60 border border-border rounded-xl px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-foreground text-sm font-semibold truncate">{customerName || "Guest"}</p>
+                  <p className="text-muted-foreground text-xs truncate">
+                    {customerPhone || "No phone"}{orderType === "delivery" && customerAddress ? ` · ${customerAddress}` : ""}
+                  </p>
+                </div>
+                <button onClick={() => setShowCustomerPopup(true)} className="text-[11px] font-bold text-red-600 hover:underline flex-shrink-0">Edit</button>
+              </div>
             </div>
           )}
 
@@ -884,7 +934,15 @@ export default function POSPage() {
         {/* Right Panel - Menu (hidden for online orders) */}
         {orderType !== "online" && (
           <div className="flex-1 overflow-hidden flex flex-col p-3">
-            <MenuPanel categories={categories} items={items} onAddItem={handleAddItem} layout="horizontal" orderType={orderType} />
+            <MenuPanel
+              categories={categories}
+              items={items}
+              onAddItem={handleAddItem}
+              layout="horizontal"
+              orderType={orderType}
+              disableAdd={orderType === "dine_in" && !selectedTable}
+              onBlockedAdd={() => setShowTablePopup(true)}
+            />
           </div>
         )}
       </div>
@@ -948,14 +1006,20 @@ export default function POSPage() {
 
                 {(orderType === "takeaway" || orderType === "delivery") && (
                   <div className="space-y-2">
-                    <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer Name"
-                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
-                    <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone Number"
-                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500" />
-                    {orderType === "delivery" && (
-                      <textarea value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="Delivery Address" rows={2}
-                        className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2.5 text-foreground text-sm placeholder-gray-500 focus:outline-none focus:border-red-500 resize-none" />
+                    {customerDetailsCollected && (
+                      <div className="flex items-center justify-between gap-2 bg-surface-hover/60 border border-border rounded-xl px-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="text-foreground text-sm font-semibold truncate">{customerName || "Guest"}</p>
+                          <p className="text-muted-foreground text-xs truncate">
+                            {customerPhone || "No phone"}{orderType === "delivery" && customerAddress ? ` · ${customerAddress}` : ""}
+                          </p>
+                        </div>
+                        <button onClick={() => setShowCustomerPopup(true)} className="text-[11px] font-bold text-red-600 hover:underline flex-shrink-0">Edit</button>
+                      </div>
                     )}
+                    <p className="text-center text-muted-foreground text-xs">
+                      {orderType === "delivery" ? "Delivery" : "Takeaway"} orders don&apos;t use tables — customer details are asked for when you send or pay.
+                    </p>
                     <button onClick={() => setMobileTab("menu")}
                       className="w-full py-3 bg-red-600/20 border border-red-500/30 text-red-700 font-semibold rounded-xl text-sm no-select pos-btn">
                       🍽️ Browse Menu →
@@ -980,7 +1044,15 @@ export default function POSPage() {
                 </div>
               )}
               <div className="flex-1 overflow-hidden min-h-0">
-                <MenuPanel categories={categories} items={items} onAddItem={handleAddItem} layout="horizontal" orderType={orderType} />
+                <MenuPanel
+                  categories={categories}
+                  items={items}
+                  onAddItem={handleAddItem}
+                  layout="horizontal"
+                  orderType={orderType}
+                  disableAdd={orderType === "dine_in" && !selectedTable}
+                  onBlockedAdd={() => setShowTablePopup(true)}
+                />
               </div>
             </div>
           )}
@@ -993,12 +1065,15 @@ export default function POSPage() {
                   {tableHeader}
                 </div>
               )}
-              {(orderType === "takeaway" || orderType === "delivery") && customerName && (
+              {(orderType === "takeaway" || orderType === "delivery") && customerDetailsCollected && (
                 <div className="px-3 pt-3 pb-2 flex-shrink-0">
-                  <div className="bg-surface-hover/60 rounded-xl px-3 py-2 text-sm">
-                    <span className="text-muted-foreground">Customer: </span>
-                    <span className="text-foreground font-semibold">{customerName}</span>
-                    {customerPhone && <span className="text-muted-foreground"> · {customerPhone}</span>}
+                  <div className="flex items-center justify-between gap-2 bg-surface-hover/60 rounded-xl px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Customer: </span>
+                      <span className="text-foreground font-semibold">{customerName || "Guest"}</span>
+                      {customerPhone && <span className="text-muted-foreground"> · {customerPhone}</span>}
+                    </div>
+                    <button onClick={() => setShowCustomerPopup(true)} className="text-[11px] font-bold text-red-600 hover:underline flex-shrink-0">Edit</button>
                   </div>
                 </div>
               )}
@@ -1087,6 +1162,38 @@ export default function POSPage() {
             <span>{status}</span>
           </div>
         </div>
+      )}
+
+      {/* Table required popup — dine-in with no table selected yet */}
+      {showTablePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowTablePopup(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="text-3xl mb-2">🪑</div>
+            <h2 className="text-foreground font-bold text-lg">Select a table first</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Dine-in orders need a table before you can add items.</p>
+            <button
+              onClick={() => { setShowTablePopup(false); setMobileTab("floor"); }}
+              className="pos-btn no-select mt-5 w-full rounded-full bg-red-600 py-2.5 font-semibold text-white hover:bg-red-500"
+            >
+              OK, pick a table
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Customer details popup — takeaway/delivery, asked for on Send to Kitchen / Pay */}
+      {showCustomerPopup && (orderType === "takeaway" || orderType === "delivery") && (
+        <CustomerDetailsModal
+          orderType={orderType}
+          name={customerName}
+          phone={customerPhone}
+          address={customerAddress}
+          onChangeName={setCustomerName}
+          onChangePhone={setCustomerPhone}
+          onChangeAddress={setCustomerAddress}
+          onConfirm={handleCustomerDetailsConfirm}
+          onClose={handleCustomerDetailsCancel}
+        />
       )}
 
       {/* Payment Modal */}

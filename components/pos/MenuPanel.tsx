@@ -21,6 +21,9 @@ interface Props {
   onAddItem: (item: CartItem) => void;
   layout?: "vertical" | "horizontal";
   orderType?: OrderType;
+  /** When true, tapping any item is blocked (e.g. dine-in with no table yet) — onBlockedAdd fires instead. */
+  disableAdd?: boolean;
+  onBlockedAdd?: () => void;
 }
 
 const categoryIcons: Record<string, string> = {
@@ -36,7 +39,7 @@ const categoryIcons: Record<string, string> = {
   "Drinks":           "🥤",
 };
 
-export default function MenuPanel({ categories, items, onAddItem, layout = "vertical", orderType }: Props) {
+export default function MenuPanel({ categories, items, onAddItem, layout = "vertical", orderType, disableAdd, onBlockedAdd }: Props) {
   const [activeCat, setActiveCat] = useState<number>(0);
   const [pickerItem, setPickerItem] = useState<MenuItem | null>(null);
 
@@ -58,6 +61,10 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
   const activeCategory = visibleCategories.find(c => c.id === activeCat);
 
   const handleAdd = (item: MenuItem) => {
+    if (disableAdd) {
+      onBlockedAdd?.();
+      return;
+    }
     if (item.modifierGroups && item.modifierGroups.length > 0) {
       setPickerItem(item);
       return;

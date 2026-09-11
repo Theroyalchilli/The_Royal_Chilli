@@ -106,6 +106,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (order_type === "delivery" && !String(customer_address || "").trim()) {
+      return NextResponse.json(
+        { error: "A delivery address is required" },
+        { status: 400 }
+      );
+    }
+
     // Get open work period
     const { data: workPeriod } = await supabase
       .from("work_periods")

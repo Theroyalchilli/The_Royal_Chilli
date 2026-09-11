@@ -226,15 +226,19 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
 
     const openToday = attendance.filter((r) => r.work_date === today && r.clock_in && !r.clock_out);
     const staffIds = [...new Set(openToday.map((r) => r.staff_id))];
-    const { data: staffNames } = staffIds.length ? await supabase.from("staff").select("id, name").in("id", staffIds) : { data: [] };
+    const missedOutStaffIds = [...new Set(missedOuts.map((m) => m.staff_id))];
+
+    // These three depend on the batch above but not on each other — run together.
+    const [{ data: staffNames }, { data: missedOutNames }, topItems] = await Promise.all([
+      staffIds.length ? supabase.from("staff").select("id, name").in("id", staffIds) : Promise.resolve({ data: [] }),
+      missedOutStaffIds.length ? supabase.from("staff").select("id, name").in("id", missedOutStaffIds) : Promise.resolve({ data: [] }),
+      deriveTopItems(orders),
+    ]);
     const nameById = new Map((staffNames ?? []).map((s) => [s.id, s.name]));
     const onShift: ShiftPerson[] = openToday.map((r) => ({
       name: nameById.get(r.staff_id) ?? "?",
       since: r.clock_in ? new Date(r.clock_in).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) : "—",
     }));
-
-    const missedOutStaffIds = [...new Set(missedOuts.map((m) => m.staff_id))];
-    const { data: missedOutNames } = missedOutStaffIds.length ? await supabase.from("staff").select("id, name").in("id", missedOutStaffIds) : { data: [] };
     const missedOutNameById = new Map((missedOutNames ?? []).map((s) => [s.id, s.name]));
 
     const tables = tablesRes.data ?? [];
@@ -256,7 +260,7 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
       onShift,
       reservations,
       byHour: deriveHourlyToday(orders, today),
-      topItems: await deriveTopItems(orders),
+      topItems,
       alerts,
     };
   }

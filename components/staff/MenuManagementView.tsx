@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { ALLERGENS } from "@/lib/allergens";
 
 type Item = {
@@ -410,9 +409,6 @@ export default function MenuManagementView() {
             <div>
               <h1 className="text-foreground font-semibold text-lg">Menu Management</h1>
               <p className="text-muted-foreground text-sm">Menu items, categories, pricing and channel availability.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← Staff Hub</Link>
             </div>
           </div>
 

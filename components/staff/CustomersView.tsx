@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 
 type Customer = {
   id: number; name: string; phone: string; email: string | null; date_of_birth: string | null;
@@ -192,9 +191,6 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
             <div>
               <h1 className="text-foreground font-semibold text-lg">Customers & Loyalty</h1>
               <p className="text-muted-foreground text-sm">Customer profiles, loyalty points and repeat-order history.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← Staff Hub</Link>
             </div>
           </div>
 

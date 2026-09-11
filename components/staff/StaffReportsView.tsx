@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 
@@ -16,9 +15,6 @@ export default function StaffReportsView() {
             <h1 className="text-foreground font-semibold text-lg">Reports</h1>
             <p className="text-muted-foreground text-sm">Sales &amp; operations, and staff hours &amp; labour cost.</p>
           </div>
-          <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
-            ← Staff Hub
-          </Link>
         </div>
         <div className="mx-auto max-w-5xl mt-3 flex gap-1 bg-surface-hover p-1 rounded-xl w-fit">
           <button

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 
 type Ingredient = {
   id: number; name: string; unit: string; current_stock: number; reorder_level: number;
@@ -746,9 +745,6 @@ export default function InventoryView({ canApproveStockTakes }: { canApproveStoc
             <div>
               <h1 className="text-foreground font-semibold text-lg">Inventory</h1>
               <p className="text-muted-foreground text-sm">Stock levels, purchase orders and supplier deliveries.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← Staff Hub</Link>
             </div>
           </div>
 

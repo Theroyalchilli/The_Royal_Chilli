@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import type { PayrollPeriod, PayrollEntry } from "@/lib/types";
 
 const statusBadge: Record<string, string> = {
@@ -127,9 +126,6 @@ export default function PayrollView() {
           <div>
             <h1 className="text-foreground font-semibold text-lg">Payroll <span className="text-muted-foreground text-sm font-normal">· HR Management</span></h1>
             <p className="text-muted-foreground text-sm">Pay periods, hours worked and payment history.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/staff/hr" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">← HR Management</Link>
           </div>
         </div>
       </div>

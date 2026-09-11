@@ -607,10 +607,10 @@ export default function ReportsPage() {
           🍳 Kitchen
         </Link>
         <Link
-          href="/pos/tables"
+          href="/pos/reservations"
           className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors"
         >
-          🍽️ Tables
+          📅 Reservations
         </Link>
       </div>
     </div>

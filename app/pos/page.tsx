@@ -738,22 +738,26 @@ export default function POSPage() {
                 </div>
               )
             )}
-            <button onClick={() => router.push("/staff")}
-              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
-              👥 Staff Hub
-            </button>
+            {session && session.role !== "employee" && (
+              <button onClick={() => router.push("/staff")}
+                className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+                👥 Staff Hub
+              </button>
+            )}
             <button onClick={() => router.push("/pos/kitchen")}
               className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               🍳 Kitchen
             </button>
-            <button onClick={() => router.push("/pos/tables")}
+            <button onClick={() => router.push("/pos/reservations")}
               className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
-              🍽️ Tables
+              📅 Reservations
             </button>
-            <button onClick={() => router.push("/pos/reports")}
-              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
-              📊 Reports
-            </button>
+            {isManager && (
+              <button onClick={() => router.push("/pos/reports")}
+                className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+                📊 Reports
+              </button>
+            )}
             {isManager && (
               <button onClick={openEndOfDay}
                 className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-300 transition-colors">
@@ -787,22 +791,26 @@ export default function POSPage() {
                       )}
                     </div>
                   )}
-                  <button onClick={() => { setShowMobileMenu(false); router.push("/staff"); }}
-                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
-                    👥 Staff Hub
-                  </button>
+                  {session && session.role !== "employee" && (
+                    <button onClick={() => { setShowMobileMenu(false); router.push("/staff"); }}
+                      className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                      👥 Staff Hub
+                    </button>
+                  )}
                   <button onClick={() => { setShowMobileMenu(false); router.push("/pos/kitchen"); }}
                     className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                     🍳 Kitchen
                   </button>
-                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/tables"); }}
+                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/reservations"); }}
                     className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
-                    🍽️ Tables
+                    📅 Reservations
                   </button>
-                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/reports"); }}
-                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
-                    📊 Reports
-                  </button>
+                  {isManager && (
+                    <button onClick={() => { setShowMobileMenu(false); router.push("/pos/reports"); }}
+                      className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                      📊 Reports
+                    </button>
+                  )}
                   {isManager && (
                     <button onClick={() => { setShowMobileMenu(false); openEndOfDay(); }}
                       className="w-full text-left px-3 py-2 text-indigo-700 text-xs font-semibold hover:bg-surface-hover">

@@ -247,7 +247,7 @@ If `options` is present, full-replaces the option list (delete-then-insert), sam
 
 ### `GET /api/reservations`
 **Auth:** session required (any role)
-**Query:** `date`, `status`
+**Query:** `date` (exact match) or `from` (>= date, "upcoming" view — used by `/pos/reservations`, which lists every booking from today onward with no date picker), `status`. `date` wins if both are given.
 **Response:** `{ reservations }`
 
 ### `POST /api/reservations`

@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
+    const from = searchParams.get("from");
     const status = searchParams.get("status");
 
     let query = supabase
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
 
     if (date) {
       query = query.eq("reservation_date", date);
+    } else if (from) {
+      // "Upcoming" view — everything from this date onward, no end cutoff.
+      query = query.gte("reservation_date", from);
     }
 
     if (status) {

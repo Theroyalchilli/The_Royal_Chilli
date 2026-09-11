@@ -12,7 +12,7 @@ export default function StaffReportsView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-5xl flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-foreground font-semibold text-lg">Reports</h1>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Reports</h1>
             <p className="text-muted-foreground text-sm">Sales &amp; operations, and staff hours &amp; labour cost.</p>
           </div>
         </div>

@@ -189,7 +189,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Customers & Loyalty</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Customers & Loyalty</h1>
               <p className="text-muted-foreground text-sm">Customer profiles, loyalty points and repeat-order history.</p>
             </div>
           </div>
@@ -249,7 +249,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
             )}
             <div className="mt-3 space-y-2">
               {rewards.map((r) => (
-                <div key={r.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+                <div key={r.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3">
                   <p className="text-foreground font-semibold">{r.name} <span className="text-red-600">· {r.points_cost} pts</span></p>
                   {r.description && <p className="text-muted-foreground text-sm">{r.description}</p>}
                 </div>

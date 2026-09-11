@@ -325,7 +325,7 @@ function ReferencesTab({ staffId }: { staffId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+      <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4 space-y-3">
         <h3 className="text-foreground font-bold text-sm">Add Reference / Qualification</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Text label="Most recent employer" value={form.employer_name} onChange={(v) => setForm({ ...form, employer_name: v })} />
@@ -341,7 +341,7 @@ function ReferencesTab({ staffId }: { staffId: number }) {
 
       <div className="space-y-2">
         {refs.map((r) => (
-          <div key={r.id} className="rounded-lg border border-border bg-surface px-4 py-3 flex items-start justify-between gap-3">
+          <div key={r.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-start justify-between gap-3">
             <div className="text-sm">
               <p className="text-foreground font-semibold">{r.employer_name || "—"} {r.job_title && `· ${r.job_title}`}</p>
               <p className="text-muted-foreground">{r.employment_dates}</p>
@@ -421,7 +421,7 @@ function RtwVerificationTab({ staffId }: { staffId: number }) {
       </button>
 
       {showForm && (
-        <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+        <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <DateField label="Check date" value={form.check_date} onChange={(v) => setForm({ ...form, check_date: v })} />
             <Select label="Check method" value={form.check_method} onChange={(v) => setForm({ ...form, check_method: v })}
@@ -461,7 +461,7 @@ function RtwVerificationTab({ staffId }: { staffId: number }) {
         <div className="space-y-2">
           <h3 className="text-foreground font-bold text-sm">History</h3>
           {checks.map((c) => (
-            <div key={c.id} className="rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+            <div key={c.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 text-sm">
               <p className="text-foreground font-medium">{new Date(c.check_date).toLocaleDateString("en-GB")} · {c.check_method.replace(/_/g, " ")} · by {c.checked_by_name || "—"}</p>
               <p className="text-muted-foreground">{c.work_permitted ? "Work permitted" : "Not confirmed permitted"} {c.time_limited && c.permission_expiry_date && `· expires ${new Date(c.permission_expiry_date).toLocaleDateString("en-GB")}`}</p>
             </div>
@@ -506,7 +506,7 @@ function ChecklistTab({ staffId }: { staffId: number }) {
         </div>
       </div>
       {tasks.map((t) => (
-        <label key={t.key} className={`flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${t.status === "done" ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-surface"}`}>
+        <label key={t.key} className={`flex items-start gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${t.status === "done" ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)]"}`}>
           <input type="checkbox" checked={t.status === "done"} onChange={() => toggle(t)} className="mt-0.5" />
           <div>
             <p className={`text-sm font-medium ${t.status === "done" ? "text-emerald-700 line-through" : "text-foreground"}`}>{t.label}</p>
@@ -528,7 +528,7 @@ function EmployeePicker({
   activeFilter: string; setActiveFilter: (v: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] overflow-hidden">
       <div className="p-2 border-b border-border space-y-2">
         <input placeholder="Search name, ID, email…" value={search} onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -823,7 +823,7 @@ export default function HrView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-6xl flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-foreground font-semibold text-lg">HR</h1>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">HR</h1>
             <p className="text-muted-foreground text-sm">Employee directory, onboarding, right-to-work verification and new-starter checklist</p>
           </div>
           <div className="flex gap-2">
@@ -846,7 +846,7 @@ export default function HrView() {
 
           <div>
             {!selected ? (
-              <div className="rounded-xl border border-border bg-surface p-10 text-center text-muted-foreground">
+              <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-10 text-center text-muted-foreground">
                 Select an employee to view or edit their HR record.
               </div>
             ) : (

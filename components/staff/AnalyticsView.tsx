@@ -19,7 +19,7 @@ type ForecastStat = { ingredient_id: number; name: string; unit: string; current
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
       <p className="text-muted-foreground text-xs uppercase tracking-widest">{label}</p>
       <p className="text-foreground text-2xl font-bold mt-1">{value}</p>
     </div>
@@ -200,7 +200,7 @@ export default function AnalyticsView() {
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Analytics Dashboard</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Analytics Dashboard</h1>
               <p className="text-muted-foreground text-sm">Sales trends, busy hours and stock forecasts at a glance.</p>
             </div>
           </div>

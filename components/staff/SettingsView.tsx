@@ -41,7 +41,7 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   if (!matrix) return <div className="text-muted-foreground text-sm py-6">Loading permissions…</div>;
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5">
+    <div className="rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
       <h2 className="text-foreground font-bold text-lg">Roles &amp; Permissions</h2>
       <p className="mt-1 text-muted-foreground text-xs">
         Which roles can open each Staff Hub tab. Admin always has everything; employees never see Staff Hub — neither is editable.
@@ -198,7 +198,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         <div className="mx-auto max-w-3xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Settings</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Settings</h1>
               <p className="text-muted-foreground text-sm">Restaurant-wide configuration — roles, permissions and more.</p>
             </div>
           </div>
@@ -223,7 +223,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
       <div className="px-4 py-6">
       <div className="mx-auto max-w-3xl">
         {tab === "general" ? (
-          <div className="mt-6 max-w-md rounded-2xl border border-border bg-surface p-5 space-y-4">
+          <div className="mt-6 max-w-md rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5 space-y-4">
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Company Name</label>
               <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />

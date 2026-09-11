@@ -182,7 +182,7 @@ function SuppliersTab({ suppliers, onChange }: { suppliers: Supplier[]; onChange
       <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add Supplier</button></div>
       <div className="mt-3 space-y-2">
         {suppliers.map((s) => (
-          <div key={s.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+          <div key={s.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3">
             <p className="text-foreground font-semibold">{s.name}</p>
             <p className="text-muted-foreground text-sm">{[s.contact_name, s.phone, s.email].filter(Boolean).join(" · ") || "No contact details"}</p>
           </div>
@@ -326,7 +326,7 @@ function PurchaseOrdersTab({ suppliers, ingredients }: { suppliers: Supplier[]; 
       <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Purchase Order</button></div>
       <div className="mt-3 space-y-2">
         {pos.map((po) => (
-          <div key={po.id} className="rounded-lg border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div key={po.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
             <div>
               <p className="text-foreground font-semibold">{po.order_number} · {po.supplier_name}</p>
               <p className="text-muted-foreground text-sm">{po.order_date} · {fmtMoney(po.total_cost)}</p>
@@ -615,7 +615,7 @@ function StockTakesTab({ canApprove }: { canApprove: boolean }) {
       <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Stock Take</button></div>
       <div className="mt-3 space-y-2">
         {stockTakes.map((st) => (
-          <button key={st.id} onClick={() => setSheetId(st.id)} className="w-full text-left rounded-lg border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-2 hover:bg-surface-hover">
+          <button key={st.id} onClick={() => setSheetId(st.id)} className="w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2 hover:bg-surface-hover">
             <div>
               <p className="text-foreground font-semibold capitalize">{st.location} · #{st.id}</p>
               <p className="text-muted-foreground text-sm">Opened {new Date(st.opened_at).toLocaleString()} {st.counted_by_name ? `by ${st.counted_by_name}` : ""}</p>
@@ -673,10 +673,10 @@ function ReconciliationTab() {
       {report && (
         <>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">Net sales</p><p className="text-foreground font-bold text-lg">{fmtMoney(report.net_sales)}</p></div>
-            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">GP % (theoretical)</p><p className="text-foreground font-bold text-lg">{report.gp_theoretical != null ? `${report.gp_theoretical}%` : "—"}</p></div>
-            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">GP % (actual)</p><p className="text-foreground font-bold text-lg">{report.gp_actual != null ? `${report.gp_actual}%` : "—"}</p></div>
-            <div className="rounded-xl border border-border bg-surface p-3"><p className="text-muted-foreground text-xs">GP gap</p><p className={`font-bold text-lg ${(report.gp_gap ?? 0) > 2 ? "text-red-600" : "text-foreground"}`}>{report.gp_gap != null ? `${report.gp_gap} pts` : "—"}</p></div>
+            <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3"><p className="text-muted-foreground text-xs">Net sales</p><p className="text-foreground font-bold text-lg">{fmtMoney(report.net_sales)}</p></div>
+            <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3"><p className="text-muted-foreground text-xs">GP % (theoretical)</p><p className="text-foreground font-bold text-lg">{report.gp_theoretical != null ? `${report.gp_theoretical}%` : "—"}</p></div>
+            <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3"><p className="text-muted-foreground text-xs">GP % (actual)</p><p className="text-foreground font-bold text-lg">{report.gp_actual != null ? `${report.gp_actual}%` : "—"}</p></div>
+            <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3"><p className="text-muted-foreground text-xs">GP gap</p><p className={`font-bold text-lg ${(report.gp_gap ?? 0) > 2 ? "text-red-600" : "text-foreground"}`}>{report.gp_gap != null ? `${report.gp_gap} pts` : "—"}</p></div>
           </div>
           <p className="mt-2 text-muted-foreground text-[11px]">Stock-vs-sales — only trustworthy once a stock take has been posted for this period, so the ledger already matches the shelf.</p>
 
@@ -743,7 +743,7 @@ export default function InventoryView({ canApproveStockTakes }: { canApproveStoc
         <div className="mx-auto max-w-5xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Inventory</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Inventory</h1>
               <p className="text-muted-foreground text-sm">Stock levels, purchase orders and supplier deliveries.</p>
             </div>
           </div>

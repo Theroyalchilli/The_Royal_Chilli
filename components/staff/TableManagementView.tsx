@@ -98,7 +98,7 @@ export default function TableManagementView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto max-w-2xl flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-foreground font-semibold text-lg">Tables</h1>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Tables</h1>
             <p className="text-muted-foreground text-xs mt-0.5">
               {tables.length} table{tables.length === 1 ? "" : "s"} · {totalSeats} seats
             </p>
@@ -110,7 +110,7 @@ export default function TableManagementView() {
         <div className="mx-auto max-w-2xl">
 
           {/* Add */}
-          <div className="rounded-xl border border-border bg-surface p-3">
+          <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3">
             <p className="text-xs font-semibold text-foreground">Add a table</p>
             <div className="mt-2 flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[120px]">
@@ -156,7 +156,7 @@ export default function TableManagementView() {
                 const cfg = statusCfg[t.status];
                 const isEditing = editingId === t.id;
                 return (
-                  <div key={t.id} className="rounded-lg border border-border bg-surface px-3 py-2.5 flex items-center gap-3">
+                  <div key={t.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-3 py-2.5 flex items-center gap-3">
                     {isEditing ? (
                       <>
                         <input

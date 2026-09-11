@@ -34,7 +34,7 @@ function ManagerPanel() {
         <h2 className="text-muted-foreground text-xs font-bold uppercase tracking-widest mb-2">Unassigned Deliveries</h2>
         <div className="space-y-2">
           {unassigned.map((o) => (
-            <div key={o.id} className="rounded-lg border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+            <div key={o.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
               <div>
                 <p className="text-foreground font-semibold">{o.order_number} · {o.customer_name}</p>
                 <p className="text-muted-foreground text-sm">{o.customer_address} · {fmtMoney(o.total)}</p>
@@ -111,7 +111,7 @@ function DriverPanel() {
 
       <div className="mt-5 space-y-2">
         {deliveries.map((d) => (
-          <div key={d.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+          <div key={d.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3">
             <p className="text-foreground font-semibold">{d.order_number} · {d.customer_name}</p>
             <p className="text-muted-foreground text-sm">{d.customer_address} · {fmtMoney(d.total)}</p>
             <p className="text-muted-foreground text-sm">📞 <a href={`tel:${d.customer_phone}`} className="text-blue-600">{d.customer_phone}</a></p>
@@ -202,7 +202,7 @@ function DeliveryZonesPanel() {
       <div className="flex justify-end"><button onClick={() => setModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Zone</button></div>
       <div className="mt-3 space-y-2">
         {zones.map((z) => (
-          <button key={z.id} onClick={() => setModal(z)} className={`w-full text-left rounded-lg border border-border bg-surface px-4 py-3 hover:border-border ${!z.active ? "opacity-50" : ""}`}>
+          <button key={z.id} onClick={() => setModal(z)} className={`w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 hover:border-border ${!z.active ? "opacity-50" : ""}`}>
             <p className="text-foreground font-semibold">{z.name} <span className="text-muted-foreground text-xs">({z.postcode_prefixes.join(", ")})</span></p>
             <p className="text-muted-foreground text-sm mt-1">{fmtMoney(z.fee)} delivery fee{z.min_order > 0 ? ` · ${fmtMoney(z.min_order)} minimum order` : ""}</p>
           </button>
@@ -222,7 +222,7 @@ export default function DriversView({ isManager, isDriver }: { isManager: boolea
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Drivers</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Drivers</h1>
               <p className="text-muted-foreground text-sm">Driver roster, live deliveries and who's assigned to what.</p>
             </div>
           </div>

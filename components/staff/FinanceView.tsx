@@ -34,7 +34,7 @@ function PnlTab() {
     <div>
       <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
       {data && (
-        <div className="mt-4 rounded-xl border border-border bg-surface divide-y divide-border">
+        <div className="mt-4 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border">
           <Row label="Revenue" value={data.revenue} positive />
           <Row label="Ingredient Purchases" value={-data.ingredient_purchases} />
           <Row label="Labour Cost" value={-data.labour_cost} />
@@ -50,7 +50,7 @@ function PnlTab() {
           <p className="text-muted-foreground text-xs mt-1">
             Cost of what was actually sold, from recipe ingredient costs — not just what was bought.
           </p>
-          <div className="mt-3 rounded-lg border border-border bg-surface divide-y divide-border">
+          <div className="mt-3 rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border">
             <Row label="Recipe-based COGS" value={-data.recipe_cogs} />
             <Row label="Net Profit (recipe basis)" value={data.net_profit_recipe_basis} bold />
           </div>
@@ -89,7 +89,7 @@ function VatTab() {
     <div>
       <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
       {data && (
-        <div className="mt-4 rounded-xl border border-border bg-surface divide-y divide-border">
+        <div className="mt-4 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border">
           <Row label="Sales (VAT-inclusive)" value={data.revenue} />
           <Row label="Output VAT (on sales)" value={data.output_vat} />
           <Row label="Expenses with VAT" value={data.vat_applicable_expenses} />
@@ -109,7 +109,7 @@ function CashReconTab() {
   return (
     <div className="space-y-2">
       {periods.map((p) => (
-        <div key={p.id} className="rounded-lg border border-border bg-surface px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+        <div key={p.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
           <div>
             <p className="text-foreground font-semibold">{new Date(p.opened_at).toLocaleDateString("en-GB")}</p>
             <p className="text-muted-foreground text-sm">Opening {fmtMoney(p.opening_cash)} + Cash sales {fmtMoney(p.cash_sales)} = Expected {fmtMoney(p.expected_cash)}</p>
@@ -161,7 +161,7 @@ function ExpensesTab() {
       </label>
       <div className="mt-4 space-y-1.5">
         {expenses.map((e) => (
-          <div key={e.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface px-4 py-2">
+          <div key={e.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">
             <span className="text-foreground capitalize">{e.category.replace("_", " ")} · {e.description} <span className="text-muted-foreground">({e.expense_date})</span></span>
             <span className="text-foreground">{fmtMoney(e.amount)}</span>
           </div>
@@ -202,7 +202,7 @@ function SupplierPaymentsTab() {
       </div>
       <div className="mt-4 space-y-1.5">
         {payments.map((p) => (
-          <div key={p.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface px-4 py-2">
+          <div key={p.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">
             <span className="text-foreground">{p.supplier_name} {p.method && `· ${p.method}`} <span className="text-muted-foreground">({new Date(p.paid_at).toLocaleDateString("en-GB")})</span></span>
             <span className="text-foreground">{fmtMoney(p.amount)}</span>
           </div>
@@ -229,7 +229,7 @@ export default function FinanceView() {
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Finance</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Finance</h1>
               <p className="text-muted-foreground text-sm">Revenue, costs, profit and VAT — the numbers behind the till.</p>
             </div>
           </div>

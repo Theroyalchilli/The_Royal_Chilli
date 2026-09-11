@@ -312,7 +312,7 @@ function CategoriesTab({ categories, onChanged }: { categories: Category[]; onCh
 
       <div className="mt-3 space-y-1.5">
         {sorted.map((c, i) => (
-          <div key={c.id} className={`rounded-lg border border-border bg-surface px-3 py-2.5 flex items-center gap-3 ${!c.active ? "opacity-50" : ""}`}>
+          <div key={c.id} className={`rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-3 py-2.5 flex items-center gap-3 ${!c.active ? "opacity-50" : ""}`}>
             <div className="flex flex-col">
               <button onClick={() => move(c, -1)} disabled={busy || i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
               <button onClick={() => move(c, 1)} disabled={busy || i === sorted.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
@@ -407,7 +407,7 @@ export default function MenuManagementView() {
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-foreground font-semibold text-lg">Menu Management</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Menu Management</h1>
               <p className="text-muted-foreground text-sm">Menu items, categories, pricing and channel availability.</p>
             </div>
           </div>
@@ -435,7 +435,7 @@ export default function MenuManagementView() {
                   <h2 className="text-red-600 font-bold text-sm uppercase tracking-widest mb-2">{catName}</h2>
                   <div className="space-y-1">
                     {catItems.map((i) => (
-                      <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
+                      <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
                         <div>
                           <span className="text-foreground font-medium">{i.name}</span>
                           {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Till only</span>}
@@ -466,7 +466,7 @@ export default function MenuManagementView() {
             <div className="flex justify-end"><button onClick={() => setGroupModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Group</button></div>
             <div className="mt-3 space-y-2">
               {groups.map((g) => (
-                <button key={g.id} onClick={() => setGroupModal(g)} className="w-full text-left rounded-lg border border-border bg-surface px-4 py-3 hover:border-border">
+                <button key={g.id} onClick={() => setGroupModal(g)} className="w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 hover:border-border">
                   <p className="text-foreground font-semibold">{g.name} <span className="text-muted-foreground text-xs capitalize">({g.selection_type})</span></p>
                   <p className="text-muted-foreground text-sm mt-1">{g.options.map((o) => `${o.name}${o.price_delta ? ` (+${fmtMoney(o.price_delta)})` : ""}`).join(", ")}</p>
                 </button>

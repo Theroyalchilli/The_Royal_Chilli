@@ -124,7 +124,7 @@ export default function PayrollView() {
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-foreground font-semibold text-lg">Payroll <span className="text-muted-foreground text-sm font-normal">· HR Management</span></h1>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Payroll <span className="text-muted-foreground text-sm font-normal">· HR Management</span></h1>
             <p className="text-muted-foreground text-sm">Pay periods, hours worked and payment history.</p>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function PayrollView() {
       <div className="mx-auto max-w-5xl">
         <div className="mt-5 grid gap-5 lg:grid-cols-[280px_1fr]">
           <div>
-            <div className="rounded-xl border border-border bg-surface p-4">
+            <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
               <h2 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">New Pay Period</h2>
               <input type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
               <input type="date" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -145,7 +145,7 @@ export default function PayrollView() {
             <div className="mt-4 space-y-2">
               {periods.map((p) => (
                 <button key={p.id} onClick={() => selectPeriod(p)}
-                  className={`w-full text-left rounded-lg border px-3 py-2 text-sm ${activePeriod?.id === p.id ? "border-red-300 bg-red-50" : "border-border bg-surface"}`}>
+                  className={`w-full text-left rounded-lg border px-3 py-2 text-sm ${activePeriod?.id === p.id ? "border-red-300 bg-red-50" : "border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)]"}`}>
                   <div className="text-foreground font-medium">{p.period_start} → {p.period_end}</div>
                   <div className="text-muted-foreground text-xs capitalize">{p.status}</div>
                 </button>
@@ -168,7 +168,7 @@ export default function PayrollView() {
 
                 <div className="mt-4 space-y-3">
                   {entries.map((e) => (
-                    <div key={e.id} className="rounded-xl border border-border bg-surface p-4">
+                    <div key={e.id} className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div>
                           <p className="text-foreground font-semibold">{e.staff_name}</p>

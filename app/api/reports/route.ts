@@ -10,15 +10,19 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const date = searchParams.get("date") || new Date().toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    const date = searchParams.get("date") || today;
+    // from/to support a real range; date alone (back-compat) means a single day.
+    const from = searchParams.get("from") || date;
+    const to = searchParams.get("to") || date;
 
-    const dayStart = date + "T00:00:00.000Z";
-    const dayEnd = date + "T23:59:59.999Z";
+    const dayStart = from + "T00:00:00.000Z";
+    const dayEnd = to + "T23:59:59.999Z";
 
     // Fetch all non-cancelled orders for the day
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
-      .select("id, total, status, order_type, created_at")
+      .select("id, total, discount, status, order_type, created_at, customer_id")
       .gte("created_at", dayStart)
       .lte("created_at", dayEnd)
       .not("status", "eq", "cancelled");
@@ -39,6 +43,39 @@ export async function GET(req: NextRequest) {
       avg_order_value: Math.round(avgOrderValue * 100) / 100,
       paid_orders: paidOrders,
     };
+
+    // Cancelled orders — excluded from every stat above by design, but worth
+    // its own rate so a spike in cancellations doesn't hide inside "revenue looks fine".
+    const { count: cancelledCount } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "cancelled")
+      .gte("created_at", dayStart)
+      .lte("created_at", dayEnd);
+    const totalOrdersIncCancelled = totalOrders + (cancelledCount ?? 0);
+    const cancellation = {
+      cancelled_count: cancelledCount ?? 0,
+      cancellation_rate: totalOrdersIncCancelled > 0 ? Math.round(((cancelledCount ?? 0) / totalOrdersIncCancelled) * 1000) / 10 : 0,
+    };
+
+    // Discounts given — a straight sum of the discount field on these orders.
+    const discountTotal = Math.round(ordersData.reduce((s, o) => s + Number(o.discount || 0), 0) * 100) / 100;
+
+    // New vs returning customers — "returning" means they have an order before this range started.
+    const customerIds = [...new Set(ordersData.map((o) => o.customer_id).filter((id): id is number => id != null))];
+    let newCustomers = customerIds.length;
+    let returningCustomers = 0;
+    if (customerIds.length > 0) {
+      const { data: priorOrders } = await supabase
+        .from("orders")
+        .select("customer_id")
+        .in("customer_id", customerIds)
+        .lt("created_at", dayStart);
+      const returningSet = new Set((priorOrders ?? []).map((o) => o.customer_id));
+      returningCustomers = returningSet.size;
+      newCustomers = customerIds.length - returningCustomers;
+    }
+    const customers = { new: newCustomers, returning: returningCustomers };
 
     // By order type
     const byTypeMap: Record<string, { count: number; revenue: number }> = {};
@@ -72,20 +109,26 @@ export async function GET(req: NextRequest) {
     // Top items: fetch order_items for these orders
     const orderIds = ordersData.map((o) => o.id);
     let topItems: { item_name: string; quantity_sold: number; revenue: number }[] = [];
+    let voidValue = 0;
 
     if (orderIds.length > 0) {
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
-        .select("item_name, item_price, quantity")
+        .select("item_name, item_price, quantity, status")
         .in("order_id", orderIds);
 
       if (itemsError) throw itemsError;
 
       const itemMap: Record<string, { quantity_sold: number; revenue: number }> = {};
       for (const oi of orderItems ?? []) {
+        const lineValue = Number(oi.item_price) * oi.quantity;
+        if (oi.status === "cancelled") {
+          voidValue += lineValue;
+          continue; // a voided line was never actually sold — don't count it as a "top item"
+        }
         if (!itemMap[oi.item_name]) itemMap[oi.item_name] = { quantity_sold: 0, revenue: 0 };
         itemMap[oi.item_name].quantity_sold += oi.quantity;
-        itemMap[oi.item_name].revenue += Number(oi.item_price) * oi.quantity;
+        itemMap[oi.item_name].revenue += lineValue;
       }
       topItems = Object.entries(itemMap)
         .map(([item_name, v]) => ({
@@ -95,6 +138,7 @@ export async function GET(req: NextRequest) {
         }))
         .sort((a, b) => b.quantity_sold - a.quantity_sold)
         .slice(0, 10);
+      voidValue = Math.round(voidValue * 100) / 100;
     }
 
     // Payment split
@@ -122,12 +166,18 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      date,
+      date: to,
+      from,
+      to,
       summary,
       byType,
       topItems,
       paymentSplit,
       hourly,
+      cancellation,
+      discountTotal,
+      voidValue,
+      customers,
     });
   } catch (error) {
     console.error("Reports error:", error);

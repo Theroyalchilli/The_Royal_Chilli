@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
-  const { data: staff, error: staffErr } = await supabase.from("staff").select("id, name, role").eq("active", 1).order("name");
+  const { data: staff, error: staffErr } = await supabase.from("staff").select("id, name, role, pay_rate").eq("active", 1).order("name");
   if (staffErr) return NextResponse.json({ error: "Failed to fetch staff" }, { status: 500 });
 
   const hoursByStaff = await computeHoursForPeriod(from, to);
@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     role: s.role,
     hours_worked: Math.round((hoursByStaff.get(s.id) || 0) * 100) / 100,
     late_count: lateByStaff.get(s.id) || 0,
+    pay_rate: Number(s.pay_rate ?? 0),
     labour_cost: Math.round((costByStaff.get(s.id) || 0) * 100) / 100,
   }));
 

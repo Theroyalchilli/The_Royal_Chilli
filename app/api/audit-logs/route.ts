@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("audit_logs")
-    .select("*, staff:staff!audit_logs_staff_id_fkey(name)")
+    .select("*, staff:staff!audit_logs_staff_id_fkey(name, role)")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
   }
 
   const flat = (data || []).map((r) => {
-    const { staff: s, ...rest } = r as typeof r & { staff: { name: string } | null };
-    return { ...rest, staff_name: s?.name ?? "System" };
+    const { staff: s, ...rest } = r as typeof r & { staff: { name: string; role: string } | null };
+    return { ...rest, staff_name: s?.name ?? "System", staff_role: s?.role ?? null };
   });
   return NextResponse.json({ logs: flat });
 }

@@ -7,11 +7,18 @@ function firstOfMonth() { const d = new Date(); return new Date(d.getFullYear(),
 function today() { return new Date().toISOString().slice(0, 10); }
 
 function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
+  const isToday = from === today() && to === today();
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
       <span className="text-muted-foreground">to</span>
       <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+      <button
+        onClick={() => { setFrom(today()); setTo(today()); }}
+        className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${isToday ? "bg-red-600 border-red-500 text-white" : "bg-surface-hover border-border text-foreground hover:bg-elevated"}`}
+      >
+        Today
+      </button>
     </div>
   );
 }
@@ -176,18 +183,40 @@ function SupplierPaymentsTab() {
   const [payments, setPayments] = useState<{ id: number; supplier_name: string; amount: number; method: string | null; paid_at: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: number; name: string }[]>([]);
   const [form, setForm] = useState({ supplier_id: "", amount: "", method: "bank_transfer" });
+  const [addingSupplier, setAddingSupplier] = useState(false);
+  const [newSupplier, setNewSupplier] = useState({ name: "", contact_name: "", phone: "", email: "" });
+  const [supplierError, setSupplierError] = useState("");
 
+  const loadSuppliers = useCallback(async () => {
+    const res = await fetch("/api/suppliers");
+    setSuppliers((await res.json()).suppliers || []);
+  }, []);
   const load = useCallback(async () => {
     const res = await fetch("/api/supplier-payments");
     setPayments((await res.json()).payments || []);
   }, []);
-  useEffect(() => { load(); fetch("/api/suppliers").then((r) => r.json()).then((d) => setSuppliers(d.suppliers || [])); }, [load]);
+  useEffect(() => { load(); loadSuppliers(); }, [load, loadSuppliers]);
 
   async function save() {
     if (!form.supplier_id || !form.amount) return;
     await fetch("/api/supplier-payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method }) });
     setForm({ supplier_id: "", amount: "", method: "bank_transfer" });
     load();
+  }
+
+  async function saveSupplier() {
+    setSupplierError("");
+    if (!newSupplier.name.trim()) return setSupplierError("Supplier name is required.");
+    const res = await fetch("/api/suppliers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newSupplier.name.trim(), contact_name: newSupplier.contact_name.trim() || null, phone: newSupplier.phone.trim() || null, email: newSupplier.email.trim() || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) return setSupplierError(data.error || "Failed to add supplier");
+    setNewSupplier({ name: "", contact_name: "", phone: "", email: "" });
+    setAddingSupplier(false);
+    await loadSuppliers();
+    setForm((f) => ({ ...f, supplier_id: String(data.supplier.id) }));
   }
 
   return (
@@ -200,6 +229,22 @@ function SupplierPaymentsTab() {
         <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Record</button>
       </div>
+      <button onClick={() => setAddingSupplier((v) => !v)} className="mt-2 text-red-600 text-xs font-semibold">
+        {addingSupplier ? "Cancel" : "+ New supplier not in the list?"}
+      </button>
+      {addingSupplier && (
+        <div className="mt-2 rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input placeholder="Supplier name" value={newSupplier.name} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
+            <input placeholder="Contact name" value={newSupplier.contact_name} onChange={(e) => setNewSupplier({ ...newSupplier, contact_name: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <input placeholder="Phone" value={newSupplier.phone} onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <input placeholder="Email" value={newSupplier.email} onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
+          </div>
+          {supplierError && <p className="text-red-600 text-xs">{supplierError}</p>}
+          <button onClick={saveSupplier} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">Add Supplier</button>
+          <p className="text-muted-foreground text-xs">Full supplier management (edit, deactivate) lives in Inventory → Suppliers — this is just a quick add so you don&apos;t have to leave this screen.</p>
+        </div>
+      )}
       <div className="mt-4 space-y-1.5">
         {payments.map((p) => (
           <div key={p.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">

@@ -13,7 +13,6 @@ type SalesData = {
   daily: { date: string; orders: number; revenue: number }[];
 };
 type MenuItemStat = { item_name: string; quantity_sold: number; revenue: number; margin_pct: number | null };
-type StaffStat = { staff_id: number; name: string; orders_handled: number; sales: number };
 type WasteStat = { ingredient_id: number; name: string; unit: string; quantity: number; value: number };
 type ForecastStat = { ingredient_id: number; name: string; unit: string; current_stock: number; daily_consumption: number; days_until_reorder: number | null };
 
@@ -97,37 +96,6 @@ function MenuTab({ from, to }: { from: string; to: string }) {
   );
 }
 
-function StaffTab({ from, to }: { from: string; to: string }) {
-  const [data, setData] = useState<{ staff_performance: StaffStat[]; labour_cost: number } | null>(null);
-  useEffect(() => { fetch(`/api/analytics/staff?from=${from}&to=${to}`).then((r) => r.json()).then(setData); }, [from, to]);
-  if (!data) return null;
-
-  return (
-    <div>
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Labour Cost" value={fmtMoney(data.labour_cost)} />
-        <StatCard label="Active Staff (with sales)" value={String(data.staff_performance.length)} />
-      </div>
-      <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest mt-6 mb-2">Sales per Employee</h3>
-      <div className="rounded-xl border border-border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Staff</th><th className="text-right px-3 py-2">Orders</th><th className="text-right px-3 py-2">Sales</th></tr></thead>
-          <tbody className="divide-y divide-border">
-            {data.staff_performance.map((s) => (
-              <tr key={s.staff_id} className="bg-background">
-                <td className="px-3 py-2 text-foreground">{s.name}</td>
-                <td className="px-3 py-2 text-right text-foreground">{s.orders_handled}</td>
-                <td className="px-3 py-2 text-right text-foreground">{fmtMoney(s.sales)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {data.staff_performance.length === 0 && <p className="text-muted-foreground text-sm text-center py-6">No staff-attributed sales in this period.</p>}
-      </div>
-    </div>
-  );
-}
-
 function InventoryTab({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<{ waste: WasteStat[]; total_waste_value: number; forecast: ForecastStat[] } | null>(null);
   useEffect(() => { fetch(`/api/analytics/inventory?from=${from}&to=${to}`).then((r) => r.json()).then(setData); }, [from, to]);
@@ -185,12 +153,11 @@ function InventoryTab({ from, to }: { from: string; to: string }) {
 export default function AnalyticsView() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
-  const [tab, setTab] = useState<"sales" | "menu" | "staff" | "inventory">("sales");
+  const [tab, setTab] = useState<"sales" | "menu" | "inventory">("sales");
 
   const tabs = [
     { id: "sales", label: "Sales" },
     { id: "menu", label: "Menu" },
-    { id: "staff", label: "Staff" },
     { id: "inventory", label: "Inventory" },
   ] as const;
 
@@ -215,16 +182,21 @@ export default function AnalyticsView() {
 
       <div className="px-4 py-6">
       <div className="mx-auto max-w-4xl">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
           <span className="text-muted-foreground">to</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+          <button
+            onClick={() => { setFrom(today()); setTo(today()); }}
+            className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${from === today() && to === today() ? "bg-red-600 border-red-500 text-white" : "bg-surface-hover border-border text-foreground hover:bg-elevated"}`}
+          >
+            Today
+          </button>
         </div>
 
         <div className="mt-5">
           {tab === "sales" && <SalesTab from={from} to={to} />}
           {tab === "menu" && <MenuTab from={from} to={to} />}
-          {tab === "staff" && <StaffTab from={from} to={to} />}
           {tab === "inventory" && <InventoryTab from={from} to={to} />}
         </div>
       </div>

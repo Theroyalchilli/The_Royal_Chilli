@@ -47,20 +47,29 @@ export default function StaffReportsView() {
 
 interface ReportData {
   date: string;
+  from: string;
+  to: string;
   summary: { total_orders: number; total_revenue: number; avg_order_value: number; paid_orders: number };
   byType: Array<{ order_type: string; count: number; revenue: number }>;
   topItems: Array<{ item_name: string; quantity_sold: number; revenue: number }>;
   paymentSplit: Array<{ method: string; count: number; total: number }>;
   hourly: Array<{ hour: string; orders: number; revenue: number }>;
+  cancellation: { cancelled_count: number; cancellation_rate: number };
+  discountTotal: number;
+  voidValue: number;
+  customers: { new: number; returning: number };
 }
 interface WeekDay { date: string; label: string; revenue: number; orders: number }
 
 const ORDER_TYPE_LABELS: Record<string, string> = { dine_in: "Dine-In", takeaway: "Takeaway", delivery: "Delivery" };
 const ORDER_TYPE_ICONS: Record<string, string> = { dine_in: "🍽️", takeaway: "🥡", delivery: "🛵" };
 
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
 function SalesReport() {
   const [data, setData] = useState<ReportData | null>(null);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(todayStr());
+  const [to, setTo] = useState(todayStr());
   const [loading, setLoading] = useState(true);
   const [chartView, setChartView] = useState<"today" | "week">("today");
   const [weekData, setWeekData] = useState<WeekDay[]>([]);
@@ -69,7 +78,7 @@ function SalesReport() {
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/reports?date=${date}`);
+      const res = await fetch(`/api/reports?from=${from}&to=${to}`);
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -77,7 +86,12 @@ function SalesReport() {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [from, to]);
+
+  function jumpToToday() {
+    setFrom(todayStr());
+    setTo(todayStr());
+  }
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
@@ -110,10 +124,11 @@ function SalesReport() {
 
   const handleExportCSV = () => {
     if (!data) return;
+    const rangeLabel = data.from === data.to ? data.to : `${data.from} to ${data.to}`;
     const lines: string[] = [];
-    lines.push("DAILY SUMMARY");
-    lines.push("Date,Total Orders,Total Revenue,Avg Order Value");
-    lines.push(`${data.date},${data.summary.total_orders},${data.summary.total_revenue.toFixed(2)},${data.summary.avg_order_value.toFixed(2)}`);
+    lines.push("SUMMARY");
+    lines.push("Period,Total Orders,Total Revenue,Avg Order Value,Cancelled,Discounts Given,Voided Items,New Customers,Returning Customers");
+    lines.push(`${rangeLabel},${data.summary.total_orders},${data.summary.total_revenue.toFixed(2)},${data.summary.avg_order_value.toFixed(2)},${data.cancellation.cancelled_count},${data.discountTotal.toFixed(2)},${data.voidValue.toFixed(2)},${data.customers.new},${data.customers.returning}`);
     lines.push("");
     lines.push("TOP SELLING ITEMS");
     lines.push("Item Name,Quantity Sold,Revenue");
@@ -127,7 +142,7 @@ function SalesReport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `royal-chilli-report-${data.date}.csv`;
+    a.download = `royal-chilli-report-${data.from}-to-${data.to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -136,7 +151,8 @@ function SalesReport() {
   // on the till's receipt printer as a long strip, no separate report printer needed.
   const handlePrintReport = () => {
     if (!data) return;
-    const dateLabel = new Date(data.date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const fmtOne = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const dateLabel = data.from === data.to ? fmtOne(data.to) : `${fmtOne(data.from)} — ${fmtOne(data.to)}`;
     const byTypeRows = data.byType
       .map((t) => `<div class="row"><span class="label">${ORDER_TYPE_LABELS[t.order_type] || t.order_type} (${t.count})</span><span class="value">£${t.revenue.toFixed(2)}</span></div>`)
       .join("");
@@ -194,15 +210,32 @@ function SalesReport() {
     return hr >= 7 && hr <= 23;
   });
 
+  const isToday = from === todayStr() && to === todayStr();
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500"
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500"
+          />
+          <span className="text-muted-foreground text-sm">to</span>
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500"
+          />
+          <button
+            onClick={jumpToToday}
+            className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${isToday ? "bg-red-600 border-red-500 text-white" : "bg-surface-hover border-border text-foreground hover:bg-elevated"}`}
+          >
+            Today
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={fetchReports} className="px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg transition-colors">
             Load
@@ -226,7 +259,7 @@ function SalesReport() {
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Total Revenue</div>
               <div className="text-red-600 text-3xl font-bold">{formatCurrency(data.summary.total_revenue)}</div>
-              <div className="text-muted-foreground text-xs mt-1">{date === new Date().toISOString().slice(0, 10) ? "Today" : date}</div>
+              <div className="text-muted-foreground text-xs mt-1">{isToday ? "Today" : from === to ? from : `${from} → ${to}`}</div>
             </div>
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Total Orders</div>
@@ -249,6 +282,29 @@ function SalesReport() {
                 ))}
                 {data.paymentSplit.length === 0 && <div className="text-muted-foreground text-sm">No payments yet</div>}
               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-surface border border-border rounded-2xl p-5">
+              <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Cancelled Orders</div>
+              <div className={`text-3xl font-bold ${data.cancellation.cancellation_rate > 10 ? "text-red-600" : "text-foreground"}`}>{data.cancellation.cancelled_count}</div>
+              <div className="text-muted-foreground text-xs mt-1">{data.cancellation.cancellation_rate}% of all orders</div>
+            </div>
+            <div className="bg-surface border border-border rounded-2xl p-5">
+              <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Discounts Given</div>
+              <div className="text-amber-600 text-3xl font-bold">{formatCurrency(data.discountTotal)}</div>
+              <div className="text-muted-foreground text-xs mt-1">across this period</div>
+            </div>
+            <div className="bg-surface border border-border rounded-2xl p-5">
+              <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Voided Items</div>
+              <div className="text-amber-600 text-3xl font-bold">{formatCurrency(data.voidValue)}</div>
+              <div className="text-muted-foreground text-xs mt-1">removed after being sent</div>
+            </div>
+            <div className="bg-surface border border-border rounded-2xl p-5">
+              <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">New vs Returning</div>
+              <div className="text-foreground text-3xl font-bold">{data.customers.new} <span className="text-muted-foreground text-lg font-medium">/ {data.customers.returning}</span></div>
+              <div className="text-muted-foreground text-xs mt-1">new / returning customers</div>
             </div>
           </div>
 
@@ -277,7 +333,7 @@ function SalesReport() {
                   onClick={() => setChartView("today")}
                   className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${chartView === "today" ? "bg-red-600 text-white" : "text-muted-foreground hover:text-foreground"}`}
                 >
-                  Today
+                  Selected Range
                 </button>
                 <button
                   onClick={() => setChartView("week")}
@@ -424,7 +480,7 @@ function SalesReport() {
 // Was the standalone Staff Reports screen — hours worked, late count and
 // labour cost per employee, for any date range.
 
-type StaffRow = { staff_id: number; name: string; role: string; hours_worked: number; late_count: number; labour_cost: number };
+type StaffRow = { staff_id: number; name: string; role: string; hours_worked: number; late_count: number; pay_rate: number; labour_cost: number };
 
 function firstOfMonth() {
   const d = new Date();
@@ -453,8 +509,8 @@ function StaffLabourReport() {
   useEffect(() => { load(); }, [load]);
 
   function exportCsv() {
-    const header = "Name,Role,Hours Worked,Late Count,Labour Cost (GBP)\n";
-    const body = rows.map((r) => `"${r.name}","${r.role}",${r.hours_worked},${r.late_count},${r.labour_cost}`).join("\n");
+    const header = "Name,Role,Hours Worked,Late Count,Pay Rate (GBP),Labour Cost (GBP)\n";
+    const body = rows.map((r) => `"${r.name}","${r.role}",${r.hours_worked},${r.late_count},${r.pay_rate},${r.labour_cost}`).join("\n");
     const blob = new Blob([header + body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -464,18 +520,29 @@ function StaffLabourReport() {
     URL.revokeObjectURL(url);
   }
 
+  const isToday = from === today() && to === today();
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         <span className="text-muted-foreground">to</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <button
+          onClick={() => { setFrom(today()); setTo(today()); }}
+          className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-colors ${isToday ? "bg-red-600 border-red-500 text-white" : "bg-surface-hover border-border text-foreground hover:bg-elevated"}`}
+        >
+          Today
+        </button>
         <button onClick={exportCsv} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">⬇ Export CSV</button>
       </div>
 
       <p className="mt-3 text-muted-foreground text-sm">
         Total hours: <span className="text-foreground font-semibold">{totals.hours.toFixed(2)}</span> · Total labour cost:{" "}
         <span className="text-foreground font-semibold">£{totals.cost.toFixed(2)}</span>
+      </p>
+      <p className="mt-1 text-muted-foreground text-xs">
+        Hours and labour cost only count weeks that have been reviewed and <strong className="text-foreground">locked</strong> as timesheets in Attendance → Timesheets — an open/unlocked week shows as 0 here even if staff clocked in.
       </p>
 
       <div className="mt-4 rounded-xl border border-border overflow-x-auto">
@@ -489,6 +556,7 @@ function StaffLabourReport() {
                 <th className="text-left px-4 py-3">Role</th>
                 <th className="text-right px-4 py-3">Hours</th>
                 <th className="text-right px-4 py-3">Late</th>
+                <th className="text-right px-4 py-3">Pay Rate</th>
                 <th className="text-right px-4 py-3">Labour Cost</th>
               </tr>
             </thead>
@@ -499,6 +567,7 @@ function StaffLabourReport() {
                   <td className="px-4 py-3 text-foreground capitalize">{r.role.replace("_", " ")}</td>
                   <td className="px-4 py-3 text-right text-foreground">{r.hours_worked.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-foreground">{r.late_count}</td>
+                  <td className="px-4 py-3 text-right text-foreground">£{r.pay_rate.toFixed(2)}/hr</td>
                   <td className="px-4 py-3 text-right text-foreground">£{r.labour_cost.toFixed(2)}</td>
                 </tr>
               ))}

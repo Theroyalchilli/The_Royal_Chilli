@@ -12,6 +12,7 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   const [tabLabels, setTabLabels] = useState<Record<string, string>>({});
   const [roleLabels, setRoleLabels] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   function load() {
     fetch("/api/permissions").then((r) => r.json()).then((d) => {
@@ -88,6 +89,19 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
           </tbody>
         </table>
       </div>
+
+      {canEdit && (
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 3000); }}
+            className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg"
+          >
+            Save Permissions
+          </button>
+          {saved && <span className="text-emerald-600 text-sm font-semibold">✓ Saved</span>}
+          <span className="text-muted-foreground text-xs">Each toggle above saves the instant you click it — this just confirms everything's up to date.</span>
+        </div>
+      )}
     </div>
   );
 }

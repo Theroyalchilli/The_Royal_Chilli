@@ -255,120 +255,99 @@ function GroupModal({ group, onClose, onSaved }: { group: ModifierGroup | "new";
   );
 }
 
-function CategoriesTab({ categories, onChanged }: { categories: Category[]; onChanged: () => void }) {
-  const [newName, setNewName] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const sorted = [...categories].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
-
-  async function call(url: string, method: string, body?: unknown) {
-    setBusy(true); setError("");
-    try {
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "Something went wrong"); return false; }
-      onChanged();
-      return true;
-    } finally { setBusy(false); }
-  }
-
-  async function add() {
-    if (!newName.trim()) return;
-    if (await call("/api/menu-categories", "POST", { name: newName.trim() })) setNewName("");
-  }
-  async function rename(id: number) {
-    if (!editName.trim()) return;
-    if (await call(`/api/menu-categories/${id}`, "PATCH", { name: editName.trim() })) setEditingId(null);
-  }
-  async function move(cat: Category, dir: -1 | 1) {
-    const idx = sorted.findIndex((c) => c.id === cat.id);
-    const swap = sorted[idx + dir];
-    if (!swap) return;
-    // Swap display_order with the neighbour.
-    await call(`/api/menu-categories/${cat.id}`, "PATCH", { display_order: swap.display_order });
-    await call(`/api/menu-categories/${swap.id}`, "PATCH", { display_order: cat.display_order });
-  }
+// ── Category grid card — the landing view's per-category tile, with inline
+// rename/hide/delete/reorder so there's no separate "Categories" tab. ───────
+function CategoryCard({
+  cat, index, isFirst, isLast, busy, onOpen, onMove, onRename, onToggleActive, onDelete,
+}: {
+  cat: Category; index: number; isFirst: boolean; isLast: boolean; busy: boolean;
+  onOpen: () => void; onMove: (dir: -1 | 1) => void; onRename: (name: string) => void;
+  onToggleActive: () => void; onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(cat.name);
 
   return (
-    <div className="mt-4">
-      <div className="flex gap-2">
-        <input
-          placeholder="New category name…" value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-        />
-        <button onClick={add} disabled={busy || !newName.trim()} className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">+ Add</button>
+    <div className={`rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4 ${!cat.active ? "opacity-50" : ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        {editing ? (
+          <input
+            autoFocus value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { onRename(editName); setEditing(false); } if (e.key === "Escape") setEditing(false); }}
+            className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-sm font-semibold"
+          />
+        ) : (
+          <button onClick={onOpen} className="flex-1 min-w-0 text-left">
+            <h3 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[15px] font-semibold truncate">{cat.name}</h3>
+            <p className="text-muted-foreground text-xs mt-0.5">{cat.item_count} item{cat.item_count === 1 ? "" : "s"}{!cat.active && " · hidden"}</p>
+          </button>
+        )}
+        <div className="flex flex-col flex-shrink-0">
+          <button onClick={() => onMove(-1)} disabled={busy || isFirst} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
+          <button onClick={() => onMove(1)} disabled={busy || isLast} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
+        </div>
       </div>
-      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
+      <div className="mt-3 flex items-center gap-3 flex-wrap">
+        {editing ? (
+          <>
+            <button onClick={() => { onRename(editName); setEditing(false); }} className="text-xs font-semibold text-red-600">Save</button>
+            <button onClick={() => setEditing(false)} className="text-xs text-muted-foreground">Cancel</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => { setEditName(cat.name); setEditing(true); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Rename</button>
+            <button onClick={onToggleActive} disabled={busy} className="text-xs font-semibold text-muted-foreground hover:text-foreground">{cat.active ? "Hide" : "Show"}</button>
+            <button
+              onClick={onDelete}
+              disabled={busy || cat.item_count > 0}
+              title={cat.item_count > 0 ? "Move or delete its items first" : "Delete category"}
+              className="text-xs font-semibold text-red-600 disabled:text-muted-foreground disabled:opacity-40"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      <p className="mt-4 text-muted-foreground text-xs">
-        Order here is the order dishes appear on both the till and the website. A category shows on a
-        menu only while it has at least one item switched on for that menu.
-      </p>
-
-      <div className="mt-3 space-y-1.5">
-        {sorted.map((c, i) => (
-          <div key={c.id} className={`rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-3 py-2.5 flex items-center gap-3 ${!c.active ? "opacity-50" : ""}`}>
-            <div className="flex flex-col">
-              <button onClick={() => move(c, -1)} disabled={busy || i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▲</button>
-              <button onClick={() => move(c, 1)} disabled={busy || i === sorted.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none">▼</button>
-            </div>
-
-            {editingId === c.id ? (
-              <input
-                autoFocus value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") rename(c.id); if (e.key === "Escape") setEditingId(null); }}
-                className="flex-1 bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-sm"
-              />
-            ) : (
-              <span className="flex-1 text-foreground font-medium text-sm">
-                {c.name}
-                <span className="ml-2 text-muted-foreground text-xs font-normal">{c.item_count} item{c.item_count === 1 ? "" : "s"}</span>
-                {!c.active && <span className="ml-2 text-muted-foreground text-xs">(hidden)</span>}
-              </span>
-            )}
-
-            {editingId === c.id ? (
-              <>
-                <button onClick={() => rename(c.id)} disabled={busy} className="text-xs font-semibold text-red-600">Save</button>
-                <button onClick={() => setEditingId(null)} className="text-xs text-muted-foreground">Cancel</button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => { setEditingId(c.id); setEditName(c.name); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Rename</button>
-                <button onClick={() => call(`/api/menu-categories/${c.id}`, "PATCH", { active: c.active ? 0 : 1 })} disabled={busy} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
-                  {c.active ? "Hide" : "Show"}
-                </button>
-                <button
-                  onClick={() => { if (confirm(`Delete "${c.name}"?`)) call(`/api/menu-categories/${c.id}`, "DELETE"); }}
-                  disabled={busy || c.item_count > 0}
-                  title={c.item_count > 0 ? "Move or delete its items first" : "Delete category"}
-                  className="text-xs font-semibold text-red-600 disabled:text-muted-foreground disabled:opacity-40"
-                >
-                  Delete
-                </button>
-              </>
-            )}
-          </div>
-        ))}
-        {sorted.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No categories yet.</p>}
+// ── Modifier Groups panel — a slide-over so it doesn't need a top-level tab ──
+function ModifierGroupsPanel({ groups, onClose, onOpenGroup, onNewGroup }: {
+  groups: ModifierGroup[]; onClose: () => void; onOpenGroup: (g: ModifierGroup) => void; onNewGroup: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-foreground font-bold text-lg">Modifier Groups</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm">✕</button>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <button onClick={onNewGroup} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Group</button>
+        </div>
+        <div className="mt-3 space-y-2">
+          {groups.map((g) => (
+            <button key={g.id} onClick={() => onOpenGroup(g)} className="w-full text-left rounded-lg border border-border bg-surface-hover px-4 py-3 hover:border-red-300">
+              <p className="text-foreground font-semibold">{g.name} <span className="text-muted-foreground text-xs capitalize">({g.selection_type})</span></p>
+              <p className="text-muted-foreground text-sm mt-1">{g.options.map((o) => `${o.name}${o.price_delta ? ` (+${fmtMoney(o.price_delta)})` : ""}`).join(", ")}</p>
+            </button>
+          ))}
+          {groups.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No modifier groups yet.</p>}
+        </div>
       </div>
     </div>
   );
 }
 
 export default function MenuManagementView() {
-  const [tab, setTab] = useState<"items" | "categories" | "modifiers">("items");
   const [items, setItems] = useState<Item[]>([]);
   const [groups, setGroups] = useState<ModifierGroup[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [modal, setModal] = useState<Item | "new" | null>(null);
   const [groupModal, setGroupModal] = useState<ModifierGroup | "new" | null>(null);
+  const [showModifiers, setShowModifiers] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [newCatName, setNewCatName] = useState("");
@@ -392,18 +371,22 @@ export default function MenuManagementView() {
   }, []);
   useEffect(() => { loadItems(); loadGroups(); loadCategories(); }, [loadItems, loadGroups, loadCategories]);
 
-  async function quickAddCategory() {
-    if (!newCatName.trim()) return;
+  async function catCall(url: string, method: string, body?: unknown) {
     setCatBusy(true); setCatError("");
     try {
-      const res = await fetch("/api/menu-categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newCatName.trim() }) });
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
       const data = await res.json();
-      if (!res.ok) { setCatError(data.error || "Failed to add category"); return; }
-      setNewCatName("");
-      await loadCategories();
+      if (!res.ok) { setCatError(data.error || "Something went wrong"); return false; }
+      await Promise.all([loadCategories(), loadItems()]);
+      return true;
     } finally {
       setCatBusy(false);
     }
+  }
+
+  async function quickAddCategory() {
+    if (!newCatName.trim()) return;
+    if (await catCall("/api/menu-categories", "POST", { name: newCatName.trim() })) setNewCatName("");
   }
 
   // Real category list (includes categories with no items yet); fall back to
@@ -411,145 +394,104 @@ export default function MenuManagementView() {
   const categoryOptions = categories.length > 0
     ? [...categories].sort((a, b) => a.display_order - b.display_order).map((c) => ({ id: c.id, name: c.name }))
     : Array.from(new Map(items.map((i) => [i.category_id, i.category_name])).entries()).map(([id, name]) => ({ id, name }));
+  const sortedCategories = [...categories].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
   const filtered = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
-  const grouped = new Map<string, Item[]>();
-  // Seed the map in category display order so the Items tab matches the
-  // Categories tab (and the live menus).
-  for (const c of categoryOptions) grouped.set(c.name, []);
-  for (const i of filtered) grouped.set(i.category_name, [...(grouped.get(i.category_name) || []), i]);
-  for (const [name, list] of grouped) if (list.length === 0) grouped.delete(name);
+  const selectedCategory = sortedCategories.find((c) => c.id === selectedCategoryId) ?? null;
+  const categoryItems = selectedCategoryId != null ? filtered.filter((i) => i.category_id === selectedCategoryId) : [];
+
+  const itemRow = (i: Item) => (
+    <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
+      <div>
+        <span className="text-foreground font-medium">{i.name}</span>
+        {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Till only</span>}
+        {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Website only</span>}
+        {i.allergens.length > 0 && <span className="ml-2 text-amber-600 text-xs">⚠ {i.allergens.join(", ")}</span>}
+        {!i.active && <span className="ml-2 text-muted-foreground text-xs">(inactive)</span>}
+      </div>
+      <span className="text-foreground whitespace-nowrap text-sm">
+        {fmtMoney(i.price)}
+        <span className="text-muted-foreground"> · web {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
+      </span>
+    </button>
+  );
 
   return (
     <>
       <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Menu Management</h1>
-              <p className="text-muted-foreground text-sm">Menu items, categories, pricing and channel availability.</p>
-            </div>
+        <div className="mx-auto max-w-4xl flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Menu Management</h1>
+            <p className="text-muted-foreground text-sm">Menu items, categories, pricing and channel availability.</p>
           </div>
-
-          <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
-            <button onClick={() => setTab("items")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "items" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Items</button>
-            <button onClick={() => setTab("categories")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "categories" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Categories</button>
-            <button onClick={() => setTab("modifiers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "modifiers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Modifier Groups</button>
-          </div>
+          <button onClick={() => setShowModifiers(true)} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border whitespace-nowrap">
+            ⚙ Modifier Groups
+          </button>
         </div>
       </div>
 
       <div className="px-4 py-6">
-      <div className={`mx-auto ${tab === "items" ? "max-w-5xl" : "max-w-4xl"}`}>
-        {tab === "items" && (() => {
-          const itemRow = (i: Item) => (
-            <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
-              <div>
-                <span className="text-foreground font-medium">{i.name}</span>
-                {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Till only</span>}
-                {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Website only</span>}
-                {i.allergens.length > 0 && <span className="ml-2 text-amber-600 text-xs">⚠ {i.allergens.join(", ")}</span>}
-                {!i.active && <span className="ml-2 text-muted-foreground text-xs">(inactive)</span>}
-              </div>
-              <span className="text-foreground whitespace-nowrap text-sm">
-                {fmtMoney(i.price)}
-                <span className="text-muted-foreground"> · web {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
-              </span>
-            </button>
-          );
-          const sortedCategories = [...categories].sort((a, b) => a.display_order - b.display_order);
-          const categoryItems = selectedCategoryId != null ? filtered.filter((i) => i.category_id === selectedCategoryId) : [];
-          const selectedCategoryName = sortedCategories.find((c) => c.id === selectedCategoryId)?.name;
+      <div className="mx-auto max-w-4xl">
+        {!selectedCategory ? (
+          // ── Landing view: categories as a two-column grid ──────────────
+          <div className="mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {sortedCategories.map((c, i) => (
+                <CategoryCard
+                  key={c.id} cat={c} index={i} isFirst={i === 0} isLast={i === sortedCategories.length - 1} busy={catBusy}
+                  onOpen={() => { setSelectedCategoryId(c.id); setSearch(""); }}
+                  onMove={(dir) => {
+                    const swap = sortedCategories[i + dir];
+                    if (!swap) return;
+                    catCall(`/api/menu-categories/${c.id}`, "PATCH", { display_order: swap.display_order });
+                    catCall(`/api/menu-categories/${swap.id}`, "PATCH", { display_order: c.display_order });
+                  }}
+                  onRename={(name) => name.trim() && catCall(`/api/menu-categories/${c.id}`, "PATCH", { name: name.trim() })}
+                  onToggleActive={() => catCall(`/api/menu-categories/${c.id}`, "PATCH", { active: c.active ? 0 : 1 })}
+                  onDelete={() => { if (confirm(`Delete "${c.name}"?`)) catCall(`/api/menu-categories/${c.id}`, "DELETE"); }}
+                />
+              ))}
 
-          return (
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5">
-              {/* Category sidebar */}
-              <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] overflow-hidden h-fit">
-                <div className="max-h-[360px] lg:max-h-[520px] overflow-y-auto">
-                  <button
-                    onClick={() => setSelectedCategoryId(null)}
-                    className={`w-full text-left px-3 py-2.5 border-b border-border text-sm font-medium transition-colors ${selectedCategoryId === null ? "bg-red-500/10 text-red-600" : "text-foreground hover:bg-surface-hover"}`}
-                  >
-                    All Items <span className="font-normal opacity-70">({items.length})</span>
-                  </button>
-                  {sortedCategories.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => setSelectedCategoryId(c.id)}
-                      className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 text-sm font-medium transition-colors ${selectedCategoryId === c.id ? "bg-red-500/10 text-red-600" : "text-foreground hover:bg-surface-hover"}`}
-                    >
-                      {c.name} <span className="font-normal opacity-70">({c.item_count})</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="p-2 border-t border-border">
-                  <div className="flex gap-1.5">
-                    <input
-                      placeholder="New category…" value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && quickAddCategory()}
-                      className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-xs"
-                    />
-                    <button onClick={quickAddCategory} disabled={catBusy || !newCatName.trim()} className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg whitespace-nowrap">+ Add</button>
-                  </div>
-                  {catError && <p className="mt-1 text-red-600 text-[11px]">{catError}</p>}
-                </div>
-              </div>
-
-              {/* Items */}
-              <div>
-                <div className="flex gap-2">
-                  <input placeholder={selectedCategoryName ? `Search in ${selectedCategoryName}…` : "Search items…"} value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-                  <button onClick={() => setModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg whitespace-nowrap">+ Add Item</button>
-                </div>
-
-                <div className="mt-5 space-y-6">
-                  {selectedCategoryId == null ? (
-                    <>
-                      {Array.from(grouped.entries()).map(([catName, catItems]) => (
-                        <div key={catName}>
-                          <h2 className="text-red-600 font-bold text-sm uppercase tracking-widest mb-2">{catName}</h2>
-                          <div className="space-y-1">{catItems.map(itemRow)}</div>
-                        </div>
-                      ))}
-                      {items.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No menu items yet.</p>}
-                    </>
-                  ) : (
-                    <div className="space-y-1">
-                      {categoryItems.map(itemRow)}
-                      {categoryItems.length === 0 && (
-                        <p className="text-muted-foreground text-sm text-center py-8">
-                          {search ? `No items matching "${search}" in this category.` : "No items in this category yet."}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
+              {/* + Add Category card */}
+              <div className="rounded-xl border border-dashed border-border bg-surface-hover p-4 flex flex-col justify-center gap-2">
+                <input
+                  placeholder="New category name…" value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && quickAddCategory()}
+                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+                />
+                <button onClick={quickAddCategory} disabled={catBusy || !newCatName.trim()} className="w-full py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">+ Add Category</button>
               </div>
             </div>
-          );
-        })()}
-
-        {tab === "categories" && (
-          <CategoriesTab categories={categories} onChanged={() => { loadCategories(); loadItems(); }} />
-        )}
-
-        {tab === "modifiers" && (
+            {catError && <p className="mt-3 text-red-600 text-sm">{catError}</p>}
+            {sortedCategories.length === 0 && <p className="mt-6 text-muted-foreground text-sm text-center py-8">No categories yet — add one above.</p>}
+          </div>
+        ) : (
+          // ── Category detail: its items, scoped search, add item ────────
           <div className="mt-4">
-            <div className="flex justify-end"><button onClick={() => setGroupModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Group</button></div>
-            <div className="mt-3 space-y-2">
-              {groups.map((g) => (
-                <button key={g.id} onClick={() => setGroupModal(g)} className="w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 hover:border-border">
-                  <p className="text-foreground font-semibold">{g.name} <span className="text-muted-foreground text-xs capitalize">({g.selection_type})</span></p>
-                  <p className="text-muted-foreground text-sm mt-1">{g.options.map((o) => `${o.name}${o.price_delta ? ` (+${fmtMoney(o.price_delta)})` : ""}`).join(", ")}</p>
-                </button>
-              ))}
-              {groups.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No modifier groups yet.</p>}
+            <button onClick={() => setSelectedCategoryId(null)} className="text-muted-foreground hover:text-foreground text-sm font-semibold">← All Categories</button>
+            <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
+              <h2 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-lg font-semibold">{selectedCategory.name}</h2>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <input placeholder={`Search in ${selectedCategory.name}…`} value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              <button onClick={() => setModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg whitespace-nowrap">+ Add Item</button>
+            </div>
+            <div className="mt-5 space-y-1">
+              {categoryItems.map(itemRow)}
+              {categoryItems.length === 0 && (
+                <p className="text-muted-foreground text-sm text-center py-8">
+                  {search ? `No items matching "${search}" in this category.` : "No items in this category yet."}
+                </p>
+              )}
             </div>
           </div>
         )}
       </div>
 
       {modal && <ItemModal item={modal} categoryOptions={categoryOptions} allGroups={groups} defaultCategoryId={selectedCategoryId ?? undefined} onClose={() => setModal(null)} onSaved={() => { loadItems(); loadCategories(); }} />}
+      {showModifiers && (
+        <ModifierGroupsPanel groups={groups} onClose={() => setShowModifiers(false)} onOpenGroup={(g) => setGroupModal(g)} onNewGroup={() => setGroupModal("new")} />
+      )}
       {groupModal && <GroupModal group={groupModal} onClose={() => setGroupModal(null)} onSaved={loadGroups} />}
       </div>
     </>

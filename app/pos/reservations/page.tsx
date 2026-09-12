@@ -376,7 +376,7 @@ export default function ReservationsPage() {
           <div className="flex items-center gap-3">
             <span className="text-2xl">📅</span>
             <div>
-              <h1 className="text-foreground font-bold text-lg">Reservations</h1>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-lg tracking-[-0.02em]">Reservations</h1>
               <p className="text-muted-foreground text-xs">
                 The Royal Chilli · Hounslow{pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
               </p>

@@ -155,7 +155,7 @@ export default function KitchenBoard() {
         <div className="flex items-center gap-2 sm:gap-3">
           <span className="text-xl sm:text-2xl">🍳</span>
           <div>
-            <h1 className="text-foreground font-bold text-base sm:text-xl leading-tight">Kitchen Display</h1>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>
             <p className="text-muted-foreground text-[10px] sm:text-xs hidden sm:block">The Royal Chilli</p>
           </div>
         </div>

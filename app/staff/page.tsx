@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { getDashboardData } from "@/lib/staff-dashboard";
-import StaffDashboard from "@/components/staff/StaffDashboard";
+import StaffDashboard, { KpiCard } from "@/components/staff/StaffDashboard";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
@@ -32,18 +32,8 @@ export default async function StaffHubPage() {
 
         {data.kpis.length > 0 && (
           <div className="mb-[18px] grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-[14px]">
-            {data.kpis.map((s) => (
-              <div key={s.label} className="rounded-[14px] border border-border bg-surface p-[17px] shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)]">
-                <div className="text-[12.5px] text-muted-foreground">{s.label}</div>
-                <div style={heading} className="mt-2 text-[28px] font-semibold leading-none tracking-[-0.02em] text-foreground">
-                  {s.value}
-                </div>
-                {s.note && (
-                  <div className={`mt-[7px] text-[11.5px] ${s.tone === "warn" ? "text-amber-600" : s.tone === "up" ? "text-red-600" : "text-muted-foreground"}`}>
-                    {s.note}
-                  </div>
-                )}
-              </div>
+            {data.kpis.map((s, i) => (
+              <KpiCard key={s.label} stat={s} id={i} />
             ))}
           </div>
         )}

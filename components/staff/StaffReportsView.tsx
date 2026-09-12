@@ -9,7 +9,7 @@ export default function StaffReportsView() {
 
   return (
     <>
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
+      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4 print:hidden">
         <div className="mx-auto max-w-5xl flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Reports</h1>
@@ -122,84 +122,11 @@ function SalesReport() {
     if (chartView === "week") fetchWeekData();
   }, [chartView]);
 
-  const handleExportCSV = () => {
-    if (!data) return;
-    const rangeLabel = data.from === data.to ? data.to : `${data.from} to ${data.to}`;
-    const lines: string[] = [];
-    lines.push("SUMMARY");
-    lines.push("Period,Total Orders,Total Revenue,Avg Order Value,Cancelled,Discounts Given,Voided Items,New Customers,Returning Customers");
-    lines.push(`${rangeLabel},${data.summary.total_orders},${data.summary.total_revenue.toFixed(2)},${data.summary.avg_order_value.toFixed(2)},${data.cancellation.cancelled_count},${data.discountTotal.toFixed(2)},${data.voidValue.toFixed(2)},${data.customers.new},${data.customers.returning}`);
-    lines.push("");
-    lines.push("TOP SELLING ITEMS");
-    lines.push("Item Name,Quantity Sold,Revenue");
-    for (const item of data.topItems) lines.push(`"${item.item_name}",${item.quantity_sold},${item.revenue.toFixed(2)}`);
-    lines.push("");
-    lines.push("HOURLY BREAKDOWN");
-    lines.push("Hour,Orders,Revenue");
-    for (const row of data.hourly) lines.push(`${row.hour}:00,${row.orders},${row.revenue.toFixed(2)}`);
-
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `royal-chilli-report-${data.from}-to-${data.to}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Same 80mm-receipt-styled print pattern as the End of Day report — prints
-  // on the till's receipt printer as a long strip, no separate report printer needed.
-  const handlePrintReport = () => {
-    if (!data) return;
-    const fmtOne = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    const dateLabel = data.from === data.to ? fmtOne(data.to) : `${fmtOne(data.from)} — ${fmtOne(data.to)}`;
-    const byTypeRows = data.byType
-      .map((t) => `<div class="row"><span class="label">${ORDER_TYPE_LABELS[t.order_type] || t.order_type} (${t.count})</span><span class="value">£${t.revenue.toFixed(2)}</span></div>`)
-      .join("");
-    const paymentRows = data.paymentSplit
-      .map((p) => `<div class="row"><span class="label">${p.method === "cash" ? "💵 Cash" : p.method === "card" ? "💳 Card" : p.method} (${p.count})</span><span class="value">£${p.total.toFixed(2)}</span></div>`)
-      .join("");
-    const topItemRows = data.topItems
-      .slice(0, 10)
-      .map((i, idx) => `<div class="row"><span class="label">${idx + 1}. ${i.item_name} ×${i.quantity_sold}</span><span class="value">£${i.revenue.toFixed(2)}</span></div>`)
-      .join("");
-
-    const html = `<!DOCTYPE html><html><head><title>Sales Report</title>
-    <style>
-      body { font-family: monospace; font-size: 12px; max-width: 300px; margin: 20px auto; color: #000; }
-      h1 { text-align: center; font-size: 16px; margin-bottom: 4px; }
-      h2 { font-size: 12px; margin: 12px 0 4px; text-transform: uppercase; }
-      .sub { text-align: center; font-size: 11px; color: #555; margin-bottom: 16px; }
-      .divider { border-top: 1px dashed #000; margin: 10px 0; }
-      .row { display: flex; justify-content: space-between; margin: 3px 0; gap: 8px; }
-      .label { color: #555; }
-      .value { font-weight: bold; white-space: nowrap; }
-      .total { font-size: 15px; font-weight: bold; }
-      .footer { text-align: center; margin-top: 16px; font-size: 10px; color: #888; }
-    </style></head><body>
-    <h1>THE ROYAL CHILLI</h1>
-    <div class="sub">43 Kingsley Road, Hounslow TW3 1PA</div>
-    <div class="sub">SALES REPORT</div>
-    <div class="sub">${dateLabel}</div>
-    <div class="divider"></div>
-    <div class="row"><span class="label">Total Orders</span><span class="value">${data.summary.total_orders}</span></div>
-    <div class="row"><span class="label">Paid Orders</span><span class="value">${data.summary.paid_orders}</span></div>
-    <div class="row"><span class="label">Avg Order Value</span><span class="value">£${data.summary.avg_order_value.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Total Revenue</span><span class="value total">£${data.summary.total_revenue.toFixed(2)}</span></div>
-    <div class="divider"></div>
-    <h2>By Order Type</h2>
-    ${byTypeRows || '<div class="row"><span class="label">No orders</span></div>'}
-    <div class="divider"></div>
-    <h2>Payment Methods</h2>
-    ${paymentRows || '<div class="row"><span class="label">No payments</span></div>'}
-    <div class="divider"></div>
-    <h2>Top Items</h2>
-    ${topItemRows || '<div class="row"><span class="label">No items sold</span></div>'}
-    <div class="footer">Printed by ${new Date().toLocaleTimeString("en-GB")} · Royal Chilli POS</div>
-    </body></html>`;
-    const w = window.open("", "_blank", "width=400,height=600");
-    if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
-  };
+  // Prints the whole report as it's shown on screen (every tile, the order
+  // breakdown, top items, the full hourly table) rather than a narrow
+  // receipt-style summary — the sidebar/topbar and this page's own controls
+  // are hidden for print via the `print:hidden` classes below.
+  const handlePrintReport = () => window.print();
 
   const hourlyData = Array.from({ length: 24 }, (_, h) => {
     const hourStr = h.toString().padStart(2, "0");
@@ -214,7 +141,13 @@ function SalesReport() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      {/* Print-only header — the sticky page title and these controls are hidden for print */}
+      <div className="hidden print:block mb-2">
+        <h1 className="text-lg font-bold">The Royal Chilli — Sales Report</h1>
+        <p className="text-sm text-neutral-600">{isToday ? "Today" : from === to ? from : `${from} → ${to}`} · Printed {new Date().toLocaleString("en-GB")}</p>
+      </div>
+
+      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="date"
@@ -240,11 +173,8 @@ function SalesReport() {
           <button onClick={fetchReports} className="px-3 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg transition-colors">
             Load
           </button>
-          <button onClick={handleExportCSV} disabled={!data} className="px-3 py-2 bg-elevated hover:bg-elevated-hover disabled:opacity-40 text-foreground text-sm font-semibold rounded-lg transition-colors">
-            ⬇ Export CSV
-          </button>
           <button onClick={handlePrintReport} disabled={!data} className="px-3 py-2 bg-elevated hover:bg-elevated-hover disabled:opacity-40 text-foreground text-sm font-semibold rounded-lg transition-colors">
-            🖨️ Print
+            🖨️ Print Report
           </button>
         </div>
       </div>
@@ -328,7 +258,7 @@ function SalesReport() {
           <div className="bg-surface border border-border rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-foreground font-bold text-base">{chartView === "today" ? "Hourly Sales" : "This Week"}</h2>
-              <div className="flex items-center gap-1 bg-surface-hover rounded-lg p-1">
+              <div className="flex items-center gap-1 bg-surface-hover rounded-lg p-1 print:hidden">
                 <button
                   onClick={() => setChartView("today")}
                   className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${chartView === "today" ? "bg-red-600 text-white" : "text-muted-foreground hover:text-foreground"}`}

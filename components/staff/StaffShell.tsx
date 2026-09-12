@@ -86,8 +86,8 @@ export default function StaffShell({
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-[252px] flex-shrink-0 bg-foreground md:sticky md:top-0 md:block md:h-screen">{sidebarBody}</aside>
+      {/* Desktop sidebar — never printed, so a printed report isn't cluttered with nav chrome */}
+      <aside className="hidden w-[252px] flex-shrink-0 bg-foreground md:sticky md:top-0 md:block md:h-screen print:hidden">{sidebarBody}</aside>
 
       {/* Mobile drawer */}
       {open && (
@@ -99,7 +99,7 @@ export default function StaffShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile-only top bar — just the menu toggle; identity/logout live in the sidebar */}
-        <div className="sticky top-0 z-20 flex h-[52px] flex-shrink-0 items-center border-b border-border bg-surface px-4 md:hidden">
+        <div className="sticky top-0 z-20 flex h-[52px] flex-shrink-0 items-center border-b border-border bg-surface px-4 md:hidden print:hidden">
           <button
             className="grid h-9 w-9 place-items-center rounded-lg border border-border text-lg"
             onClick={() => setOpen(true)}

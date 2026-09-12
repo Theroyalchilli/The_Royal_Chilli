@@ -427,18 +427,13 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
     const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: "Manager", employee: "Employee" };
     const byRole: SlicePoint[] = [...byRoleMap.entries()].map(([role, value]) => ({ name: ROLE_LABEL[role] ?? role, value }));
 
-    const lateThisWeek = attendance.filter((r) => (r.late_seconds ?? 0) > 0).length;
-    const missedOutThisWeek = attendance.filter((r) => r.clock_in && !r.clock_out && r.work_date < today && week.includes(r.work_date)).length;
-
-    const alerts: Alert[] = [
-      ...(pendingLeaveRows ?? []).map((r) => {
-        const staffRow = r.staff as unknown as { name: string } | null;
-        return { tone: "amber" as const, text: `${staffRow?.name ?? "Someone"} requested leave`, sub: `${r.leave_type} · from ${r.start_date}` };
-      }),
-      ...(lateThisWeek + missedOutThisWeek > 0
-        ? [{ tone: "teal" as const, text: `${lateThisWeek} late arrival${lateThisWeek === 1 ? "" : "s"}, ${missedOutThisWeek} missed clock-out${missedOutThisWeek === 1 ? "" : "s"} this week`, sub: "Attendance compliance summary" }]
-        : []),
-    ];
+    // Day-to-day late arrivals / missed clock-outs are a manager concern
+    // (they already see it on their own dashboard and correct it directly) —
+    // HR's alerts stay scoped to what's actually HR's to act on.
+    const alerts: Alert[] = (pendingLeaveRows ?? []).map((r) => {
+      const staffRow = r.staff as unknown as { name: string } | null;
+      return { tone: "amber" as const, text: `${staffRow?.name ?? "Someone"} requested leave`, sub: `${r.leave_type} · from ${r.start_date}` };
+    });
 
     return {
       kpis: [

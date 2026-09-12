@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { computeHoursForPeriod } from "@/lib/payroll";
 
 export async function getVatRate(): Promise<number> {
   const { data } = await supabase.from("app_settings").select("value").eq("key", "vat_rate").maybeSingle();
@@ -30,13 +31,18 @@ export async function getIngredientPurchases(from: string, to: string): Promise<
   return Math.round((data || []).reduce((s, po) => s + Number(po.total_cost), 0) * 100) / 100;
 }
 
+// Hours worked x current pay rate, computed live from attendance — not a
+// lookup into payroll_entries, which only has rows once a pay period has
+// actually been run and would silently understate this (overstating profit)
+// until then.
 export async function getLabourCost(from: string, to: string): Promise<number> {
-  const { data } = await supabase
-    .from("payroll_entries")
-    .select("gross_pay, payroll_periods!inner(period_start, period_end)")
-    .gte("payroll_periods.period_start", from)
-    .lte("payroll_periods.period_end", to);
-  return Math.round((data || []).reduce((s, e) => s + Number(e.gross_pay), 0) * 100) / 100;
+  const hoursByStaff = await computeHoursForPeriod(from, to);
+  if (hoursByStaff.size === 0) return 0;
+  const { data: staff } = await supabase.from("staff").select("id, pay_rate").in("id", [...hoursByStaff.keys()]);
+  const rateById = new Map((staff || []).map((s) => [s.id, Number(s.pay_rate ?? 0)]));
+  let total = 0;
+  for (const [staffId, hours] of hoursByStaff) total += hours * (rateById.get(staffId) ?? 0);
+  return Math.round(total * 100) / 100;
 }
 
 // Real (accrual) cost of goods sold: for every paid order in the period, cost

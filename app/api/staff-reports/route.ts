@@ -29,23 +29,23 @@ export async function GET(req: NextRequest) {
   const lateByStaff = new Map<number, number>();
   for (const l of lateCounts || []) lateByStaff.set(l.staff_id, (lateByStaff.get(l.staff_id) || 0) + 1);
 
-  const { data: entries } = await supabase
-    .from("payroll_entries")
-    .select("staff_id, gross_pay, payroll_periods!inner(period_start, period_end)")
-    .gte("payroll_periods.period_start", from)
-    .lte("payroll_periods.period_end", to);
-  const costByStaff = new Map<number, number>();
-  for (const e of entries || []) costByStaff.set(e.staff_id, (costByStaff.get(e.staff_id) || 0) + Number(e.gross_pay));
-
-  const rows = (staff || []).map((s) => ({
-    staff_id: s.id,
-    name: s.name,
-    role: s.role,
-    hours_worked: Math.round((hoursByStaff.get(s.id) || 0) * 100) / 100,
-    late_count: lateByStaff.get(s.id) || 0,
-    pay_rate: Number(s.pay_rate ?? 0),
-    labour_cost: Math.round((costByStaff.get(s.id) || 0) * 100) / 100,
-  }));
+  // Labour cost = hours worked x current pay rate, computed live — not a
+  // lookup into payroll_entries, which only has rows once a pay period has
+  // actually been run (and would silently show £0 for everyone until then,
+  // even with real hours and a real rate sitting right next to it).
+  const rows = (staff || []).map((s) => {
+    const hoursWorked = Math.round((hoursByStaff.get(s.id) || 0) * 100) / 100;
+    const payRate = Number(s.pay_rate ?? 0);
+    return {
+      staff_id: s.id,
+      name: s.name,
+      role: s.role,
+      hours_worked: hoursWorked,
+      late_count: lateByStaff.get(s.id) || 0,
+      pay_rate: payRate,
+      labour_cost: Math.round(hoursWorked * payRate * 100) / 100,
+    };
+  });
 
   const totals = rows.reduce(
     (acc, r) => ({ hours: acc.hours + r.hours_worked, cost: acc.cost + r.labour_cost }),

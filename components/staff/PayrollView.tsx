@@ -62,7 +62,7 @@ function PaymentModal({
   );
 }
 
-export default function PayrollView() {
+export function PayrollBody() {
   const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
   const [activePeriod, setActivePeriod] = useState<PayrollPeriod | null>(null);
   const [entries, setEntries] = useState<(PayrollEntry & { staff_name: string })[]>([]);
@@ -120,19 +120,9 @@ export default function PayrollView() {
   const totals = entries.reduce((acc, e) => ({ gross: acc.gross + e.gross_pay, paid: acc.paid + e.paid_amount }), { gross: 0, paid: 0 });
 
   return (
-    <>
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Payroll <span className="text-muted-foreground text-sm font-normal">· HR Management</span></h1>
-            <p className="text-muted-foreground text-sm">Pay periods, hours worked and payment history.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 py-6">
+    <div>
       <div className="mx-auto max-w-5xl">
-        <div className="mt-5 grid gap-5 lg:grid-cols-[280px_1fr]">
+        <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
           <div>
             <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
               <h2 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">New Pay Period</h2>
@@ -205,6 +195,25 @@ export default function PayrollView() {
       {payingEntry && (
         <PaymentModal entry={payingEntry} onClose={() => setPayingEntry(null)} onSaved={() => activePeriod && loadEntries(activePeriod.id)} />
       )}
+    </div>
+  );
+}
+
+// Standalone route (/staff/payroll) — kept for old bookmarks/links; the normal
+// way in is now the Payroll tab inside HR, which renders PayrollBody directly.
+export default function PayrollView() {
+  return (
+    <>
+      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Payroll <span className="text-muted-foreground text-sm font-normal">· HR Management</span></h1>
+            <p className="text-muted-foreground text-sm">Pay periods, hours worked and payment history.</p>
+          </div>
+        </div>
+      </div>
+      <div className="px-4 py-6">
+        <PayrollBody />
       </div>
     </>
   );

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import type { Staff } from "@/lib/types";
 import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
+import { PayrollBody } from "@/components/staff/PayrollView";
+import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
 
 type HrDetails = {
   preferred_name: string | null; job_title: string | null; department: string | null;
@@ -798,11 +799,22 @@ const TABS = [
   { id: "references", label: "References" },
 ] as const;
 
-export default function HrView() {
+const SECTIONS = [
+  { id: "employee", label: "Employee" },
+  { id: "payroll", label: "Payroll" },
+  { id: "privacy", label: "Privacy & Retention" },
+] as const;
+
+const SECTION_SUB = {
+  employee: "Employee directory, onboarding, right-to-work verification and new-starter checklist",
+  payroll: "Pay periods run for everyone at once, or a one-off payslip for a single employee.",
+  privacy: "What's collected, why, and how long it's kept.",
+};
+
+function EmployeeSection() {
   const [employees, setEmployees] = useState<Staff[]>([]);
   const [selected, setSelected] = useState<Staff | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("info");
-  const [showPrivacy, setShowPrivacy] = useState(false);
   const [showNewEmployee, setShowNewEmployee] = useState(false);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -820,86 +832,50 @@ export default function HrView() {
 
   return (
     <>
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
-        <div className="mx-auto max-w-6xl flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">HR</h1>
-            <p className="text-muted-foreground text-sm">Employee directory, onboarding, right-to-work verification and new-starter checklist</p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/staff/payroll" className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg">
-              💷 Payroll
-            </Link>
-            <button onClick={() => setShowPrivacy(true)} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
-              Privacy &amp; Retention
-            </button>
-          </div>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
+        <EmployeePicker
+          employees={employees} selected={selected} onSelect={(s) => { setSelected(s); setTab("info"); }} onAddNew={() => setShowNewEmployee(true)}
+          search={search} setSearch={setSearch} roleFilter={roleFilter} setRoleFilter={setRoleFilter} activeFilter={activeFilter} setActiveFilter={setActiveFilter}
+        />
 
-      <div className="px-4 py-6">
-        <div className="mx-auto max-w-6xl grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
-          <EmployeePicker
-            employees={employees} selected={selected} onSelect={(s) => { setSelected(s); setTab("info"); }} onAddNew={() => setShowNewEmployee(true)}
-            search={search} setSearch={setSearch} roleFilter={roleFilter} setRoleFilter={setRoleFilter} activeFilter={activeFilter} setActiveFilter={setActiveFilter}
-          />
-
-          <div>
-            {!selected ? (
-              <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-10 text-center text-muted-foreground">
-                Select an employee to view or edit their HR record.
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                  <div>
-                    <h2 className="text-foreground font-bold text-lg">{selected.name}</h2>
-                    <p className="text-muted-foreground text-sm capitalize">
-                      {selected.employee_number} · {selected.role.replace("_", " ")}
-                      {!selected.active && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground normal-case">Inactive</span>}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1 bg-surface-hover p-1 rounded-xl mb-5 w-fit">
-                  {TABS.map((t) => (
-                    <button key={t.id} onClick={() => setTab(t.id)}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${tab === t.id ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                {tab === "info" && (
-                  <EmployeeInfoTab
-                    staff={selected}
-                    onUpdated={(s) => { setSelected(s); loadEmployees(); }}
-                  />
-                )}
-                {tab === "onboarding" && <OnboardingTab staffId={selected.id} />}
-                {tab === "rtw" && <RtwVerificationTab staffId={selected.id} />}
-                {tab === "checklist" && <ChecklistTab staffId={selected.id} />}
-                {tab === "references" && <ReferencesTab staffId={selected.id} />}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {showPrivacy && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setShowPrivacy(false)}>
-          <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-foreground font-bold text-lg mb-3">Employee Data Privacy &amp; Retention</h2>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p><strong className="text-foreground">Right-to-work evidence</strong> — restricted HR access, stored securely in non-editable format. Retain for duration of employment plus 2 years, then securely destroy.</p>
-              <p><strong className="text-foreground">Payroll, NI and bank details</strong> — payroll/HR only, secure systems. Retain for applicable payroll, tax and employment-law periods.</p>
-              <p><strong className="text-foreground">Reasonable adjustments / health information</strong> — separate confidential record with very limited access. Keep only what&apos;s necessary and review regularly.</p>
-              <p><strong className="text-foreground">References and qualifications</strong> — HR and recruiting manager only. Retain only as necessary under the recruitment/employee retention schedule.</p>
-              <hr className="border-border" />
-              <p>Collect only information that is adequate, relevant and necessary. Keep information accurate, secure and access-controlled. Detailed health or food-handler declarations should be collected separately and confidentially. This page is an operational tool, not legal advice — review against current guidance.</p>
+        <div>
+          {!selected ? (
+            <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-10 text-center text-muted-foreground">
+              Select an employee to view or edit their HR record.
             </div>
-            <button onClick={() => setShowPrivacy(false)} className="mt-4 w-full py-2.5 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Close</button>
-          </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                <div>
+                  <h2 className="text-foreground font-bold text-lg">{selected.name}</h2>
+                  <p className="text-muted-foreground text-sm capitalize">
+                    {selected.employee_number} · {selected.role.replace("_", " ")}
+                    {!selected.active && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground normal-case">Inactive</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1 bg-surface-hover p-1 rounded-xl mb-5 w-fit">
+                {TABS.map((t) => (
+                  <button key={t.id} onClick={() => setTab(t.id)}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${tab === t.id ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {tab === "info" && (
+                <EmployeeInfoTab
+                  staff={selected}
+                  onUpdated={(s) => { setSelected(s); loadEmployees(); }}
+                />
+              )}
+              {tab === "onboarding" && <OnboardingTab staffId={selected.id} />}
+              {tab === "rtw" && <RtwVerificationTab staffId={selected.id} />}
+              {tab === "checklist" && <ChecklistTab staffId={selected.id} />}
+              {tab === "references" && <ReferencesTab staffId={selected.id} />}
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {showNewEmployee && (
         <NewEmployeeModal
@@ -912,6 +888,66 @@ export default function HrView() {
           }}
         />
       )}
+    </>
+  );
+}
+
+function PayrollSection() {
+  const [mode, setMode] = useState<"periods" | "payslips">("periods");
+  return (
+    <div>
+      <div className="flex gap-1 bg-surface-hover p-1 rounded-xl mb-5 w-fit">
+        <button onClick={() => setMode("periods")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${mode === "periods" ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>Pay Periods</button>
+        <button onClick={() => setMode("payslips")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${mode === "payslips" ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>Employee Payslips</button>
+      </div>
+      {mode === "periods" ? <PayrollBody /> : <EmployeePayslipsPanel />}
+    </div>
+  );
+}
+
+function PrivacySection() {
+  return (
+    <div className="max-w-2xl rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
+      <h2 className="text-foreground font-bold text-lg mb-3">Employee Data Privacy &amp; Retention</h2>
+      <div className="space-y-3 text-sm text-muted-foreground">
+        <p><strong className="text-foreground">Right-to-work evidence</strong> — restricted HR access, stored securely in non-editable format. Retain for duration of employment plus 2 years, then securely destroy.</p>
+        <p><strong className="text-foreground">Payroll, NI and bank details</strong> — payroll/HR only, secure systems. Retain for applicable payroll, tax and employment-law periods.</p>
+        <p><strong className="text-foreground">Reasonable adjustments / health information</strong> — separate confidential record with very limited access. Keep only what&apos;s necessary and review regularly.</p>
+        <p><strong className="text-foreground">References and qualifications</strong> — HR and recruiting manager only. Retain only as necessary under the recruitment/employee retention schedule.</p>
+        <hr className="border-border" />
+        <p>Collect only information that is adequate, relevant and necessary. Keep information accurate, secure and access-controlled. Detailed health or food-handler declarations should be collected separately and confidentially. This page is an operational tool, not legal advice — review against current guidance.</p>
+      </div>
+    </div>
+  );
+}
+
+export default function HrView() {
+  const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("employee");
+
+  return (
+    <>
+      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
+        <div className="mx-auto max-w-6xl">
+          <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">HR</h1>
+          <p className="text-muted-foreground text-sm">{SECTION_SUB[section]}</p>
+          <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl w-fit">
+            {SECTIONS.map((s) => (
+              <button key={s.id} onClick={() => setSection(s.id)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${section === s.id ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-6">
+        <div className="mx-auto max-w-6xl">
+          {section === "employee" && <EmployeeSection />}
+          {section === "payroll" && <PayrollSection />}
+          {section === "privacy" && <PrivacySection />}
+        </div>
+      </div>
     </>
   );
 }

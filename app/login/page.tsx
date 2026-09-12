@@ -66,7 +66,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <form onSubmit={handleLogin} className="bg-surface border border-border rounded-2xl p-6 space-y-4">
+        <form onSubmit={handleLogin} className="bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)]">
           <div>
             <label htmlFor="username" className="block text-sm font-semibold text-muted-foreground mb-1.5">
               Username

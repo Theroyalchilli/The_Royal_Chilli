@@ -66,12 +66,12 @@ function ItemModifiersSection({ itemId, allGroups, onChanged }: { itemId: number
   );
 }
 
-function ItemModal({ item, categoryOptions, allGroups, onClose, onSaved }: {
-  item: Item | "new"; categoryOptions: { id: number; name: string }[]; allGroups: ModifierGroup[]; onClose: () => void; onSaved: () => void;
+function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClose, onSaved }: {
+  item: Item | "new"; categoryOptions: { id: number; name: string }[]; allGroups: ModifierGroup[]; defaultCategoryId?: number; onClose: () => void; onSaved: () => void;
 }) {
   const isNew = item === "new";
   const [form, setForm] = useState({
-    category_id: isNew ? categoryOptions[0]?.id ?? 0 : item.category_id,
+    category_id: isNew ? defaultCategoryId ?? categoryOptions[0]?.id ?? 0 : item.category_id,
     name: isNew ? "" : item.name,
     description: isNew ? "" : item.description || "",
     price: isNew ? "" : String(item.price),
@@ -370,6 +370,10 @@ export default function MenuManagementView() {
   const [modal, setModal] = useState<Item | "new" | null>(null);
   const [groupModal, setGroupModal] = useState<ModifierGroup | "new" | null>(null);
   const [search, setSearch] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [newCatName, setNewCatName] = useState("");
+  const [catBusy, setCatBusy] = useState(false);
+  const [catError, setCatError] = useState("");
 
   const loadItems = useCallback(async () => {
     const res = await fetch("/api/menu-items");
@@ -387,6 +391,20 @@ export default function MenuManagementView() {
     setCategories(data.categories || []);
   }, []);
   useEffect(() => { loadItems(); loadGroups(); loadCategories(); }, [loadItems, loadGroups, loadCategories]);
+
+  async function quickAddCategory() {
+    if (!newCatName.trim()) return;
+    setCatBusy(true); setCatError("");
+    try {
+      const res = await fetch("/api/menu-categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newCatName.trim() }) });
+      const data = await res.json();
+      if (!res.ok) { setCatError(data.error || "Failed to add category"); return; }
+      setNewCatName("");
+      await loadCategories();
+    } finally {
+      setCatBusy(false);
+    }
+  }
 
   // Real category list (includes categories with no items yet); fall back to
   // the set referenced by items until the categories request lands.
@@ -421,41 +439,95 @@ export default function MenuManagementView() {
       </div>
 
       <div className="px-4 py-6">
-      <div className="mx-auto max-w-4xl">
-        {tab === "items" && (
-          <>
-            <div className="mt-4 flex gap-2">
-              <input placeholder="Search items…" value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-              <button onClick={() => setModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Item</button>
-            </div>
+      <div className={`mx-auto ${tab === "items" ? "max-w-5xl" : "max-w-4xl"}`}>
+        {tab === "items" && (() => {
+          const itemRow = (i: Item) => (
+            <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
+              <div>
+                <span className="text-foreground font-medium">{i.name}</span>
+                {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Till only</span>}
+                {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Website only</span>}
+                {i.allergens.length > 0 && <span className="ml-2 text-amber-600 text-xs">⚠ {i.allergens.join(", ")}</span>}
+                {!i.active && <span className="ml-2 text-muted-foreground text-xs">(inactive)</span>}
+              </div>
+              <span className="text-foreground whitespace-nowrap text-sm">
+                {fmtMoney(i.price)}
+                <span className="text-muted-foreground"> · web {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
+              </span>
+            </button>
+          );
+          const sortedCategories = [...categories].sort((a, b) => a.display_order - b.display_order);
+          const categoryItems = selectedCategoryId != null ? filtered.filter((i) => i.category_id === selectedCategoryId) : [];
+          const selectedCategoryName = sortedCategories.find((c) => c.id === selectedCategoryId)?.name;
 
-            <div className="mt-5 space-y-6">
-              {Array.from(grouped.entries()).map(([catName, catItems]) => (
-                <div key={catName}>
-                  <h2 className="text-red-600 font-bold text-sm uppercase tracking-widest mb-2">{catName}</h2>
-                  <div className="space-y-1">
-                    {catItems.map((i) => (
-                      <button key={i.id} onClick={() => setModal(i)} className={`w-full text-left rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2.5 flex items-center justify-between gap-3 hover:border-border ${!i.active ? "opacity-50" : ""}`}>
-                        <div>
-                          <span className="text-foreground font-medium">{i.name}</span>
-                          {i.active && i.online_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Till only</span>}
-                          {i.active && i.pos_available === 0 && <span className="ml-2 text-xs font-semibold text-muted-foreground">Website only</span>}
-                          {i.allergens.length > 0 && <span className="ml-2 text-amber-600 text-xs">⚠ {i.allergens.join(", ")}</span>}
-                          {!i.active && <span className="ml-2 text-muted-foreground text-xs">(inactive)</span>}
-                        </div>
-                        <span className="text-foreground whitespace-nowrap text-sm">
-                          {fmtMoney(i.price)}
-                          <span className="text-muted-foreground"> · web {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+          return (
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5">
+              {/* Category sidebar */}
+              <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] overflow-hidden h-fit">
+                <div className="max-h-[360px] lg:max-h-[520px] overflow-y-auto">
+                  <button
+                    onClick={() => setSelectedCategoryId(null)}
+                    className={`w-full text-left px-3 py-2.5 border-b border-border text-sm font-medium transition-colors ${selectedCategoryId === null ? "bg-red-500/10 text-red-600" : "text-foreground hover:bg-surface-hover"}`}
+                  >
+                    All Items <span className="font-normal opacity-70">({items.length})</span>
+                  </button>
+                  {sortedCategories.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedCategoryId(c.id)}
+                      className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 text-sm font-medium transition-colors ${selectedCategoryId === c.id ? "bg-red-500/10 text-red-600" : "text-foreground hover:bg-surface-hover"}`}
+                    >
+                      {c.name} <span className="font-normal opacity-70">({c.item_count})</span>
+                    </button>
+                  ))}
                 </div>
-              ))}
-              {items.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No menu items yet.</p>}
+                <div className="p-2 border-t border-border">
+                  <div className="flex gap-1.5">
+                    <input
+                      placeholder="New category…" value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && quickAddCategory()}
+                      className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-xs"
+                    />
+                    <button onClick={quickAddCategory} disabled={catBusy || !newCatName.trim()} className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg whitespace-nowrap">+ Add</button>
+                  </div>
+                  {catError && <p className="mt-1 text-red-600 text-[11px]">{catError}</p>}
+                </div>
+              </div>
+
+              {/* Items */}
+              <div>
+                <div className="flex gap-2">
+                  <input placeholder={selectedCategoryName ? `Search in ${selectedCategoryName}…` : "Search items…"} value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                  <button onClick={() => setModal("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg whitespace-nowrap">+ Add Item</button>
+                </div>
+
+                <div className="mt-5 space-y-6">
+                  {selectedCategoryId == null ? (
+                    <>
+                      {Array.from(grouped.entries()).map(([catName, catItems]) => (
+                        <div key={catName}>
+                          <h2 className="text-red-600 font-bold text-sm uppercase tracking-widest mb-2">{catName}</h2>
+                          <div className="space-y-1">{catItems.map(itemRow)}</div>
+                        </div>
+                      ))}
+                      {items.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No menu items yet.</p>}
+                    </>
+                  ) : (
+                    <div className="space-y-1">
+                      {categoryItems.map(itemRow)}
+                      {categoryItems.length === 0 && (
+                        <p className="text-muted-foreground text-sm text-center py-8">
+                          {search ? `No items matching "${search}" in this category.` : "No items in this category yet."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </>
-        )}
+          );
+        })()}
 
         {tab === "categories" && (
           <CategoriesTab categories={categories} onChanged={() => { loadCategories(); loadItems(); }} />
@@ -477,7 +549,7 @@ export default function MenuManagementView() {
         )}
       </div>
 
-      {modal && <ItemModal item={modal} categoryOptions={categoryOptions} allGroups={groups} onClose={() => setModal(null)} onSaved={() => { loadItems(); loadCategories(); }} />}
+      {modal && <ItemModal item={modal} categoryOptions={categoryOptions} allGroups={groups} defaultCategoryId={selectedCategoryId ?? undefined} onClose={() => setModal(null)} onSaved={() => { loadItems(); loadCategories(); }} />}
       {groupModal && <GroupModal group={groupModal} onClose={() => setGroupModal(null)} onSaved={loadGroups} />}
       </div>
     </>

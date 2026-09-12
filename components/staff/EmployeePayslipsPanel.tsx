@@ -98,8 +98,8 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
     <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
       <h3 className="text-foreground font-bold text-sm">Create Payslip for {staff.name}</h3>
       <p className="text-muted-foreground text-xs mt-1">
-        Hours are pulled from locked timesheets in Attendance for this range, at their current rate of £{Number(staff.pay_rate).toFixed(2)}/hr.
-        An unlocked week counts as 0 hours.
+        Hours are pulled live from clocked-in-and-out shifts in this range, at their current rate of £{Number(staff.pay_rate).toFixed(2)}/hr.
+        A shift still open (no clock-out yet) doesn&apos;t count until it&apos;s closed.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <div>

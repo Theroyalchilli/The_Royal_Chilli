@@ -542,7 +542,7 @@ function StaffLabourReport() {
         <span className="text-foreground font-semibold">£{totals.cost.toFixed(2)}</span>
       </p>
       <p className="mt-1 text-muted-foreground text-xs">
-        Hours and labour cost only count weeks that have been reviewed and <strong className="text-foreground">locked</strong> as timesheets in Attendance → Timesheets — an open/unlocked week shows as 0 here even if staff clocked in.
+        Hours count every closed shift (clocked in and out) in this range, live — a still-open shift doesn&apos;t count until it&apos;s clocked out. A manager correction to a punch is reflected here immediately.
       </p>
 
       <div className="mt-4 rounded-xl border border-border overflow-x-auto">

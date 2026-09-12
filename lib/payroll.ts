@@ -1,25 +1,27 @@
 import supabase from "@/lib/supabase";
 
-// Worked hours per staff member for a payroll period, taken from the attendance
-// app's LOCKED weekly timesheets (royal-chilli-attendance — same database).
-// A timesheet counts only if it sits entirely within [periodStart, periodEnd]
-// and is locked, so a period can't be run until its weeks are approved + locked.
+// Worked hours per staff member for a period, taken directly from live
+// attendance punches (closed shifts only — clock_out set) in the shared
+// database. No manager "lock" step required: hours are current the moment
+// someone clocks out, and a later correction (attendance_corrections) that
+// edits the underlying attendance row is reflected immediately too, since
+// everything downstream always reads current state rather than a snapshot.
 export async function computeHoursForPeriod(
   periodStart: string,
   periodEnd: string,
 ): Promise<Map<number, number>> {
-  const { data: sheets, error } = await supabase
-    .from("timesheets")
-    .select("staff_id, totals")
-    .eq("locked", true)
-    .gte("period_start", periodStart)
-    .lte("period_end", periodEnd);
+  const { data: rows, error } = await supabase
+    .from("attendance")
+    .select("staff_id, net_work_seconds")
+    .not("clock_out", "is", null)
+    .gte("work_date", periodStart)
+    .lte("work_date", periodEnd);
   if (error) throw error;
 
   const hoursByStaff = new Map<number, number>();
-  for (const s of sheets ?? []) {
-    const netSeconds = Number((s.totals as { net_seconds?: number } | null)?.net_seconds ?? 0);
-    hoursByStaff.set(s.staff_id, (hoursByStaff.get(s.staff_id) ?? 0) + netSeconds / 3600);
+  for (const r of rows ?? []) {
+    const netSeconds = Number(r.net_work_seconds ?? 0);
+    hoursByStaff.set(r.staff_id, (hoursByStaff.get(r.staff_id) ?? 0) + netSeconds / 3600);
   }
   return hoursByStaff;
 }

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Staff } from "@/lib/types";
 import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
-import { PayrollBody } from "@/components/staff/PayrollView";
 import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
 
 type HrDetails = {
@@ -807,7 +806,7 @@ const SECTIONS = [
 
 const SECTION_SUB = {
   employee: "Employee directory, onboarding, right-to-work verification and new-starter checklist",
-  payroll: "Pay periods run for everyone at once, or a one-off payslip for a single employee.",
+  payroll: "Select an employee to create a payslip or view their payment history.",
   privacy: "What's collected, why, and how long it's kept.",
 };
 
@@ -893,16 +892,7 @@ function EmployeeSection() {
 }
 
 function PayrollSection() {
-  const [mode, setMode] = useState<"periods" | "payslips">("periods");
-  return (
-    <div>
-      <div className="flex gap-1 bg-surface-hover p-1 rounded-xl mb-5 w-fit">
-        <button onClick={() => setMode("periods")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${mode === "periods" ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>Pay Periods</button>
-        <button onClick={() => setMode("payslips")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${mode === "payslips" ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}>Employee Payslips</button>
-      </div>
-      {mode === "periods" ? <PayrollBody /> : <EmployeePayslipsPanel />}
-    </div>
-  );
+  return <EmployeePayslipsPanel />;
 }
 
 function PrivacySection() {

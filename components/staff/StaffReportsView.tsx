@@ -438,23 +438,17 @@ function StaffLabourReport() {
 
   useEffect(() => { load(); }, [load]);
 
-  function exportCsv() {
-    const header = "Name,Role,Hours Worked,Late Count,Pay Rate (GBP),Labour Cost (GBP)\n";
-    const body = rows.map((r) => `"${r.name}","${r.role}",${r.hours_worked},${r.late_count},${r.pay_rate},${r.labour_cost}`).join("\n");
-    const blob = new Blob([header + body], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `staff-report-${from}-to-${to}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   const isToday = from === today() && to === today();
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Print-only header — the controls below and the parent tab bar are hidden for print */}
+      <div className="hidden print:block mb-2">
+        <h1 className="text-lg font-bold text-foreground">The Royal Chilli — Staff Hours &amp; Labour Cost</h1>
+        <p className="text-sm text-muted-foreground">{isToday ? "Today" : `${from} → ${to}`} · Printed {new Date().toLocaleString("en-GB")}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         <span className="text-muted-foreground">to</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -464,14 +458,14 @@ function StaffLabourReport() {
         >
           Today
         </button>
-        <button onClick={exportCsv} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">⬇ Export CSV</button>
+        <button onClick={() => window.print()} className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">🖨️ Print Report</button>
       </div>
 
       <p className="mt-3 text-muted-foreground text-sm">
         Total hours: <span className="text-foreground font-semibold">{totals.hours.toFixed(2)}</span> · Total labour cost:{" "}
         <span className="text-foreground font-semibold">£{totals.cost.toFixed(2)}</span>
       </p>
-      <p className="mt-1 text-muted-foreground text-xs">
+      <p className="mt-1 text-muted-foreground text-xs print:hidden">
         Hours count every closed shift (clocked in and out) in this range, live — a still-open shift doesn&apos;t count until it&apos;s clocked out. A manager correction to a punch is reflected here immediately.
       </p>
 

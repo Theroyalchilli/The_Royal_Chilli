@@ -175,8 +175,10 @@ CREATE TABLE orders (
   scheduled_for    TIMESTAMPTZ, -- requested pickup/delivery time; null = ASAP
   work_period_id   INT REFERENCES work_periods(id),
   subtotal         NUMERIC(10,2) DEFAULT 0,
-  discount         NUMERIC(10,2) DEFAULT 0,
+  discount         NUMERIC(10,2) DEFAULT 0, -- resolved flat amount; kept in sync from discount_type/discount_pct
   discount_reason  TEXT,
+  discount_type    TEXT CHECK (discount_type IN ('percent', 'amount')),
+  discount_pct     NUMERIC(5,2) CHECK (discount_pct >= 0 AND discount_pct <= 100),
   service_charge_pct    NUMERIC(5,2) NOT NULL DEFAULT 0,
   service_charge_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
   amount_paid      NUMERIC(10,2) NOT NULL DEFAULT 0, -- running total from payments, via trigger

@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
+import { computeBill } from "@/lib/order-totals";
 
 export async function GET(req: NextRequest) {
   try {
@@ -122,16 +123,23 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .single();
 
-    // Calculate totals
+    // Calculate totals — subtotal -> VAT -> discount -> total (see lib/order-totals.ts).
+    // New orders never start with a service charge; that's applied later via
+    // PUT /api/orders/:id/service-charge if needed.
     const subtotal = items.reduce(
       (sum: number, item: { item_price: number; quantity: number }) =>
         sum + item.item_price * item.quantity,
       0
     );
     const discountAmt = discount || 0;
-    const taxableAmount = subtotal - discountAmt;
-    const tax = Math.round(taxableAmount * 0.2 * 100) / 100; // 20% VAT
-    const total = Math.round((taxableAmount + tax) * 100) / 100;
+    const bill = computeBill({
+      subtotal,
+      discountType: discountAmt > 0 ? "amount" : null,
+      discountPct: null,
+      discountAmount: discountAmt,
+      serviceChargePct: 0,
+    });
+    const { tax, total } = bill;
 
     const orderNumber = await generateOrderNumber();
     const customerId = customer_phone ? await findOrCreateCustomerByPhone(customer_phone, customer_name || "Guest") : null;
@@ -150,6 +158,7 @@ export async function POST(req: NextRequest) {
         work_period_id: workPeriod?.id || null,
         subtotal,
         discount: discountAmt,
+        discount_type: discountAmt > 0 ? "amount" : null,
         discount_reason: discount_reason || null,
         tax,
         total,

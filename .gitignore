@@ -53,6 +53,10 @@ next-env.d.ts
 # by app/(public)/ — not project content, shouldn't bloat repo history)
 /The-Royal-Chilli-Website-Handover.zip
 
+# reference-only package for a different (Express/Postgres) stack, read for
+# its business logic and ported into lib/order-totals.ts — not buildable here
+/handover/
+
 .vercel
 .env*
 

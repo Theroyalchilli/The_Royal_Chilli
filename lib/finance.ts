@@ -6,7 +6,11 @@ export async function getVatRate(): Promise<number> {
   return data ? Number(data.value) : 0.2;
 }
 
-// Menu prices are VAT-inclusive, so the VAT portion of a gross figure is gross * (rate / (1 + rate)).
+// For expenses/purchases only — a supplier invoice total is VAT-inclusive,
+// so the reclaimable VAT portion is gross * (rate / (1 + rate)). NOT used for
+// sales output VAT: since VAT is added on top of the subtotal at order time
+// (see lib/order-totals.ts), the exact amount collected is already tracked
+// per order in orders.tax — see getOutputVatCollected below.
 export function extractVat(grossAmount: number, vatRate: number): number {
   return Math.round(grossAmount * (vatRate / (1 + vatRate)) * 100) / 100;
 }
@@ -19,6 +23,19 @@ export async function getRevenue(from: string, to: string): Promise<number> {
     .gte("created_at", `${from}T00:00:00.000Z`)
     .lte("created_at", `${to}T23:59:59.999Z`);
   return Math.round((data || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
+}
+
+// Sum of the actual VAT added to each paid order, not a back-calculated
+// estimate — accurate regardless of any discount applied, since orders.tax
+// is computed once per order at the time of sale (see lib/order-totals.ts).
+export async function getOutputVatCollected(from: string, to: string): Promise<number> {
+  const { data } = await supabase
+    .from("orders")
+    .select("tax")
+    .eq("status", "paid")
+    .gte("created_at", `${from}T00:00:00.000Z`)
+    .lte("created_at", `${to}T23:59:59.999Z`);
+  return Math.round((data || []).reduce((s, o) => s + Number(o.tax), 0) * 100) / 100;
 }
 
 export async function getIngredientPurchases(from: string, to: string): Promise<number> {

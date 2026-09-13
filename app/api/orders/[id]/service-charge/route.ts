@@ -17,13 +17,18 @@ export async function POST(
       return NextResponse.json({ error: "pct must be between 0 and 100" }, { status: 400 });
     }
 
+    const { data: order } = await supabase.from("orders").select("status").eq("id", id).single();
+    if (order?.status === "paid") {
+      return NextResponse.json({ error: "Cannot change the service charge on an order that's already fully paid" }, { status: 409 });
+    }
+
     const { error } = await supabase.from("orders").update({ service_charge_pct: Number(pct) }).eq("id", id);
     if (error) throw error;
 
     await recalcTotals(id);
 
-    const { data: order } = await supabase.from("orders").select("*").eq("id", id).single();
-    return NextResponse.json({ success: true, order });
+    const { data: updatedOrder } = await supabase.from("orders").select("*").eq("id", id).single();
+    return NextResponse.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error("Service charge error:", error);
     return NextResponse.json({ error: "Failed to apply service charge" }, { status: 500 });

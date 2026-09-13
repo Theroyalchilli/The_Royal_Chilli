@@ -90,9 +90,9 @@ Staff-side POS order creation. Computes subtotal/tax (flat 20% VAT)/total server
 
 ### `PUT /api/orders/:id`
 **Auth:** session required (any role)
-**Body:** `{ status?, discount?, discount_reason?, notes? }`
-**Response:** `{ success: true, order }`
-Updating `status` to `paid`/`cancelled` frees the table. Changing `discount` recomputes `tax`/`total` from the order's stored `subtotal`.
+**Body:** `{ status?, discount_type?: "percent" | "amount" | null, discount_value?, discount_reason?, notes? }`
+**Response:** `{ success: true, order }` or `409` if `discount_type` is sent for an order that's already fully paid.
+Updating `status` to `paid`/`cancelled` frees the table. Setting `discount_type`/`discount_value` recomputes `tax`/`discount`/`total` via `lib/order-totals.ts`'s `recalcTotals` (subtotal → VAT → discount → service charge → total) — `discount_value` is a percentage (0-100) when `discount_type` is `"percent"`, or a flat pound amount when `"amount"`. Pass `discount_type: null` to clear it.
 
 ### `DELETE /api/orders/:id`
 **Auth:** session required (any role)
@@ -136,7 +136,7 @@ Rejects payment if the order is already `paid`, and rejects `amount` that exceed
 ### `POST /api/orders/:id/service-charge`
 **Auth:** session required (any role)
 **Body:** `{ pct: number }` (0–100)
-**Response:** `{ success: true, order }`
+**Response:** `{ success: true, order }` or `409` if the order is already fully paid.
 Sets `service_charge_pct` then calls `recalcTotals(id)`.
 
 ### `GET /api/kitchen`

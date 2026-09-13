@@ -1,6 +1,7 @@
 import supabase from "@/lib/supabase";
 import { generateOrderNumber } from "@/lib/orders";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
+import { recalcTotals } from "@/lib/order-totals";
 
 const OPEN_STATUSES = ["open", "sent_to_kitchen", "ready"];
 
@@ -48,23 +49,6 @@ export async function getOrderItems(orderId: number) {
     modsByItem.set(m.order_item_id, list);
   }
   return (data || []).map((i) => ({ ...i, modifiers: modsByItem.get(i.id) || [] }));
-}
-
-async function recalcOrderTotal(orderId: number) {
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("item_price, quantity")
-    .eq("order_id", orderId)
-    .neq("status", "cancelled");
-  const total = Math.round(
-    (items || []).reduce((s, i) => s + i.item_price * i.quantity, 0) * 100
-  ) / 100;
-  // Dine-in menu prices are VAT-inclusive, so no tax is added on top here.
-  await supabase
-    .from("orders")
-    .update({ subtotal: total, total, tax: 0, updated_at: new Date().toISOString() })
-    .eq("id", orderId);
-  return total;
 }
 
 export async function addItemsToTable(
@@ -130,6 +114,6 @@ export async function addItemsToTable(
     }
   }
 
-  await recalcOrderTotal(order!.id);
+  await recalcTotals(String(order!.id));
   return order!.id;
 }

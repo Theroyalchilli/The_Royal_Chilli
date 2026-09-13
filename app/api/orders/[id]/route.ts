@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
+import { recalcTotals } from "@/lib/order-totals";
 
 export async function GET(
   req: NextRequest,
@@ -67,11 +68,11 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { status, discount, discount_reason, notes } = body;
+    const { status, discount_type, discount_value, discount_reason, notes } = body;
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, table_id, status, subtotal")
+      .select("id, table_id, status")
       .eq("id", id)
       .single();
 
@@ -99,26 +100,47 @@ export async function PUT(
       }
     }
 
-    if (discount !== undefined) {
-      const existingSubtotal = (order as { subtotal: number }).subtotal;
-      const taxableAmount = existingSubtotal - discount;
-      const tax = Math.round(taxableAmount * 0.2 * 100) / 100;
-      const total = Math.round((taxableAmount + tax) * 100) / 100;
+    if (discount_type !== undefined) {
+      // Discount/service-charge changes are refused once the bill is fully
+      // settled — otherwise it silently rewrites a total that's already
+      // been paid and reported on.
+      if (order.status === "paid") {
+        return NextResponse.json({ error: "Cannot change the discount on an order that's already fully paid" }, { status: 409 });
+      }
 
-      const updatePayload: Record<string, unknown> = {
-        discount,
-        discount_reason: discount_reason || null,
-        tax,
-        total,
-        updated_at: new Date().toISOString(),
-      };
-      if (notes) updatePayload.notes = notes;
+      if (discount_type === null) {
+        const { error } = await supabase
+          .from("orders")
+          .update({ discount_type: null, discount_pct: null, discount: 0, discount_reason: null, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) throw error;
+      } else if (discount_type === "percent") {
+        if (typeof discount_value !== "number" || discount_value <= 0 || discount_value > 100) {
+          return NextResponse.json({ error: "discount_value must be between 0 and 100 for a percent discount" }, { status: 400 });
+        }
+        const { error } = await supabase
+          .from("orders")
+          .update({ discount_type: "percent", discount_pct: discount_value, discount_reason: discount_reason || null, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) throw error;
+      } else if (discount_type === "amount") {
+        if (typeof discount_value !== "number" || discount_value < 0) {
+          return NextResponse.json({ error: "discount_value must be a positive amount" }, { status: 400 });
+        }
+        const { error } = await supabase
+          .from("orders")
+          .update({ discount_type: "amount", discount_pct: null, discount: discount_value, discount_reason: discount_reason || null, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) throw error;
+      } else {
+        return NextResponse.json({ error: "discount_type must be \"percent\", \"amount\", or null" }, { status: 400 });
+      }
 
-      const { error } = await supabase
-        .from("orders")
-        .update(updatePayload)
-        .eq("id", id);
+      await recalcTotals(id);
+    }
 
+    if (notes !== undefined) {
+      const { error } = await supabase.from("orders").update({ notes, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     }
 

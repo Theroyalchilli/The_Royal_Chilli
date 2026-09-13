@@ -48,6 +48,7 @@ export default function PaymentModal({
   // Discount state — overrides props once applied
   const [discountInput, setDiscountInput] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "pct">("fixed");
+  const [discountReasonInput, setDiscountReasonInput] = useState("");
   const [localDiscount, setLocalDiscount] = useState(discount);
   const [localTax, setLocalTax] = useState(tax);
   const [localTotal, setLocalTotal] = useState(total);
@@ -90,6 +91,7 @@ export default function PaymentModal({
       setError("");
       setDiscountInput("");
       setDiscountType("fixed");
+      setDiscountReasonInput("");
       setLocalDiscount(discount);
       setLocalTax(tax);
       setLocalTotal(total);
@@ -110,45 +112,51 @@ export default function PaymentModal({
   const applyDiscount = async () => {
     if (!orderId || !discountInput) return;
     const raw = parseFloat(discountInput) || 0;
-    const discountAmt = discountType === "pct"
-      ? Math.round(subtotal * (raw / 100) * 100) / 100
-      : raw;
     setDiscountApplying(true);
+    setError("");
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discount: discountAmt }),
+        body: JSON.stringify({
+          discount_type: discountType === "pct" ? "percent" : "amount",
+          discount_value: raw,
+          discount_reason: discountReasonInput || undefined,
+        }),
       });
       const data = await res.json();
+      if (!res.ok) { setError(data.error || "Failed to apply discount"); return; }
       if (data.order) {
-        setLocalDiscount(data.order.discount ?? discountAmt);
+        setLocalDiscount(data.order.discount ?? 0);
         setLocalTax(data.order.tax ?? localTax);
         setLocalTotal(data.order.total ?? localTotal);
         setRemainingBalance(data.order.total ?? localTotal);
       }
-    } catch { /* silent */ }
+    } catch { setError("Failed to apply discount"); }
     finally { setDiscountApplying(false); }
   };
 
   const removeDiscount = async () => {
     if (!orderId) return;
     setDiscountApplying(true);
+    setError("");
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discount: 0 }),
+        body: JSON.stringify({ discount_type: null }),
       });
       const data = await res.json();
+      if (!res.ok) { setError(data.error || "Failed to remove discount"); return; }
       if (data.order) {
         setLocalDiscount(0);
         setLocalTax(data.order.tax ?? tax);
         setLocalTotal(data.order.total ?? total);
         setRemainingBalance(data.order.total ?? total);
         setDiscountInput("");
+        setDiscountReasonInput("");
       }
-    } catch { /* silent */ }
+    } catch { setError("Failed to remove discount"); }
     finally { setDiscountApplying(false); }
   };
 
@@ -391,6 +399,13 @@ export default function PaymentModal({
                     </button>
                   )}
                 </div>
+                <input
+                  type="text"
+                  placeholder="Reason (optional) — e.g. goodwill, complaint, staff meal"
+                  value={discountReasonInput}
+                  onChange={e => setDiscountReasonInput(e.target.value)}
+                  className="w-full bg-elevated border border-elevated rounded-lg px-3 py-1.5 text-foreground text-xs focus:outline-none focus:border-red-500"
+                />
               </div>
 
               {/* Service charge */}

@@ -15,5 +15,5 @@ export default async function PosLayout({
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <div style={{ fontFamily: "var(--font-space-grotesk)" }}>{children}</div>;
 }

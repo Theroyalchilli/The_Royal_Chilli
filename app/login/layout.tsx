@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return <div style={{ fontFamily: "var(--font-space-grotesk)" }}>{children}</div>;
 }

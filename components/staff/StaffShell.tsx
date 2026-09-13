@@ -85,7 +85,7 @@ export default function StaffShell({
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background" style={{ fontFamily: "var(--font-space-grotesk)" }}>
       {/* Desktop sidebar — never printed, so a printed report isn't cluttered with nav chrome */}
       <aside className="hidden w-[252px] flex-shrink-0 bg-foreground md:sticky md:top-0 md:block md:h-screen print:hidden">{sidebarBody}</aside>
 

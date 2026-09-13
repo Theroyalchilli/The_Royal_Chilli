@@ -125,7 +125,7 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
-        <h2 className="text-foreground font-bold text-lg">{isNew ? "New Menu Item" : item.name}</h2>
+        <h2 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-bold text-lg">{isNew ? "New Menu Item" : item.name}</h2>
         <div className="mt-4 space-y-2">
           <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: Number(e.target.value) })} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
             {categoryOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -222,7 +222,7 @@ function GroupModal({ group, onClose, onSaved }: { group: ModifierGroup | "new";
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="bg-surface border border-border rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5">
-        <h2 className="text-foreground font-bold text-lg">{isNew ? "New Modifier Group" : group.name}</h2>
+        <h2 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-bold text-lg">{isNew ? "New Modifier Group" : group.name}</h2>
         <div className="mt-4 space-y-2">
           <input placeholder="Group name (e.g. Spice Level)" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
           <div className="grid grid-cols-2 gap-2">
@@ -321,7 +321,7 @@ function ModifierGroupsPanel({ groups, onClose, onOpenGroup, onNewGroup }: {
     <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-foreground font-bold text-lg">Modifier Groups</h2>
+          <h2 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-bold text-lg">Modifier Groups</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm">✕</button>
         </div>
         <div className="mt-3 flex justify-end">

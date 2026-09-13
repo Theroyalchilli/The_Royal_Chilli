@@ -109,7 +109,7 @@ function RankedList({ title, sub, data, formatValue = gbp, color = RED }: { titl
         {data.map((it, i) => (
           <div key={it.name} className="flex items-center gap-3 border-b border-[#f0f3f2] py-2.5 last:border-0">
             <span className="grid h-[22px] w-[22px] flex-shrink-0 place-items-center rounded-md text-[11px] font-semibold" style={{ background: `${color}1a`, color }}>{i + 1}</span>
-            <span className="flex-1 truncate text-[13.5px] font-medium text-foreground">{it.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-foreground">{it.name}</span>
             <span className="h-1.5 w-[100px] flex-shrink-0 overflow-hidden rounded-full bg-surface-hover">
               <span
                 className="block h-full rounded-full"
@@ -247,7 +247,7 @@ export default function StaffDashboard({ data }: { data: DashboardData }) {
             {data.channelMix.map((c, i) => (
               <div key={c.name} className="flex items-center gap-2 text-[12.5px]">
                 <span className="h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
-                <span className="flex-1 truncate text-foreground">{c.name}</span>
+                <span className="min-w-0 flex-1 truncate text-foreground">{c.name}</span>
                 <span className="tabular-nums text-muted-foreground">{total > 0 ? Math.round((c.value / total) * 100) : 0}%</span>
               </div>
             ))}
@@ -390,10 +390,10 @@ export default function StaffDashboard({ data }: { data: DashboardData }) {
 
   return (
     <>
-      {chartCards.length > 0 && <div className="mb-4 grid gap-4 md:grid-cols-2">{chartCards}</div>}
+      {chartCards.length > 0 && <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">{chartCards}</div>}
       {wideCards.length > 0 && <div className="mb-4 space-y-4">{wideCards}</div>}
       {(listPanels.length > 0 || data.alerts.length >= 0) && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {listPanels}
           {alertsPanel}
         </div>

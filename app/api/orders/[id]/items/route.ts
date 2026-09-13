@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
+import { cancelOrderAndFreeTable } from "@/lib/orders";
 
 export async function GET(
   req: NextRequest,
@@ -128,6 +129,20 @@ export async function PUT(
 
       if (error) throw error;
       await recalcTotals(orderId);
+
+      // Voiding the last active item leaves an order with nothing left to
+      // send or pay for — close it out the same way an explicit whole-order
+      // cancel does, so a dine-in table doesn't stay stuck "occupied" with
+      // an empty order (see cancelOrderAndFreeTable's docstring).
+      const { count: remaining } = await supabase
+        .from("order_items")
+        .select("id", { count: "exact", head: true })
+        .eq("order_id", orderId)
+        .neq("status", "cancelled");
+      if (remaining === 0) {
+        const { data: order } = await supabase.from("orders").select("table_id").eq("id", orderId).single();
+        await cancelOrderAndFreeTable(Number(orderId), order?.table_id ?? null);
+      }
     } else if (action === "reduce" && quantity > 0) {
       const { error } = await supabase
         .from("order_items")

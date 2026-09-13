@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { cancelOrderAndFreeTable } from "@/lib/orders";
 
 export async function GET(
   req: NextRequest,
@@ -78,7 +79,9 @@ export async function PUT(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (status) {
+    if (status === "cancelled") {
+      await cancelOrderAndFreeTable(Number(id), order.table_id);
+    } else if (status) {
       const { error } = await supabase
         .from("orders")
         .update({ status, updated_at: new Date().toISOString() })
@@ -86,8 +89,9 @@ export async function PUT(
 
       if (error) throw error;
 
-      // Free table when order is paid or cancelled
-      if ((status === "paid" || status === "cancelled") && order.table_id) {
+      // Free table when the order is fully paid this way (rare — normal
+      // payments go through /payment, which handles this itself).
+      if (status === "paid" && order.table_id) {
         await supabase
           .from("restaurant_tables")
           .update({ status: "available" })
@@ -170,19 +174,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", id);
-
-    if (error) throw error;
-
-    if (order.table_id) {
-      await supabase
-        .from("restaurant_tables")
-        .update({ status: "available" })
-        .eq("id", order.table_id);
-    }
+    await cancelOrderAndFreeTable(Number(id), order.table_id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

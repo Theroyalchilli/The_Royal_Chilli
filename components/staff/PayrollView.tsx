@@ -123,7 +123,7 @@ export function PayrollBody() {
     <div>
       <div className="mx-auto max-w-5xl">
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-          <div>
+          <div className="min-w-0">
             <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
               <h2 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">New Pay Period</h2>
               <input type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -143,7 +143,7 @@ export function PayrollBody() {
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             {!activePeriod ? (
               <div className="text-muted-foreground text-center py-20">Select or create a pay period.</div>
             ) : (

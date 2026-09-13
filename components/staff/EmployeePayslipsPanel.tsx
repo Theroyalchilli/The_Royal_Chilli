@@ -227,9 +227,11 @@ export default function EmployeePayslipsPanel() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-      <EmployeePicker selected={selected} onSelect={select} />
+      <div className="min-w-0">
+        <EmployeePicker selected={selected} onSelect={select} />
+      </div>
 
-      <div>
+      <div className="min-w-0">
         {!selected ? (
           <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-10 text-center text-muted-foreground">
             Select an employee to create a payslip or view their history.

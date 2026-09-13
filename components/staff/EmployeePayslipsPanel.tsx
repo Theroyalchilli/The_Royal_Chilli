@@ -52,7 +52,7 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
           </select>
         </div>
       </div>
-      <div className="max-h-[420px] overflow-y-auto">
+      <div className="lg:max-h-[420px] lg:overflow-y-auto">
         {employees.map((e) => (
           <button key={e.id} onClick={() => onSelect(e)}
             className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${selected?.id === e.id ? "bg-red-500/10" : "hover:bg-surface-hover"}`}>

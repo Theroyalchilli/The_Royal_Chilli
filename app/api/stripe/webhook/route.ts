@@ -32,8 +32,13 @@ export async function POST(req: NextRequest) {
 
     try {
       if (type === "order" && order_id) {
+        // Stripe can redeliver the same event (retries, manual resend) — guard
+        // against inserting a second payment row for a session we've already
+        // recorded, since there's no DB-level unique constraint on reference.
+        const { data: existingPayment } = await supabase
+          .from("payments").select("id").eq("order_id", Number(order_id)).eq("reference", session.id).maybeSingle();
         const { data: order } = await supabase.from("orders").select("amount_paid, total").eq("id", order_id).single();
-        if (order && Number(order.amount_paid) < Number(order.total)) {
+        if (!existingPayment && order && Number(order.amount_paid) < Number(order.total)) {
           const amount = (session.amount_total || 0) / 100;
           await supabase.from("payments").insert({
             order_id: Number(order_id),

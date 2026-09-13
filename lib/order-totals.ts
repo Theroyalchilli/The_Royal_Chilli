@@ -20,7 +20,7 @@ export async function recalcTotals(orderId: string) {
     (s: number, i: { item_price: number; quantity: number }) => s + i.item_price * i.quantity,
     0
   );
-  const taxable = subtotal - discount;
+  const taxable = Math.max(0, subtotal - discount);
   const tax = Math.round(taxable * 0.2 * 100) / 100;
   const serviceChargeAmount = Math.round(taxable * (serviceChargePct / 100) * 100) / 100;
   const total = Math.round((taxable + tax + serviceChargeAmount) * 100) / 100;

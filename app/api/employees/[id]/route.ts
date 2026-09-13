@@ -41,6 +41,17 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
+    // Role, active status and password resets are privilege-affecting — a
+    // manager/hr session must not be able to promote themselves (or anyone
+    // else) to admin, deactivate another account, or reset someone else's
+    // password. Only admin may touch these; the rest of EDITABLE_FIELDS
+    // (contact info, pay rate, etc.) stays open to any canManageStaff role.
+    const RESTRICTED_FIELDS = new Set(["role", "active", "password"]);
+    const touchesRestrictedField = Object.keys(body).some((k) => RESTRICTED_FIELDS.has(k));
+    if (touchesRestrictedField && session.role !== "admin") {
+      return NextResponse.json({ error: "Only an admin can change role, active status or reset a password" }, { status: 403 });
+    }
+
     const updates: Record<string, unknown> = {};
     for (const field of EDITABLE_FIELDS) {
       if (field in body) updates[field] = body[field];

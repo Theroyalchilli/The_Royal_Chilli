@@ -17,6 +17,6 @@ describe("makeLineId", () => {
   });
 
   it("handles no modifiers selected", () => {
-    expect(makeLineId(42, [])).toBe("42:");
+    expect(makeLineId(42, [])).toBe("42::");
   });
 });

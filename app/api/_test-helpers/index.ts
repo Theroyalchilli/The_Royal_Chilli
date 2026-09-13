@@ -13,5 +13,9 @@ export async function authedRequest(url: string, user: SessionUser | null, init:
     headers.set("cookie", `${name}=${token}`);
   }
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  return new NextRequest(url, { ...init, headers });
+  // Only pass through the fields tests actually need — spreading the whole
+  // RequestInit carries over `signal`, whose DOM-lib type (AbortSignal |
+  // null | undefined) doesn't satisfy NextRequest's own RequestInit (no
+  // null), which fails `tsc`/next build even though ts-jest let it through.
+  return new NextRequest(url, { method: init.method, body: init.body, headers });
 }

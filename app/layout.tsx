@@ -24,9 +24,10 @@ const workSans = Work_Sans({
   variable: "--font-worksans",
 });
 
-// Reserved for the Staff Hub welcome screen's headings/stat numbers only —
-// same "one signature purpose" treatment as Cinzel on the brand wordmark,
-// not a general body font.
+// Base font for the entire back office — Staff Hub, POS till and the staff
+// login page (applied at each area's layout, see StaffShell.tsx and
+// app/pos|login/layout.tsx) — set inline there rather than on <body> here so
+// the public-facing website keeps its own Poppins/Playfair/Cinzel branding.
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],

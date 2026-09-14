@@ -8,6 +8,7 @@ import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { readCart, writeCart, makeLineId, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
 import { isRestaurantOpen } from "@/lib/hours";
 import ModifierPickerModal from "./ModifierPickerModal";
+import ParticleButton from "@/components/kokonutui/particle-button";
 import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav, useIsNarrow } from "./CategoryNav";
 
 export default function OrderMenu({ categories }: { categories: MenuCategory[] }) {
@@ -113,7 +114,14 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
                 <span className="w-4 text-center">{lines[0].quantity}</span>
               </>
             )}
-            <button onClick={() => handleAddClick(item)} className="h-8 w-8 rounded-full border border-border text-lg leading-none hover:border-primary">+</button>
+            <ParticleButton
+              onClick={() => handleAddClick(item)}
+              variant="outline"
+              showIcon={false}
+              className="h-8 w-8 rounded-full border-border p-0 text-lg leading-none hover:border-primary"
+            >
+              +
+            </ParticleButton>
           </div>
         </div>
         {hasModifiers && lines.length > 0 && (

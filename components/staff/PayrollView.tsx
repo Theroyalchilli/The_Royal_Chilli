@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import type { PayrollPeriod, PayrollEntry } from "@/lib/types";
 
 const statusBadge: Record<string, string> = {
@@ -16,11 +17,10 @@ function PaymentModal({
   const [amount, setAmount] = useState(String(remaining));
   const [method, setMethod] = useState("bank_transfer");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function submit(full: boolean) {
     setSaving(true);
-    setError("");
     try {
       const res = await fetch(`/api/payroll/entries/${entry.id}/payments`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -28,10 +28,11 @@ function PaymentModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      toast({ variant: "success", title: "Payment recorded", description: `${entry.staff_name}: £${(full ? remaining : Number(amount)).toFixed(2)}.` });
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
+      toast({ variant: "destructive", title: "Couldn't record payment", description: err instanceof Error ? err.message : "Failed" });
     } finally {
       setSaving(false);
     }
@@ -51,7 +52,6 @@ function PaymentModal({
             <option value="cheque">Cheque</option>
           </select>
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-2">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           <button onClick={() => submit(false)} disabled={saving} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover disabled:opacity-50 text-foreground font-bold rounded-xl text-sm">Pay Amount</button>
@@ -69,7 +69,7 @@ export function PayrollBody() {
   const [newStart, setNewStart] = useState("");
   const [newEnd, setNewEnd] = useState("");
   const [payingEntry, setPayingEntry] = useState<(PayrollEntry & { staff_name: string }) | null>(null);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
   const [running, setRunning] = useState(false);
 
   const loadPeriods = useCallback(async () => {
@@ -91,14 +91,14 @@ export function PayrollBody() {
   }
 
   async function createPeriod() {
-    setError("");
-    if (!newStart || !newEnd) return setError("Pick a start and end date.");
+    if (!newStart || !newEnd) return toast({ variant: "destructive", title: "Pick a start and end date" });
     const res = await fetch("/api/payroll/periods", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ period_start: newStart, period_end: newEnd }),
     });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't create period", description: data.error });
+    toast({ variant: "success", title: "Pay period created", description: `${newStart} → ${newEnd}` });
     setNewStart(""); setNewEnd("");
     await loadPeriods();
     selectPeriod(data.period);
@@ -107,13 +107,22 @@ export function PayrollBody() {
   async function runPayroll() {
     if (!activePeriod) return;
     setRunning(true);
-    await fetch(`/api/payroll/periods/${activePeriod.id}/run`, { method: "POST" });
+    const res = await fetch(`/api/payroll/periods/${activePeriod.id}/run`, { method: "POST" });
     await loadEntries(activePeriod.id);
     setRunning(false);
+    if (!res.ok) {
+      const data = await res.json();
+      return toast({ variant: "destructive", title: "Couldn't run payroll", description: data.error });
+    }
+    toast({ variant: "success", title: "Payroll run from attendance" });
   }
 
   async function updateEntry(id: number, field: string, value: number) {
-    await fetch(`/api/payroll/entries/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value }) });
+    const res = await fetch(`/api/payroll/entries/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value }) });
+    if (!res.ok) {
+      const data = await res.json();
+      toast({ variant: "destructive", title: "Couldn't save change", description: data.error });
+    }
     if (activePeriod) loadEntries(activePeriod.id);
   }
 
@@ -129,7 +138,6 @@ export function PayrollBody() {
               <input type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
               <input type="date" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
               <button onClick={createPeriod} className="mt-2 w-full py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">Create Period</button>
-              {error && <p className="mt-2 text-red-600 text-xs">{error}</p>}
             </div>
 
             <div className="mt-4 space-y-2">

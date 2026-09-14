@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { canAccess, isStaffManagement } from "@/lib/permissions";
 import StaffShell, { type NavGroup } from "@/components/staff/StaffShell";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -59,6 +60,7 @@ export default async function StaffHubLayout({
   return (
     <StaffShell user={{ name: session.name, role: session.role }} nav={nav}>
       {children}
+      <Toaster />
     </StaffShell>
   );
 }

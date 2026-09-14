@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
 
 type Payslip = {
@@ -71,12 +72,11 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
   const [created, setCreated] = useState<Payslip | null>(null);
 
   async function create() {
     setSaving(true);
-    setError("");
     setCreated(null);
     try {
       const res = await fetch("/api/employee-payslips", {
@@ -88,7 +88,7 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
       setCreated(data.payslip);
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      toast({ variant: "destructive", title: "Couldn't create payslip", description: err instanceof Error ? err.message : "Something went wrong" });
     } finally {
       setSaving(false);
     }
@@ -114,7 +114,6 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
           {saving ? "Calculating…" : "Create Payslip"}
         </button>
       </div>
-      {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
       {created && (
         <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
           <p className="text-emerald-700 font-semibold">✓ {created.name} created</p>

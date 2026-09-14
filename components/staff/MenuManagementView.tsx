@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { ALLERGENS } from "@/lib/allergens";
 
 type Item = {
@@ -85,7 +86,7 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
     carbs_g: isNew ? "" : item.carbs_g !== null ? String(item.carbs_g) : "",
     fat_g: isNew ? "" : item.fat_g !== null ? String(item.fat_g) : "",
   });
-  const [error, setError] = useState("");
+  const { toast } = useToast();
   const [savedItemId, setSavedItemId] = useState<number | null>(isNew ? null : item.id);
 
   function toggleAllergen(a: string) {
@@ -93,7 +94,7 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
   }
 
   async function save() {
-    if (!form.name.trim() || !form.price) return setError("Name and till price are required.");
+    if (!form.name.trim() || !form.price) return toast({ variant: "destructive", title: "Name and till price are required" });
     const payload = {
       category_id: form.category_id, name: form.name.trim(), description: form.description.trim() || null,
       price: Number(form.price),
@@ -110,7 +111,8 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
       ? await fetch("/api/menu-items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       : await fetch(`/api/menu-items/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't save item", description: data.error });
+    toast({ variant: "success", title: isNew ? "Item created" : "Item saved", description: form.name.trim() });
     onSaved();
     if (isNew) setSavedItemId(data.item.id);
     else onClose();
@@ -118,7 +120,12 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
 
   async function toggleActive() {
     if (isNew || !savedItemId) return;
-    await fetch(`/api/menu-items/${savedItemId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: (item as Item).active ? 0 : 1 }) });
+    const res = await fetch(`/api/menu-items/${savedItemId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: (item as Item).active ? 0 : 1 }) });
+    if (!res.ok) {
+      const data = await res.json();
+      return toast({ variant: "destructive", title: "Couldn't update item", description: data.error });
+    }
+    toast({ variant: "success", title: (item as Item).active ? "Item deactivated" : "Item reactivated" });
     onSaved(); onClose();
   }
 
@@ -182,7 +189,6 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
           </div>
         </div>
 
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">{savedItemId && isNew ? "Done" : "Cancel"}</button>
           {!isNew && <button onClick={toggleActive} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl text-sm">{item.active ? "Deactivate" : "Reactivate"}</button>}
@@ -199,23 +205,29 @@ function GroupModal({ group, onClose, onSaved }: { group: ModifierGroup | "new";
   const [selectionType, setSelectionType] = useState<"single" | "multiple">(isNew ? "single" : group.selection_type);
   const [maxSelect, setMaxSelect] = useState(isNew ? "" : group.max_select !== null ? String(group.max_select) : "");
   const [options, setOptions] = useState<ModifierOption[]>(isNew ? [{ name: "", price_delta: 0 }] : group.options.map((o) => ({ ...o })));
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function save() {
     const validOptions = options.filter((o) => o.name.trim());
-    if (!name.trim() || validOptions.length === 0) return setError("Name and at least one option are required.");
+    if (!name.trim() || validOptions.length === 0) return toast({ variant: "destructive", title: "Name and at least one option are required" });
     const payload = { name: name.trim(), selection_type: selectionType, max_select: maxSelect ? Number(maxSelect) : null, options: validOptions };
     const res = isNew
       ? await fetch("/api/modifier-groups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       : await fetch(`/api/modifier-groups/${group.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't save group", description: data.error });
+    toast({ variant: "success", title: isNew ? "Modifier group created" : "Modifier group saved", description: name.trim() });
     onSaved(); onClose();
   }
 
   async function remove() {
     if (isNew) return;
-    await fetch(`/api/modifier-groups/${group.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/modifier-groups/${group.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      return toast({ variant: "destructive", title: "Couldn't delete group", description: data.error });
+    }
+    toast({ variant: "success", title: "Modifier group deleted", description: group.name });
     onSaved(); onClose();
   }
 
@@ -244,7 +256,6 @@ function GroupModal({ group, onClose, onSaved }: { group: ModifierGroup | "new";
             <button onClick={() => setOptions((prev) => [...prev, { name: "", price_delta: 0 }])} className="text-red-600 text-xs font-semibold">+ Add option</button>
           </div>
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           {!isNew && <button onClick={remove} className="flex-1 h-10 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-xl text-sm">Delete</button>}

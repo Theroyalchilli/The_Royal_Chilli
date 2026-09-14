@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
 import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
 import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
@@ -581,12 +582,11 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
     hire_date: new Date().toISOString().slice(0, 10),
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function save() {
-    setError("");
     if (!form.name.trim() || !form.username.trim() || form.password.length < 6) {
-      setError("Name and username are required, and the password needs at least 6 characters.");
+      toast({ variant: "destructive", title: "Name and username are required, and the password needs at least 6 characters" });
       return;
     }
     setSaving(true);
@@ -602,9 +602,10 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create employee");
+      toast({ variant: "success", title: "Employee created", description: `${form.name.trim()} can now log in.` });
       onCreated(data.employee);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      toast({ variant: "destructive", title: "Couldn't create employee", description: err instanceof Error ? err.message : "Something went wrong" });
     } finally {
       setSaving(false);
     }
@@ -652,7 +653,6 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
               <span className="text-muted-foreground text-xs">{form.employment_type === "hourly" ? "per hour" : `per ${form.pay_frequency === "weekly" ? "week" : "month"}`}</span>
             </div>
           </div>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
         </div>
         <div className="px-5 py-4 border-t border-border flex gap-3">
           <button onClick={onClose} className="flex-1 h-11 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
@@ -689,15 +689,13 @@ function formFromStaff(s: Staff): InfoForm {
 function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: Staff) => void }) {
   const [form, setForm] = useState<InfoForm>(formFromStaff(staff));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => { setForm(formFromStaff(staff)); }, [staff]);
 
   async function save() {
-    setError("");
     if (!form.name.trim() || !form.username.trim()) {
-      setError("Name and username are required.");
+      toast({ variant: "destructive", title: "Name and username are required" });
       return;
     }
     setSaving(true);
@@ -715,11 +713,10 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
       setForm((f) => ({ ...f, password: "" }));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      toast({ variant: "success", title: "Saved", description: `${form.name.trim()}'s record updated.` });
       onUpdated(data.employee);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      toast({ variant: "destructive", title: "Couldn't save", description: err instanceof Error ? err.message : "Something went wrong" });
     } finally {
       setSaving(false);
     }
@@ -730,7 +727,9 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: staff.active ? 0 : 1 }),
     });
     const data = await res.json();
-    if (res.ok) onUpdated(data.employee);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't update status", description: data.error });
+    toast({ variant: "success", title: staff.active ? "Employee deactivated" : "Employee reactivated" });
+    onUpdated(data.employee);
   }
 
   return (
@@ -775,13 +774,10 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
         <Text label="Phone" value={form.emergency_contact_phone} onChange={(v) => setForm({ ...form, emergency_contact_phone: v })} />
       </div>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-
       <div className="flex items-center gap-3 pt-2">
         <button onClick={save} disabled={saving} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
           {saving ? "Saving…" : "Save"}
         </button>
-        {saved && <span className="text-emerald-600 text-sm font-semibold">✓ Saved</span>}
         <button onClick={toggleActive} className="ml-auto px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border">
           {staff.active ? "Deactivate" : "Reactivate"}
         </button>

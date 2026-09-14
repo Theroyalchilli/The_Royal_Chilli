@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import type { CartItem } from "@/lib/types";
 
@@ -44,6 +45,7 @@ export default function PaymentModal({
   const [cashInput, setCashInput] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { toast } = useToast();
 
   // Discount state — overrides props once applied
   const [discountInput, setDiscountInput] = useState("");
@@ -131,6 +133,7 @@ export default function PaymentModal({
         setLocalTax(data.order.tax ?? localTax);
         setLocalTotal(data.order.total ?? localTotal);
         setRemainingBalance(data.order.total ?? localTotal);
+        toast({ variant: "success", title: "Discount applied" });
       }
     } catch { setError("Failed to apply discount"); }
     finally { setDiscountApplying(false); }

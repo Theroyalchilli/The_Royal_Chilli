@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 type Table = {
   id: number;
@@ -23,7 +24,7 @@ export default function TableManagementView() {
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   const [newNumber, setNewNumber] = useState("");
   const [newCapacity, setNewCapacity] = useState("4");
@@ -42,7 +43,6 @@ export default function TableManagementView() {
 
   async function call(url: string, method: string, body?: unknown) {
     setBusy(true);
-    setError("");
     try {
       const res = await fetch(url, {
         method,
@@ -50,7 +50,7 @@ export default function TableManagementView() {
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data.error || "Something went wrong"); return false; }
+      if (!res.ok) { toast({ variant: "destructive", title: "Couldn't save table", description: data.error || "Something went wrong" }); return false; }
       await load();
       return true;
     } finally {
@@ -62,10 +62,11 @@ export default function TableManagementView() {
     const number = newNumber.trim();
     const capacity = Number(newCapacity);
     if (!number || !Number.isFinite(capacity) || capacity < 1) {
-      setError("Enter a table number and a capacity of at least 1.");
+      toast({ variant: "destructive", title: "Enter a table number and a capacity of at least 1" });
       return;
     }
     if (await call("/api/tables", "POST", { table_number: number, capacity })) {
+      toast({ variant: "success", title: "Table added", description: `${number} (${capacity} seats)` });
       setNewNumber("");
       setNewCapacity("4");
     }
@@ -75,17 +76,17 @@ export default function TableManagementView() {
     setEditingId(t.id);
     setEditNumber(t.table_number);
     setEditCapacity(String(t.capacity));
-    setError("");
   }
 
   async function saveEdit(id: number) {
     const number = editNumber.trim();
     const capacity = Number(editCapacity);
     if (!number || !Number.isFinite(capacity) || capacity < 1) {
-      setError("Enter a table number and a capacity of at least 1.");
+      toast({ variant: "destructive", title: "Enter a table number and a capacity of at least 1" });
       return;
     }
     if (await call("/api/tables", "PUT", { id, table_number: number, capacity })) {
+      toast({ variant: "success", title: "Table updated", description: `${number} (${capacity} seats)` });
       setEditingId(null);
     }
   }
@@ -142,8 +143,6 @@ export default function TableManagementView() {
               </button>
             </div>
           </div>
-
-          {error && <p className="mt-3 text-red-600 text-sm">{error}</p>}
 
           {/* List */}
           <div className="mt-4 space-y-1.5">

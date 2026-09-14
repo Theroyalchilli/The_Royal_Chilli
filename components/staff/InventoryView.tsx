@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 type Ingredient = {
   id: number; name: string; unit: string; current_stock: number; reorder_level: number;
@@ -31,10 +32,10 @@ function IngredientModal({ suppliers, onClose, onSaved }: { suppliers: Supplier[
   const [costPerUnit, setCostPerUnit] = useState("0");
   const [supplierId, setSupplierId] = useState("");
   const [openingStock, setOpeningStock] = useState("0");
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function save() {
-    if (!name.trim()) return setError("Name is required.");
+    if (!name.trim()) return toast({ variant: "destructive", title: "Name is required" });
     const res = await fetch("/api/ingredients", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -43,7 +44,8 @@ function IngredientModal({ suppliers, onClose, onSaved }: { suppliers: Supplier[
       }),
     });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't add ingredient", description: data.error });
+    toast({ variant: "success", title: "Ingredient added", description: `${name.trim()} is now in inventory.` });
     onSaved(); onClose();
   }
 
@@ -69,7 +71,6 @@ function IngredientModal({ suppliers, onClose, onSaved }: { suppliers: Supplier[
           </div>
           <div><label className="text-muted-foreground text-xs">Cost per unit (£)</label><input type="number" step="0.01" value={costPerUnit} onChange={(e) => setCostPerUnit(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" /></div>
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Save</button>
@@ -83,16 +84,17 @@ function StockMovementModal({ ingredient, onClose, onSaved }: { ingredient: Ingr
   const [type, setType] = useState<"waste" | "adjustment" | "usage">("waste");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function save() {
-    if (!quantity || Number(quantity) === 0) return setError("Enter a quantity.");
+    if (!quantity || Number(quantity) === 0) return toast({ variant: "destructive", title: "Enter a quantity" });
     const res = await fetch("/api/stock-movements", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ingredient_id: ingredient.id, movement_type: type, quantity: Number(quantity), reason: reason || undefined }),
     });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't record movement", description: data.error });
+    toast({ variant: "success", title: "Stock movement recorded", description: `${ingredient.name}: ${type} ${quantity} ${ingredient.unit}.` });
     onSaved(); onClose();
   }
 
@@ -110,7 +112,6 @@ function StockMovementModal({ ingredient, onClose, onSaved }: { ingredient: Ingr
           <input type="number" step="0.001" placeholder={type === "adjustment" ? "Delta (e.g. -2 or 5)" : `Quantity (${ingredient.unit})`} value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
           <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Record</button>
@@ -169,10 +170,16 @@ function SuppliersTab({ suppliers, onChange }: { suppliers: Supplier[]; onChange
   const [contact, setContact] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const { toast } = useToast();
 
   async function save() {
-    if (!name.trim()) return;
-    await fetch("/api/suppliers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, contact_name: contact, phone, email }) });
+    if (!name.trim()) return toast({ variant: "destructive", title: "Name is required" });
+    const res = await fetch("/api/suppliers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, contact_name: contact, phone, email }) });
+    if (!res.ok) {
+      const data = await res.json();
+      return toast({ variant: "destructive", title: "Couldn't add supplier", description: data.error });
+    }
+    toast({ variant: "success", title: "Supplier added", description: `${name.trim()} is ready to use on purchase orders.` });
     setModal(false); setName(""); setContact(""); setPhone(""); setEmail("");
     onChange();
   }
@@ -216,22 +223,23 @@ type POItem = { ingredient_id: number; quantity: number; unit_cost: number };
 function NewPoModal({ suppliers, ingredients, onClose, onSaved }: { suppliers: Supplier[]; ingredients: Ingredient[]; onClose: () => void; onSaved: () => void }) {
   const [supplierId, setSupplierId] = useState("");
   const [items, setItems] = useState<POItem[]>([{ ingredient_id: 0, quantity: 1, unit_cost: 0 }]);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   function updateItem(i: number, field: keyof POItem, value: number) {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, [field]: value } : it)));
   }
 
   async function save() {
-    if (!supplierId) return setError("Pick a supplier.");
+    if (!supplierId) return toast({ variant: "destructive", title: "Pick a supplier" });
     const validItems = items.filter((i) => i.ingredient_id > 0 && i.quantity > 0);
-    if (validItems.length === 0) return setError("Add at least one item.");
+    if (validItems.length === 0) return toast({ variant: "destructive", title: "Add at least one item" });
     const res = await fetch("/api/purchase-orders", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ supplier_id: Number(supplierId), items: validItems, status: "ordered" }),
     });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't create order", description: data.error });
+    toast({ variant: "success", title: "Purchase order created", description: `${validItems.length} item${validItems.length > 1 ? "s" : ""} ordered.` });
     onSaved(); onClose();
   }
 
@@ -258,7 +266,6 @@ function NewPoModal({ suppliers, ingredients, onClose, onSaved }: { suppliers: S
           <button onClick={() => setItems((prev) => [...prev, { ingredient_id: 0, quantity: 1, unit_cost: 0 }])} className="text-red-600 text-xs font-semibold">+ Add line</button>
         </div>
 
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Create Order</button>
@@ -444,7 +451,7 @@ function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stock
   const [lines, setLines] = useState<StockTakeLine[]>([]);
   const [counts, setCounts] = useState<Record<number, { counted: string; reason: string }>>({});
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { toast } = useToast();
   const [confirmingPost, setConfirmingPost] = useState(false);
   const [confirmingReopen, setConfirmingReopen] = useState(false);
 
@@ -469,7 +476,7 @@ function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stock
   const isSubmitted = stockTake?.status === "submitted";
 
   async function saveCounts() {
-    setSaving(true); setError("");
+    setSaving(true);
     const payload = lines
       .filter((l) => counts[l.ingredient_id]?.counted !== "")
       .map((l) => ({ ingredient_id: l.ingredient_id, counted_qty: Number(counts[l.ingredient_id].counted), reason_code: counts[l.ingredient_id].reason || undefined }));
@@ -477,16 +484,18 @@ function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stock
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines: payload }),
     });
     setSaving(false);
-    if (!res.ok) { const d = await res.json(); return setError(d.error); }
+    if (!res.ok) { const d = await res.json(); return toast({ variant: "destructive", title: "Couldn't save counts", description: d.error }); }
+    toast({ variant: "success", title: "Counts saved" });
     load();
   }
 
   async function submit() {
-    setSaving(true); setError("");
+    setSaving(true);
     const res = await fetch(`/api/stock-takes/${stockTakeId}/submit`, { method: "POST" });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't submit", description: data.error });
+    toast({ variant: "success", title: "Stock take submitted", description: "Awaiting manager approval." });
     onChanged();
     load();
   }
@@ -495,7 +504,8 @@ function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stock
     const res = await fetch(`/api/stock-takes/${stockTakeId}/post`, { method: "POST" });
     const data = await res.json();
     setConfirmingPost(false);
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't post", description: data.error });
+    toast({ variant: "success", title: "Stock take posted", description: "Inventory levels updated." });
     onChanged();
     load();
   }
@@ -504,7 +514,8 @@ function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stock
     const res = await fetch(`/api/stock-takes/${stockTakeId}/reopen`, { method: "POST" });
     const data = await res.json();
     setConfirmingReopen(false);
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't reopen", description: data.error });
+    toast({ variant: "success", title: "Stock take reopened" });
     onChanged();
     load();
   }
@@ -553,7 +564,6 @@ function StockTakeSheet({ stockTakeId, canApprove, onClose, onChanged }: { stock
           </table>
           {lines.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No active ingredients to count.</p>}
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         {isSubmitted && !canApprove && (
           <p className="mt-4 text-muted-foreground text-sm text-center">Awaiting approval from a manager before this posts.</p>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 type Driver = { id: number; name: string; phone: string | null; vehicle_type: string | null; vehicle_registration: string | null; driver_status: string; delivered_count: number; delivered_value: number };
 type UnassignedOrder = { id: number; order_number: string; customer_name: string; customer_phone: string; customer_address: string; total: number };
@@ -135,23 +136,29 @@ function ZoneModal({ zone, onClose, onSaved }: { zone: DeliveryZone | "new"; onC
   const [prefixes, setPrefixes] = useState(isNew ? "" : zone.postcode_prefixes.join(", "));
   const [fee, setFee] = useState(isNew ? "0" : String(zone.fee));
   const [minOrder, setMinOrder] = useState(isNew ? "0" : String(zone.min_order));
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function save() {
     const prefixList = prefixes.split(",").map((p) => p.trim()).filter(Boolean);
-    if (!name.trim() || prefixList.length === 0) return setError("Name and at least one postcode prefix are required.");
+    if (!name.trim() || prefixList.length === 0) return toast({ variant: "destructive", title: "Name and at least one postcode prefix are required" });
     const payload = { name: name.trim(), postcode_prefixes: prefixList, fee: Number(fee) || 0, min_order: Number(minOrder) || 0 };
     const res = isNew
       ? await fetch("/api/delivery-zones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
       : await fetch(`/api/delivery-zones/${zone.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't save zone", description: data.error });
+    toast({ variant: "success", title: isNew ? "Zone added" : "Zone updated", description: name.trim() });
     onSaved(); onClose();
   }
 
   async function remove() {
     if (isNew) return;
-    await fetch(`/api/delivery-zones/${zone.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/delivery-zones/${zone.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      return toast({ variant: "destructive", title: "Couldn't delete zone", description: data.error });
+    }
+    toast({ variant: "success", title: "Zone deleted", description: zone.name });
     onSaved(); onClose();
   }
 
@@ -176,7 +183,6 @@ function ZoneModal({ zone, onClose, onSaved }: { zone: DeliveryZone | "new"; onC
             </div>
           </div>
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           {!isNew && <button onClick={remove} className="flex-1 h-10 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-xl text-sm">Delete</button>}

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -15,5 +16,10 @@ export default async function PosLayout({
     redirect("/login");
   }
 
-  return <div style={{ fontFamily: "var(--font-space-grotesk)" }}>{children}</div>;
+  return (
+    <div style={{ fontFamily: "var(--font-space-grotesk)" }}>
+      {children}
+      <Toaster />
+    </div>
+  );
 }

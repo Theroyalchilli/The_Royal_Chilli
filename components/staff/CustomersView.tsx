@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 type Customer = {
   id: number; name: string; phone: string; email: string | null; date_of_birth: string | null;
@@ -18,16 +19,17 @@ function AddCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   const [email, setEmail] = useState("");
   const [dob, setDob] = useState("");
   const [referredBy, setReferredBy] = useState("");
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function save() {
-    if (!name.trim() || !phone.trim()) return setError("Name and phone are required.");
+    if (!name.trim() || !phone.trim()) return toast({ variant: "destructive", title: "Name and phone are required" });
     const res = await fetch("/api/customers", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, phone, email: email || undefined, date_of_birth: dob || undefined, referred_by_code: referredBy || undefined }),
     });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't add customer", description: data.error });
+    toast({ variant: "success", title: "Customer added", description: `${name.trim()} is now in the loyalty program.` });
     onSaved(); onClose();
   }
 
@@ -45,7 +47,6 @@ function AddCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           </div>
           <input placeholder="Referral code (optional)" value={referredBy} onChange={(e) => setReferredBy(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         </div>
-        {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
           <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Save</button>
@@ -65,7 +66,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
   };
   const [detail, setDetail] = useState<Detail | null>(null);
   const [adjustPoints, setAdjustPoints] = useState("");
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/customers/${customerId}`);
@@ -74,17 +75,22 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
   }, [customerId]);
   useEffect(() => { load(); }, [load]);
 
-  async function redeem(rewardId: number) {
-    setError("");
+  async function redeem(rewardId: number, rewardName: string) {
     const res = await fetch("/api/loyalty/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, reward_id: rewardId }) });
     const data = await res.json();
-    if (!res.ok) return setError(data.error);
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't redeem reward", description: data.error });
+    toast({ variant: "success", title: "Reward redeemed", description: rewardName });
     load(); onChange();
   }
 
   async function adjust() {
     if (!adjustPoints) return;
-    await fetch("/api/loyalty/adjust", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, points_delta: Number(adjustPoints) }) });
+    const res = await fetch("/api/loyalty/adjust", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, points_delta: Number(adjustPoints) }) });
+    if (!res.ok) {
+      const data = await res.json();
+      return toast({ variant: "destructive", title: "Couldn't adjust points", description: data.error });
+    }
+    toast({ variant: "success", title: "Points adjusted", description: `${Number(adjustPoints) > 0 ? "+" : ""}${adjustPoints} points.` });
     setAdjustPoints("");
     load(); onChange();
   }
@@ -115,13 +121,12 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
           <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Redeem a Reward</h3>
           <div className="mt-2 flex flex-wrap gap-2">
             {rewards.map((r) => (
-              <button key={r.id} onClick={() => redeem(r.id)} disabled={c.loyalty_points < r.points_cost}
+              <button key={r.id} onClick={() => redeem(r.id, r.name)} disabled={c.loyalty_points < r.points_cost}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated disabled:opacity-40 text-foreground text-xs font-semibold rounded-lg border border-border">
                 {r.name} · {r.points_cost}pts
               </button>
             ))}
           </div>
-          {error && <p className="mt-2 text-red-600 text-sm">{error}</p>}
         </div>
 
         {isManager && (

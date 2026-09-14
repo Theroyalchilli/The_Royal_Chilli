@@ -5,6 +5,7 @@ import { ArrowRight, Bike, BookOpen, ChevronDown, Clock, MapPin } from "lucide-r
 import { siteContent } from "@/lib/site-content";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
+import ShimmerHeadline from "@/components/site/ShimmerHeadline";
 import TodayHours from "@/components/site/TodayHours";
 
 export const metadata: Metadata = {
@@ -50,7 +51,7 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto w-full max-w-3xl px-6 sm:px-10">
           <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-semibold leading-tight text-white/90 sm:text-6xl lg:text-7xl">
             <span className="block">{hero.headline}</span>
-            <span className="block italic text-primary/90">{hero.headlineGold}</span>
+            <ShimmerHeadline text={hero.headlineGold} className="italic" />
           </h1>
           <p className="mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
 

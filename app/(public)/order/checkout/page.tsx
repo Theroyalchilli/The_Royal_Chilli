@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { formatCurrency, isValidUkMobile } from "@/lib/utils";
+import { formatCurrency, isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
 import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, toDateTimeInputValue } from "@/lib/hours";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
@@ -113,8 +113,9 @@ export default function CheckoutPage() {
   async function submitOrder() {
     setError("");
     if (cart.length === 0) return setError("Your cart is empty.");
-    if (!name.trim() || !phone.trim()) return setError("Please enter your name and phone number.");
+    if (!name.trim() || !phone.trim() || !email.trim()) return setError("Please enter your name, phone number, and email.");
     if (!isValidUkMobile(phone)) return setError("Please enter a valid UK mobile number (starts with 07, 11 digits).");
+    if (!isValidEmail(email)) return setError("Please enter a valid email address.");
     if (orderType === "delivery" && (!address.trim() || !postcode.trim())) return setError("Please enter a delivery address and postcode.");
     if (orderType === "delivery" && zoneCheck && !zoneCheck.deliverable) return setError("Sorry, we don't currently deliver to that postcode — we deliver within 5 miles of the restaurant.");
     if (orderType === "delivery" && zoneCheck?.deliverable && subtotal < MIN_DELIVERY_ORDER) {
@@ -147,11 +148,12 @@ export default function CheckoutPage() {
           order_type: orderType,
           customer_name: name.trim(),
           customer_phone: phone.trim(),
-          customer_email: email.trim() || undefined,
+          customer_email: email.trim(),
           customer_address: orderType === "delivery" ? address.trim() : undefined,
           customer_postcode: orderType === "delivery" ? postcode.trim() : undefined,
           notes: notes.trim() || undefined,
           scheduled_for: scheduledFor,
+          pay_online: payOnline && STRIPE_ENABLED,
           items: cart.map((c) => ({ menu_item_id: c.menu_item_id, quantity: c.quantity, selected_options: c.selectedOptions.map((o) => o.id), notes: c.notes })),
         }),
       });
@@ -313,8 +315,9 @@ export default function CheckoutPage() {
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email (optional, for order confirmation)"
+          placeholder="Enter email to get order confirmation"
           type="email"
+          required
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         {orderType === "delivery" && (

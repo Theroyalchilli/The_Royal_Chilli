@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { sendReservationConfirmationEmail } from "@/lib/email";
+import { isValidEmail } from "@/lib/utils";
 
 const ACTIVE_STATUSES = ["pending", "confirmed", "seated"];
 
@@ -10,11 +11,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { customer_name, customer_phone, customer_email, party_size, reservation_date, reservation_time, notes, join_waitlist } = body;
 
-    if (!customer_name || !customer_phone || !reservation_date || !reservation_time) {
+    if (!customer_name || !customer_phone || !customer_email || !reservation_date || !reservation_time) {
       return NextResponse.json(
-        { error: "Name, phone, date and time are required" },
+        { error: "Name, phone, email, date and time are required" },
         { status: 400 }
       );
+    }
+    if (!isValidEmail(customer_email)) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
 
     // Real capacity check against the actual table count — not a guess.

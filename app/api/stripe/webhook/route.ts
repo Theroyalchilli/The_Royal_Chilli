@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import supabase from "@/lib/supabase";
 import { stripe } from "@/lib/stripe";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 
 // Stripe is the source of truth for "did the payment actually succeed" — the
 // browser redirect back to success_url is just a UX hint, never trusted on
@@ -37,7 +38,10 @@ export async function POST(req: NextRequest) {
         // recorded, since there's no DB-level unique constraint on reference.
         const { data: existingPayment } = await supabase
           .from("payments").select("id").eq("order_id", Number(order_id)).eq("reference", session.id).maybeSingle();
-        const { data: order } = await supabase.from("orders").select("amount_paid, total").eq("id", order_id).single();
+        const { data: order } = await supabase
+          .from("orders")
+          .select("order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_name, customer_email, customer_address, customer_postcode")
+          .eq("id", order_id).single();
         if (!existingPayment && order && Number(order.amount_paid) < Number(order.total)) {
           const amount = (session.amount_total || 0) / 100;
           await supabase.from("payments").insert({
@@ -46,6 +50,29 @@ export async function POST(req: NextRequest) {
             amount,
             staff_id: null,
             reference: session.id,
+          });
+
+          // First real confirmation this order gets — the order-creation
+          // route deliberately skipped it for pay-online orders, since
+          // "confirmed" wasn't true until this webhook fired.
+          const { data: orderItems } = await supabase
+            .from("order_items").select("item_name, quantity, item_price, notes").eq("order_id", order_id);
+          sendOrderConfirmationEmail(order.customer_email, {
+            orderNumber: order.order_number,
+            customerName: order.customer_name,
+            orderType: order.order_type,
+            scheduledFor: order.scheduled_for,
+            subtotal: Number(order.subtotal),
+            deliveryFee: order.order_type === "delivery" ? Number(order.total) - Number(order.subtotal) : 0,
+            discount: 0,
+            total: Number(order.total),
+            customerAddress:
+              order.order_type === "delivery" && order.customer_address
+                ? `${order.customer_address}, ${order.customer_postcode}`
+                : null,
+            paymentMethod: "Card, paid online",
+            paymentStatus: "paid",
+            items: (orderItems || []).map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: i.item_price, notes: i.notes })),
           });
         }
       } else if (type === "reservation" && reservation_id) {

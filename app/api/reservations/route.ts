@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { sendReservationConfirmationEmail } from "@/lib/email";
+import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -74,11 +76,17 @@ export async function POST(req: NextRequest) {
       source,
     } = body;
 
-    if (!customer_name || !reservation_date || !reservation_time) {
+    if (!customer_name || !customer_phone || !customer_email || !reservation_date || !reservation_time) {
       return NextResponse.json(
-        { error: "Customer name, date, and time are required" },
+        { error: "Customer name, phone, email, date, and time are required" },
         { status: 400 }
       );
+    }
+    if (!isValidUkMobile(customer_phone)) {
+      return NextResponse.json({ error: "Please enter a valid UK mobile number (starts with 07, 11 digits)" }, { status: 400 });
+    }
+    if (!isValidEmail(customer_email)) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -86,7 +94,7 @@ export async function POST(req: NextRequest) {
       .insert({
         customer_name,
         customer_phone: customer_phone || null,
-        customer_email: customer_email || null,
+        customer_email,
         party_size: party_size ?? 2,
         reservation_date,
         reservation_time,
@@ -99,6 +107,15 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    sendReservationConfirmationEmail(customer_email, {
+      customerName: customer_name,
+      partySize: party_size ?? 2,
+      reservationDate: reservation_date,
+      reservationTime: reservation_time,
+      waitlisted: false,
+      depositAmount: 0,
+    });
 
     return NextResponse.json({ success: true, reservation: data }, { status: 201 });
   } catch (error) {

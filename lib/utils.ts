@@ -15,6 +15,10 @@ export function isValidUkMobile(phone: string): boolean {
   return /^07\d{9}$/.test(phone.replace(/[\s-]/g, ""));
 }
 
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 export function isHappyHour(): boolean {
   const now = new Date();
   const hours = now.getHours();

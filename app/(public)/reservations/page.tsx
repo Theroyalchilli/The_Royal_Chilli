@@ -5,38 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
 import { getScheduleSlotOptions, toDateInputValue } from "@/lib/hours";
+import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 
-// wa.me only opens a pre-filled draft — the customer still has to tap Send
-// themselves — since actually auto-sending would need a WhatsApp Business
-// API account we don't have set up. This is the no-setup stand-in for that:
-// one tap, right after they've already engaged with the booking flow.
-function buildWhatsAppReservationLink({
-  waitlisted, name, phone, guests, time, notes,
-}: { waitlisted: boolean; name: string; phone: string; guests: number; time: string; notes: string }) {
-  // `time` is already a full local "YYYY-MM-DDTHH:MM" from the slot <select>
-  // — not just a time — since a post-midnight slot actually falls on the day
-  // after the date the customer picked (see getScheduleSlotOptions).
-  let dateLabel = time;
-  let timeLabel = time;
-  try {
-    const d = new Date(`${time}:00`);
-    dateLabel = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-    timeLabel = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true });
-  } catch {
-    // keep the raw string if parsing fails
-  }
-  const lines = [
-    waitlisted ? "⏳ Waitlist Request — The Royal Chilli" : "🍽️ New Reservation Request — The Royal Chilli",
-    "",
-    `👤 Name: ${name}`,
-    `📞 Phone: ${phone}`,
-    `👥 Party size: ${guests}`,
-    `📅 Date: ${dateLabel}`,
-    `🕐 Time: ${timeLabel}`,
-  ];
-  if (notes.trim()) lines.push(`📝 Notes: ${notes.trim()}`);
-  return `https://wa.me/${siteContent.contact.waNumber}?text=${encodeURIComponent(lines.join("\n"))}`;
-}
+type Result = { status: "full" | "waitlisted" | "booked" };
 
 export default function ReservationsPage() {
   return (
@@ -60,6 +31,8 @@ function ReservationsForm() {
   const [guests, setGuests] = useState(2);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<Result | null>(null);
 
   // Every valid quarter-hour slot for the chosen date, restricted to that
   // day's real opening hours (9am–1am) — same helper the checkout page uses
@@ -79,7 +52,6 @@ function ReservationsForm() {
 
   // On return from Stripe Checkout we re-check the real deposit status from
   // the webhook-updated record rather than trusting the redirect itself.
-  // (Dormant while bookings aren't saved to the database — see submit().)
   useEffect(() => {
     if (depositRedirect !== "return" || !depositReservationId) return;
     fetch(`/api/public/reservations/${depositReservationId}`)
@@ -88,22 +60,66 @@ function ReservationsForm() {
       .catch(() => setDepositPaid(false));
   }, [depositRedirect, depositReservationId]);
 
-  // Nothing is saved to the database for now (per explicit instruction, until
-  // told otherwise) — so there's no deposit check and no fully-booked/waitlist
-  // check either, since both depend on a stored reservation. This just
-  // validates the form client-side and redirects straight into WhatsApp.
-  function submit() {
+  async function submit(joinWaitlist = false) {
     setError("");
-    if (!name.trim() || !phone.trim() || !date || !time) {
-      setError("Please fill in your name, phone, date and time.");
+    if (!name.trim() || !phone.trim() || !email.trim() || !date || !time) {
+      setError("Please fill in your name, phone, email, date and time.");
       return;
     }
-    // Instant same-tab redirect straight into WhatsApp, message pre-filled
-    // — not a new tab, since a popup opened outside a direct click handler
-    // would likely get blocked. No confirmation screen shown here.
-    window.location.href = buildWhatsAppReservationLink({
-      waitlisted: false, name, phone, guests, time, notes,
-    });
+    if (!isValidUkMobile(phone)) {
+      setError("Please enter a valid UK mobile number (starts with 07, 11 digits).");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    setSubmitting(true);
+    // `time` is a full local "YYYY-MM-DDTHH:MM" — split rather than reusing
+    // the separate date picker's value, since a post-midnight slot actually
+    // falls on the day after the date the customer picked.
+    const [reservationDate, reservationTime] = time.split("T");
+    try {
+      const res = await fetch("/api/public/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_name: name.trim(),
+          customer_phone: phone.trim(),
+          customer_email: email.trim(),
+          party_size: guests,
+          reservation_date: reservationDate,
+          reservation_time: reservationTime,
+          notes: notes.trim() || undefined,
+          join_waitlist: joinWaitlist,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Something went wrong — please try again or call us.");
+        return;
+      }
+      if (data.full) {
+        setResult({ status: "full" });
+        return;
+      }
+      // Only meaningful once a deposit is configured in Settings — otherwise
+      // deposit_amount is 0 and this never fires.
+      if (data.deposit_amount > 0 && !data.waitlisted) {
+        const csRes = await fetch(`/api/public/reservations/${data.id}/checkout-session`, { method: "POST" });
+        const csData = await csRes.json();
+        if (csData.url) {
+          window.location.href = csData.url;
+          return;
+        }
+      }
+      setResult({ status: data.waitlisted ? "waitlisted" : "booked" });
+    } catch {
+      setError("Something went wrong — please try again or call us.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (depositRedirect === "return") {
@@ -130,6 +146,49 @@ function ReservationsForm() {
     );
   }
 
+  if (result?.status === "booked" || result?.status === "waitlisted") {
+    const waitlisted = result.status === "waitlisted";
+    return (
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <div className="text-5xl">{waitlisted ? "⏳" : "✅"}</div>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">
+          {waitlisted ? "You're On The Waitlist" : "Table Booked!"}
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          {waitlisted
+            ? "That time is fully booked, but we've added you to the waitlist — we'll be in touch if a table frees up."
+            : "We've got your reservation and sent a confirmation to your email."}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">Questions? Call us on {contact.phone}.</p>
+      </div>
+    );
+  }
+
+  if (result?.status === "full") {
+    return (
+      <div className="mx-auto max-w-md px-4 py-24 text-center">
+        <div className="text-5xl">📅</div>
+        <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-2xl">That Time Is Fully Booked</h1>
+        <p className="mt-2 text-muted-foreground">We don&apos;t have a table free for that slot. Want to join the waitlist, or pick a different time?</p>
+        <div className="mt-6 flex flex-col gap-3">
+          <button
+            onClick={() => submit(true)}
+            disabled={submitting}
+            className="w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {submitting ? "Joining…" : "Join The Waitlist"}
+          </button>
+          <button
+            onClick={() => setResult(null)}
+            className="w-full border border-border px-6 py-3 text-xs uppercase tracking-[0.15em] hover:bg-surface-hover"
+          >
+            Pick A Different Time
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-lg px-4 py-16">
       <Reveal className="text-center">
@@ -140,7 +199,9 @@ function ReservationsForm() {
         <p className="mt-3 text-muted-foreground">{reservation.desc}</p>
       </Reveal>
 
-      <div className="mt-10 space-y-3">
+      <div className="mt-10 rounded-2xl border border-border bg-background p-6 shadow-sm">
+        <p className="text-sm text-muted-foreground">A table gets assigned later, when you arrive.</p>
+        <div className="mt-4 space-y-3">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -150,14 +211,18 @@ function ReservationsForm() {
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone number"
+          placeholder="Mobile number (07…)"
+          type="tel"
+          inputMode="numeric"
+          maxLength={11}
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email (optional, for confirmation)"
+          placeholder="Enter email to get booking confirmation"
           type="email"
+          required
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
         <div className="grid grid-cols-2 gap-3">
@@ -217,16 +282,18 @@ function ReservationsForm() {
           rows={3}
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
+        </div>
+
+        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+
+        <button
+          onClick={() => submit(false)}
+          disabled={submitting}
+          className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {submitting ? "Booking…" : "Book Table"}
+        </button>
       </div>
-
-      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-
-      <button
-        onClick={submit}
-        className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90"
-      >
-        Book Table
-      </button>
     </div>
   );
 }

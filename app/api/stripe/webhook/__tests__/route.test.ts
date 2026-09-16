@@ -50,6 +50,9 @@ jest.mock("@/lib/supabase", () => ({
       if (table === "orders") {
         return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: orderRow, error: null }) }) }) };
       }
+      if (table === "order_items") {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+      }
       throw new Error(`Unexpected table in test: ${table}`);
     },
   },

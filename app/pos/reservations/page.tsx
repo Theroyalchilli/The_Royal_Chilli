@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { RestaurantTable } from "@/lib/types";
+import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 
 const tableStatusCfg = {
   available: { color: "bg-green-100 border-green-300 text-green-700", dot: "bg-green-500", ring: "ring-green-500" },
@@ -188,6 +189,7 @@ function TablePickerModal({
 function NewReservationModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [partySize, setPartySize] = useState("2");
   const [date, setDate] = useState(todayStr());
   const [time, setTime] = useState("19:00");
@@ -196,8 +198,16 @@ function NewReservationModal({ onClose, onCreated }: { onClose: () => void; onCr
   const [saving, setSaving] = useState(false);
 
   async function submit() {
-    if (!name.trim() || !date || !time) {
-      setErr("Name, date and time are required");
+    if (!name.trim() || !date || !time || !phone.trim() || !email.trim()) {
+      setErr("Name, phone, email, date and time are required");
+      return;
+    }
+    if (!isValidUkMobile(phone)) {
+      setErr("Please enter a valid UK mobile number (starts with 07, 11 digits)");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setErr("Please enter a valid email address");
       return;
     }
     setSaving(true);
@@ -207,7 +217,8 @@ function NewReservationModal({ onClose, onCreated }: { onClose: () => void; onCr
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         customer_name: name.trim(),
-        customer_phone: phone.trim() || undefined,
+        customer_phone: phone.trim(),
+        customer_email: email.trim(),
         party_size: Number(partySize) || 2,
         reservation_date: date,
         reservation_time: time,
@@ -233,7 +244,9 @@ function NewReservationModal({ onClose, onCreated }: { onClose: () => void; onCr
         <div className="px-5 py-4 space-y-3">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Customer name"
             className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500" />
-          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number (optional)"
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Mobile number (07…)" type="tel" inputMode="numeric" maxLength={11}
+            className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500" />
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email — for confirmation" type="email" required
             className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500" />
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs text-muted-foreground">
@@ -327,6 +340,13 @@ export default function ReservationsPage() {
   useEffect(() => {
     fetchReservations();
   }, [fetchReservations]);
+
+  // Clears the "new bookings" badge on the POS header button — staff opening
+  // this page counts as having seen everything up to now, regardless of
+  // which of those reservations are still pending.
+  useEffect(() => {
+    localStorage.setItem("pos_reservations_last_seen", new Date().toISOString());
+  }, []);
 
   const handleResvStatus = async (id: number, status: string) => {
     setUpdating(id);

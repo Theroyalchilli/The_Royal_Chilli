@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     // Flatten joined fields to match original shape
-    const flatOrders = (orders ?? []).map((o) => {
+    let flatOrders = (orders ?? []).map((o) => {
       const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
         restaurant_tables: { table_number: string } | null;
         staff: { name: string } | null;
@@ -69,6 +69,16 @@ export async function GET(req: NextRequest) {
         staff_name: s?.name ?? null,
       };
     });
+
+    if (source === "website") {
+      // A stripe_session_id means the customer chose to pay online — don't
+      // surface it to staff (who'd otherwise start cooking) until the
+      // webhook actually confirms payment. An order with no session (paid
+      // at collection/delivery) still shows immediately as normal.
+      flatOrders = flatOrders.filter(
+        (o) => !o.stripe_session_id || Number(o.amount_paid) >= Number(o.total)
+      );
+    }
 
     return NextResponse.json({ orders: flatOrders });
   } catch (error) {

@@ -6,7 +6,7 @@ import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen } from "@/lib/hours";
 import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
-import { isValidUkMobile } from "@/lib/utils";
+import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { formatTicketText } from "@/lib/cloudprnt";
 
@@ -22,17 +22,21 @@ export async function POST(req: NextRequest) {
       customer_postcode,
       notes,
       scheduled_for, // ISO string, optional — omitted/null means ASAP
+      pay_online, // customer picked "Pay Online Now" — a checkout session follows this call
       items, // [{ menu_item_id, quantity, notes, selected_options }]
     } = body;
 
     if (order_type !== "takeaway" && order_type !== "delivery") {
       return NextResponse.json({ error: "Invalid order type" }, { status: 400 });
     }
-    if (!customer_name || !customer_phone) {
-      return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
+    if (!customer_name || !customer_phone || !customer_email) {
+      return NextResponse.json({ error: "Name, phone, and email are required" }, { status: 400 });
     }
     if (!isValidUkMobile(customer_phone)) {
       return NextResponse.json({ error: "Please enter a valid UK mobile number (starts with 07, 11 digits)" }, { status: 400 });
+    }
+    if (!isValidEmail(customer_email)) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
     if (order_type === "delivery" && (!customer_address || !customer_postcode)) {
       return NextResponse.json({ error: "Delivery address and postcode are required" }, { status: 400 });
@@ -138,13 +142,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    sendOrderConfirmationEmail(customer_email, {
-      orderNumber,
-      orderType: order_type,
-      total,
-      scheduledFor: scheduled_for || null,
-      items: orderItems.map((i) => ({ name: i.item_name, quantity: i.quantity })),
-    });
+    // Paying online means this order isn't actually confirmed yet — a
+    // checkout session follows this response, and the customer's payment
+    // could still fail or be abandoned. Sending "order confirmed" now would
+    // be a lie in that case; the webhook sends it once payment is real.
+    if (!pay_online) {
+      sendOrderConfirmationEmail(customer_email, {
+        orderNumber,
+        customerName: customer_name,
+        orderType: order_type,
+        scheduledFor: scheduled_for || null,
+        subtotal: Math.round(subtotal * 100) / 100,
+        deliveryFee,
+        discount: 0,
+        total,
+        customerAddress:
+          order_type === "delivery" ? `${customer_address}, ${customer_postcode.trim().toUpperCase()}` : null,
+        paymentMethod: order_type === "delivery" ? "Cash or card on delivery" : "Cash or card on collection",
+        paymentStatus: "due",
+        items: orderItems.map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: i.item_price, notes: i.notes })),
+      });
+    }
 
     // Queues a ticket for the reception printer (Star mC-Print3, CloudPRNT)
     // so staff see the order without watching any screen — see

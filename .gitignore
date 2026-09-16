@@ -29,6 +29,9 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# local-only database backups (contain customer PII, never commit)
+/backups
+
 # vercel
 .vercel
 

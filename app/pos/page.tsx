@@ -68,6 +68,7 @@ export default function POSPage() {
   const [mobileTab, setMobileTab] = useState<MobileTab>("floor");
   const [clickPos, setClickPos] = useState<{ x: number; y: number } | null>(null);
   const [onlineBadge, setOnlineBadge] = useState(0);
+  const [reservationBadge, setReservationBadge] = useState(0);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
 
@@ -138,6 +139,48 @@ export default function POSPage() {
     loadMenuData();
     loadSession();
     checkTillStatus();
+  }, []);
+
+  // Runs regardless of which tab is active — OnlineOrdersPanel only mounts
+  // (and only polls) while staff are actually on the Online tab, so without
+  // this the badge count would freeze until they clicked into it.
+  useEffect(() => {
+    const fetchOnlineBadge = async () => {
+      try {
+        const res = await fetch("/api/orders?source=website&status=open", { cache: "no-store" });
+        const data = await res.json();
+        const orders: { status: string }[] = data.orders || [];
+        setOnlineBadge(orders.filter(o => o.status === "sent_to_kitchen").length);
+      } catch {
+        // silent — badge just skips this tick
+      }
+    };
+    fetchOnlineBadge();
+    const t = setInterval(fetchOnlineBadge, 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  // "New bookings since staff last opened Reservations" — not a live pending
+  // count, since a reservation staying "pending" shouldn't keep re-alerting
+  // once someone's already seen it. /pos/reservations stamps this timestamp
+  // in localStorage on mount, so opening that page clears the badge even if
+  // the bookings underneath are still unprocessed.
+  useEffect(() => {
+    const fetchReservationBadge = async () => {
+      try {
+        const lastSeen = localStorage.getItem("pos_reservations_last_seen") || "1970-01-01T00:00:00.000Z";
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(`/api/reservations?from=${today}`, { cache: "no-store" });
+        const data = await res.json();
+        const list: { created_at: string }[] = data.reservations || [];
+        setReservationBadge(list.filter(r => r.created_at > lastSeen).length);
+      } catch {
+        // silent — badge just skips this tick
+      }
+    };
+    fetchReservationBadge();
+    const t = setInterval(fetchReservationBadge, 15000);
+    return () => clearInterval(t);
   }, []);
 
   const checkTillStatus = async () => {
@@ -748,9 +791,19 @@ export default function POSPage() {
               className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               🍳 Kitchen
             </button>
-            <button onClick={() => router.push("/pos/reservations")}
-              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+            <button
+              onClick={() => {
+                localStorage.setItem("pos_reservations_last_seen", new Date().toISOString());
+                setReservationBadge(0);
+                router.push("/pos/reservations");
+              }}
+              className="relative px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               📅 Reservations
+              {reservationBadge > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 leading-none">
+                  {reservationBadge}
+                </span>
+              )}
             </button>
             {isManager && (
               <button onClick={openEndOfDay}
@@ -795,9 +848,20 @@ export default function POSPage() {
                     className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                     🍳 Kitchen
                   </button>
-                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/reservations"); }}
-                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                  <button
+                    onClick={() => {
+                      localStorage.setItem("pos_reservations_last_seen", new Date().toISOString());
+                      setReservationBadge(0);
+                      setShowMobileMenu(false);
+                      router.push("/pos/reservations");
+                    }}
+                    className="relative w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                     📅 Reservations
+                    {reservationBadge > 0 && (
+                      <span className="absolute top-1 right-3 bg-red-500 text-white text-[9px] font-black rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 leading-none">
+                        {reservationBadge}
+                      </span>
+                    )}
                   </button>
                   {isManager && (
                     <button onClick={() => { setShowMobileMenu(false); openEndOfDay(); }}
@@ -833,7 +897,7 @@ export default function POSPage() {
               <div className="mb-2 pt-1">
                 <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Online Orders</span>
               </div>
-              <OnlineOrdersPanel onCountChange={setOnlineBadge} />
+              <OnlineOrdersPanel />
             </div>
           )}
 
@@ -958,7 +1022,7 @@ export default function POSPage() {
                 <OrderTypeSelector value={orderType} onChange={handleOrderTypeChange} onlineBadge={onlineBadge} />
 
                 {orderType === "online" && (
-                  <OnlineOrdersPanel onCountChange={setOnlineBadge} />
+                  <OnlineOrdersPanel />
                 )}
 
                 {orderType !== "online" && orderType === "dine_in" && !selectedTable && (

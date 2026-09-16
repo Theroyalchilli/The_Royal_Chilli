@@ -23,15 +23,12 @@ interface OnlineOrder {
   customer_address?: string;
   status: string;
   total: number;
+  amount_paid: number;
   subtotal: number;
   tax?: number;
   notes?: string;
   created_at: string;
   scheduled_for?: string | null;
-}
-
-interface Props {
-  onCountChange?: (count: number) => void;
 }
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
@@ -41,7 +38,7 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> =
   cancelled:       { label: "Cancelled", color: "text-red-600",     bg: "bg-red-50 border-red-800/40" },
 };
 
-export default function OnlineOrdersPanel({ onCountChange }: Props) {
+export default function OnlineOrdersPanel() {
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [itemsCache, setItemsCache] = useState<Record<number, OnlineOrderItem[]>>({});
@@ -59,13 +56,12 @@ export default function OnlineOrdersPanel({ onCountChange }: Props) {
       const data = await res.json();
       const list: OnlineOrder[] = data.orders || [];
       setOrders(list);
-      onCountChange?.(list.filter(o => o.status === "sent_to_kitchen").length);
     } catch (err) {
       console.error("Failed to fetch online orders", err);
     } finally {
       setLoading(false);
     }
-  }, [onCountChange]);
+  }, []);
 
   useEffect(() => {
     fetchOrders();
@@ -163,6 +159,7 @@ export default function OnlineOrdersPanel({ onCountChange }: Props) {
           const items = itemsCache[order.id] || [];
           const isDelivery = !!order.customer_address;
           const tax = order.tax ?? Math.round((order.subtotal ?? order.total) * 0.2 * 100) / 100;
+          const paidOnline = order.amount_paid >= order.total;
 
           return (
             <div key={order.id} className={`rounded-xl border overflow-hidden transition-all ${cfg.bg}`}>
@@ -178,6 +175,11 @@ export default function OnlineOrdersPanel({ onCountChange }: Props) {
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
                       {cfg.label}
                     </span>
+                    {paidOnline && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/40 text-emerald-700">
+                        ✓ Paid Online
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground font-semibold">
                       {isDelivery ? "🛵 Delivery" : "🥡 Collection"}
                     </span>
@@ -250,13 +252,19 @@ export default function OnlineOrdersPanel({ onCountChange }: Props) {
 
                   {/* Action buttons */}
                   <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => handleTakePayment(order)}
-                      disabled={updating === order.id}
-                      className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 no-select flex items-center justify-center gap-2"
-                    >
-                      💰 Take Payment — {formatCurrency(order.total)}
-                    </button>
+                    {paidOnline ? (
+                      <div className="flex-1 h-10 bg-emerald-500/10 border border-emerald-500/40 text-emerald-700 text-sm font-bold rounded-lg flex items-center justify-center gap-2">
+                        ✓ Paid Online — {formatCurrency(order.amount_paid)}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleTakePayment(order)}
+                        disabled={updating === order.id}
+                        className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 no-select flex items-center justify-center gap-2"
+                      >
+                        💰 Take Payment — {formatCurrency(order.total)}
+                      </button>
+                    )}
                     <button
                       onClick={() => updateStatus(order.id, "cancelled")}
                       disabled={updating === order.id}

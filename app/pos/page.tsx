@@ -9,6 +9,7 @@ import MenuPanel from "@/components/pos/MenuPanel";
 import OrderTicket from "@/components/pos/OrderTicket";
 import PaymentModal from "@/components/pos/PaymentModal";
 import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
+import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import type {
   MenuCategory,
@@ -946,7 +947,19 @@ export default function POSPage() {
             </div>
           )}
 
-          {orderType !== "online" && (selectedTable || orderType !== "dine_in") && (
+          {(orderType === "takeaway" || orderType === "delivery") && cartItems.length === 0 && (
+            <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3">
+              <div className="mb-2 pt-1">
+                <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">
+                  Open {orderType === "delivery" ? "Delivery" : "Takeaway"} Orders
+                </span>
+              </div>
+              <OpenOrdersPanel orderType={orderType} />
+            </div>
+          )}
+
+          {orderType !== "online" && (selectedTable || orderType !== "dine_in") &&
+            !((orderType === "takeaway" || orderType === "delivery") && cartItems.length === 0) && (
             <div className="flex-1 flex flex-col overflow-hidden min-h-0 px-3">
               <div className="flex items-center justify-between mb-2 flex-shrink-0">
                 <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">Order Items</span>
@@ -1077,9 +1090,20 @@ export default function POSPage() {
                         <button onClick={() => setShowCustomerPopup(true)} className="text-[11px] font-bold text-red-600 hover:underline flex-shrink-0">Edit</button>
                       </div>
                     )}
-                    <p className="text-center text-muted-foreground text-xs">
-                      {orderType === "delivery" ? "Delivery" : "Takeaway"} orders don&apos;t use tables — customer details are asked for when you send or pay.
-                    </p>
+                    {cartItems.length === 0 ? (
+                      <>
+                        <div>
+                          <span className="text-[11px] font-bold text-muted-foreground tracking-widest uppercase">
+                            Open {orderType === "delivery" ? "Delivery" : "Takeaway"} Orders
+                          </span>
+                        </div>
+                        <OpenOrdersPanel orderType={orderType} />
+                      </>
+                    ) : (
+                      <p className="text-center text-muted-foreground text-xs">
+                        {orderType === "delivery" ? "Delivery" : "Takeaway"} orders don&apos;t use tables — customer details are asked for when you send or pay.
+                      </p>
+                    )}
                     <button onClick={() => setMobileTab("menu")}
                       className="w-full py-3 bg-red-600/20 border border-red-500/30 text-red-700 font-semibold rounded-xl text-sm no-select pos-btn">
                       🍽️ Browse Menu →

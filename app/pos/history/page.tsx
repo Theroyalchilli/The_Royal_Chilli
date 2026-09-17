@@ -211,17 +211,19 @@ export default function HistoryPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-border bg-surface px-4 py-3 flex items-center gap-3">
+      {/* Header — title on top, Back button underneath it */}
+      <div className="flex-shrink-0 border-b border-border bg-surface px-4 py-2.5">
+        <div className="flex items-center gap-3">
+          <h1 className="text-foreground font-bold text-lg flex-1">📜 Order History</h1>
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Shown total</div>
+            <div className="text-foreground font-black">{formatCurrency(dayTotal)}</div>
+          </div>
+        </div>
         <button onClick={() => router.push("/pos")}
-          className="text-muted-foreground hover:text-foreground text-sm font-semibold no-select">
+          className="mt-2 px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors no-select">
           ← Back
         </button>
-        <h1 className="text-foreground font-bold text-lg flex-1">📜 Order History</h1>
-        <div className="text-right">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Shown total</div>
-          <div className="text-foreground font-black">{formatCurrency(dayTotal)}</div>
-        </div>
       </div>
 
       {/* Filters */}

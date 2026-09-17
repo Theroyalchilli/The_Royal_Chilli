@@ -151,18 +151,12 @@ export default function KitchenBoard() {
         />
       ))}
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="bg-surface border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+      {/* Header — title on top, Back button underneath it */}
+      <div className="bg-surface border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex-shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/pos"
-            className="px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors flex-shrink-0">
-            ← Back
-          </Link>
           <span className="text-xl sm:text-2xl">🍳</span>
-          <div>
-            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>
-            <p className="text-muted-foreground text-[10px] sm:text-xs hidden sm:block">The Royal Chilli</p>
-          </div>
+          <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           <div className="hidden md:flex items-center gap-2" title="New orders auto-print to this device's default printer">
@@ -204,6 +198,11 @@ export default function KitchenBoard() {
             ↻ Refresh
           </button>
         </div>
+      </div>
+      <Link href="/pos"
+        className="mt-2 inline-block px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors">
+        ← Back
+      </Link>
       </div>
 
       {/* Orders Grid */}

@@ -83,6 +83,14 @@ export default function POSPage() {
     open_orders: number;
     pending_bills_total: number;
     pending_bills: { order_number: string; total: number; customer_name: string | null }[];
+    collected: {
+      own_total: number;
+      prior_total: number;
+      total: number;
+      cash_total: number;
+      card_total: number;
+      prior_settlements: { order_number: string; order_type: string | null; order_date: string | null; amount: number }[];
+    };
   } | null>(null);
   const [eodClosingCash, setEodClosingCash] = useState("");
   const [eodOpeningCash, setEodOpeningCash] = useState(0);
@@ -625,15 +633,20 @@ export default function POSPage() {
     <div class="sub">${date} · ${time}</div>
     <div class="divider"></div>
     <div class="row"><span class="label">Total Orders</span><span class="value">${eodData.total_orders}</span></div>
-    <div class="row"><span class="label">Total Revenue</span><span class="value total">£${eodData.total_revenue.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Sales (this shift)</span><span class="value total">£${eodData.total_revenue.toFixed(2)}</span></div>
     <div class="divider"></div>
-    <div class="row"><span class="label">💵 Cash Sales</span><span class="value">£${eodData.cash_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">💳 Card</span><span class="value">£${eodData.card_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Collected Today</span><span class="value total">£${eodData.collected.total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">💵 Cash</span><span class="value">£${eodData.collected.cash_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">💳 Card</span><span class="value">£${eodData.collected.card_total.toFixed(2)}</span></div>
+    ${eodData.collected.prior_settlements.length > 0 ? `
+    <div class="row"><span class="label">  incl. prior-shift settlements</span><span class="value">£${eodData.collected.prior_total.toFixed(2)}</span></div>
+    ${eodData.collected.prior_settlements.map(s => `<div class="row"><span class="label">  ${s.order_number}${s.order_date ? ` — ${new Date(s.order_date).toLocaleDateString("en-GB")}` : ""}</span><span class="value">£${s.amount.toFixed(2)}</span></div>`).join("")}
+    ` : ""}
     <div class="divider"></div>
     <div class="row"><span class="label">Opening Float</span><span class="value">£${eodOpeningCash.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.cash_total).toFixed(2)}</span></div>
+    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total).toFixed(2)}</span></div>
     <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
-    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.cash_total)).toFixed(2)}</span></div>
+    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total)).toFixed(2)}</span></div>
     ${eodData.pending_bills.length > 0 ? `
     <div class="divider"></div>
     <div class="row"><span class="label">📌 Pending Bills</span><span class="value total">£${eodData.pending_bills_total.toFixed(2)}</span></div>
@@ -1360,26 +1373,54 @@ export default function POSPage() {
               ) : (
                 /* Normal state */
                 <>
-                  {/* Revenue Summary */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-surface-hover rounded-xl p-3">
-                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Revenue</div>
-                      <div className="text-red-600 text-xl font-bold">
-                        £{(eodData?.total_revenue || 0).toFixed(2)}
+                  {/* Sales — trading performance: orders served this shift, paid or not counted separately */}
+                  <div>
+                    <div className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-1.5">📊 Sales (this shift)</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-surface-hover rounded-xl p-3">
+                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Revenue</div>
+                        <div className="text-red-600 text-xl font-bold">
+                          £{(eodData?.total_revenue || 0).toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="bg-surface-hover rounded-xl p-3">
+                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Orders</div>
+                        <div className="text-blue-600 text-xl font-bold">{eodData?.total_orders || 0}</div>
                       </div>
                     </div>
-                    <div className="bg-surface-hover rounded-xl p-3">
-                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Orders</div>
-                      <div className="text-blue-600 text-xl font-bold">{eodData?.total_orders || 0}</div>
+                  </div>
+
+                  {/* Collected — till reconciliation: money that actually landed today,
+                      including any prior-shift Pay Later bill settled just now. This is
+                      what Expected Cash below is based on, not Sales. */}
+                  <div>
+                    <div className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-1.5">💰 Collected Today</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-surface-hover rounded-xl p-3">
+                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💵 Cash</div>
+                        <div className="text-green-600 text-xl font-bold">£{(eodData?.collected.cash_total || 0).toFixed(2)}</div>
+                      </div>
+                      <div className="bg-surface-hover rounded-xl p-3">
+                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💳 Card</div>
+                        <div className="text-purple-600 text-xl font-bold">£{(eodData?.collected.card_total || 0).toFixed(2)}</div>
+                      </div>
                     </div>
-                    <div className="bg-surface-hover rounded-xl p-3">
-                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💵 Cash</div>
-                      <div className="text-green-600 text-xl font-bold">£{(eodData?.cash_total || 0).toFixed(2)}</div>
-                    </div>
-                    <div className="bg-surface-hover rounded-xl p-3">
-                      <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💳 Card</div>
-                      <div className="text-purple-600 text-xl font-bold">£{(eodData?.card_total || 0).toFixed(2)}</div>
-                    </div>
+                    {(eodData?.collected.prior_settlements?.length || 0) > 0 && (
+                      <div className="mt-2 bg-emerald-500/10 border border-emerald-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-emerald-700 text-xs font-bold">Includes prior-shift settlements</span>
+                          <span className="text-emerald-700 text-sm font-black">£{eodData?.collected.prior_total.toFixed(2)}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {eodData?.collected.prior_settlements.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between text-[11px] text-emerald-800">
+                              <span>{s.order_number}{s.order_date ? ` — ${new Date(s.order_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span>
+                              <span className="font-semibold">£{s.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {(eodData?.open_orders || 0) > 0 && (
@@ -1408,10 +1449,12 @@ export default function POSPage() {
                     </div>
                   )}
 
-                  {/* Opening float + expected cash */}
+                  {/* Opening float + expected cash — based on Collected (cash physically
+                      taken this shift), not Sales, since a prior-shift settlement adds
+                      real cash to the drawer today even though it isn't today's sale. */}
                   <div className="flex items-center justify-between bg-surface-hover rounded-xl px-3 py-2.5 text-xs">
-                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Sales</span>
-                    <span className="text-foreground font-bold">£{(eodOpeningCash + (eodData?.cash_total || 0)).toFixed(2)} expected</span>
+                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Collected</span>
+                    <span className="text-foreground font-bold">£{(eodOpeningCash + (eodData?.collected.cash_total || 0)).toFixed(2)} expected</span>
                   </div>
 
                   {/* Closing Cash Input */}
@@ -1429,8 +1472,8 @@ export default function POSPage() {
                       className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
                     />
                     {eodClosingCash && eodData && (
-                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.cash_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
-                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.cash_total)).toFixed(2)}
+                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
+                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total)).toFixed(2)}
                       </p>
                     )}
                   </div>

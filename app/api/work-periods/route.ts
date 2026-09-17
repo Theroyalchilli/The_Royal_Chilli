@@ -87,6 +87,53 @@ export async function GET(req: NextRequest) {
     pendingBillsTotal = Math.round(pendingBills.reduce((s, o) => s + o.total, 0) * 100) / 100;
   }
 
+  // Collected — actual money received during THIS shift, regardless of which
+  // day/shift the underlying order was placed under. Different question from
+  // Sales above ("how much did we trade") — this is "what should physically
+  // be in the drawer + terminal right now", so it must include a Pay Later
+  // order from an earlier, already-closed shift being settled just now.
+  let collectedOwn = 0;
+  let collectedPriorTotal = 0;
+  let collectedCash = 0;
+  let collectedCard = 0;
+  const priorSettlements: { order_number: string; order_type: string | null; order_date: string | null; amount: number }[] = [];
+
+  if (period?.id) {
+    const { data: periodPayments } = await supabase
+      .from("payments")
+      .select("amount, method, order_id")
+      .gte("created_at", period.opened_at)
+      .lte("created_at", new Date().toISOString());
+
+    const pays = periodPayments || [];
+    const payOrderIds = [...new Set(pays.map((p) => p.order_id))];
+    const orderById: Record<number, { order_number: string; order_type: string; work_period_id: number | null; created_at: string }> = {};
+    if (payOrderIds.length > 0) {
+      const { data: relatedOrders } = await supabase
+        .from("orders")
+        .select("id, order_number, order_type, work_period_id, created_at")
+        .in("id", payOrderIds);
+      for (const o of relatedOrders || []) orderById[o.id] = o;
+    }
+
+    for (const p of pays) {
+      const amt = Number(p.amount);
+      if (p.method === "cash") collectedCash += amt; else collectedCard += amt;
+      const o = orderById[p.order_id];
+      if (o && o.work_period_id === period.id) {
+        collectedOwn += amt;
+      } else {
+        collectedPriorTotal += amt;
+        priorSettlements.push({
+          order_number: o?.order_number ?? `#${p.order_id}`,
+          order_type: o?.order_type ?? null,
+          order_date: o?.created_at ?? null,
+          amount: Math.round(amt * 100) / 100,
+        });
+      }
+    }
+  }
+
   return NextResponse.json({
     period,
     summary: {
@@ -97,6 +144,14 @@ export async function GET(req: NextRequest) {
       open_orders: openOrdersCount || 0,
       pending_bills_total: pendingBillsTotal,
       pending_bills: pendingBills,
+      collected: {
+        own_total: Math.round(collectedOwn * 100) / 100,
+        prior_total: Math.round(collectedPriorTotal * 100) / 100,
+        total: Math.round((collectedOwn + collectedPriorTotal) * 100) / 100,
+        cash_total: Math.round(collectedCash * 100) / 100,
+        card_total: Math.round(collectedCard * 100) / 100,
+        prior_settlements: priorSettlements,
+      },
     },
   });
 }

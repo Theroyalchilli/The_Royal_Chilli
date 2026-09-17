@@ -92,7 +92,7 @@ export default function POSPage() {
     open_orders: number;
     pending_bills_total: number;
     pending_bills: { order_number: string; total: number; customer_name: string | null }[];
-    unpaid_orders: { order_number: string; total: number; amount_paid: number; status: string; pay_later: boolean }[];
+    unresolved_orders: { order_number: string; total: number; amount_paid: number; status: string }[];
     cash_paid_out_total: number;
     cash_paid_outs: { amount: number; reason: string; created_at: string }[];
     collected: {
@@ -688,10 +688,15 @@ export default function POSPage() {
     <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total).toFixed(2)}</span></div>
     <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
     <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)).toFixed(2)}</span></div>
-    ${eodData.unpaid_orders.length > 0 ? `
+    ${eodData.pending_bills.length > 0 ? `
     <div class="divider"></div>
-    <div class="row"><span class="label">⚠️ Unpaid Orders</span><span class="value total">£${eodData.unpaid_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}</span></div>
-    ${eodData.unpaid_orders.map(o => `<div class="row"><span class="label">${o.order_number} — ${o.pay_later ? "Pay Later" : "In Progress"}</span><span class="value">£${(o.total - o.amount_paid).toFixed(2)}</span></div>`).join("")}
+    <div class="row"><span class="label">📌 Pending Bills</span><span class="value total">£${eodData.pending_bills_total.toFixed(2)}</span></div>
+    ${eodData.pending_bills.map(o => `<div class="row"><span class="label">${o.order_number}${o.customer_name ? ` — ${o.customer_name}` : ""}</span><span class="value">£${o.total.toFixed(2)}</span></div>`).join("")}
+    ` : ""}
+    ${eodData.unresolved_orders.length > 0 ? `
+    <div class="divider"></div>
+    <div class="row"><span class="label">⛔ UNRESOLVED — must pay or Pay Later</span><span class="value total">£${eodData.unresolved_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}</span></div>
+    ${eodData.unresolved_orders.map(o => `<div class="row"><span class="label">${o.order_number}</span><span class="value">£${(o.total - o.amount_paid).toFixed(2)}</span></div>`).join("")}
     ` : ""}
     <div class="divider"></div>
     <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
@@ -1533,26 +1538,39 @@ export default function POSPage() {
                     )}
                   </div>
 
-                  {/* Unpaid Orders — one itemized list for every currently-unpaid order
-                      this shift, whether it's just mid-service or explicitly Pay Later,
-                      instead of a bare count staff can't act on. */}
-                  {(eodData?.unpaid_orders?.length || 0) > 0 && (
+                  {/* Pending Bills — Pay Later orders, informational, doesn't block closing. */}
+                  {(eodData?.pending_bills?.length || 0) > 0 && (
                     <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-amber-700 text-xs font-bold">⚠️ Unpaid Orders (this shift)</span>
-                        <span className="text-amber-700 text-sm font-black">
-                          £{eodData?.unpaid_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}
+                        <span className="text-amber-700 text-xs font-bold">📌 Pending Bills (this shift)</span>
+                        <span className="text-amber-700 text-sm font-black">£{(eodData?.pending_bills_total || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {eodData?.pending_bills.map((o) => (
+                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-amber-800">
+                            <span>{o.order_number}{o.customer_name ? ` — ${o.customer_name}` : ""}</span>
+                            <span className="font-semibold">£{o.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Unresolved orders — blocks Close Day entirely. Every order this
+                      shift must be paid or explicitly marked Pay Later before you can
+                      close; this is what's stopping you. */}
+                  {(eodData?.unresolved_orders?.length || 0) > 0 && (
+                    <div className="bg-red-500/10 border-2 border-red-500/50 rounded-xl px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-red-600">⛔</span>
+                        <span className="text-red-700 text-xs font-bold">
+                          Can't close yet — {eodData?.unresolved_orders.length} order{(eodData?.unresolved_orders.length || 0) > 1 ? "s" : ""} still need{(eodData?.unresolved_orders.length || 0) > 1 ? "" : "s"} to be paid or marked Pay Later
                         </span>
                       </div>
                       <div className="space-y-1">
-                        {eodData?.unpaid_orders.map((o) => (
-                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-amber-800">
-                            <span>
-                              {o.order_number}
-                              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide opacity-70">
-                                {o.pay_later ? "Pay Later" : "In Progress"}
-                              </span>
-                            </span>
+                        {eodData?.unresolved_orders.map((o) => (
+                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-red-800">
+                            <span>{o.order_number}</span>
                             <span className="font-semibold">£{(o.total - o.amount_paid).toFixed(2)}</span>
                           </div>
                         ))}
@@ -1621,7 +1639,8 @@ export default function POSPage() {
                     </button>
                     <button
                       onClick={handleCloseDay}
-                      disabled={eodLoading}
+                      disabled={eodLoading || (eodData?.unresolved_orders?.length || 0) > 0}
+                      title={(eodData?.unresolved_orders?.length || 0) > 0 ? "Resolve every unpaid order first" : undefined}
                       className="py-3 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm"
                     >
                       {eodLoading ? "Closing..." : "🔒 Close Day"}

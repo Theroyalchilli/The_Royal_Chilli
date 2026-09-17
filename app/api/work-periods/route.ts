@@ -147,11 +147,11 @@ export async function GET(req: NextRequest) {
     cashPaidOutTotal = Math.round(cashPaidOuts.reduce((s, p) => s + p.amount, 0) * 100) / 100;
   }
 
-  // Unpaid Orders — every currently-unpaid order for this shift, one
-  // itemized list covering both ordinary in-progress orders and ones
-  // explicitly marked Pay Later, replacing a bare count with something
-  // staff can actually act on at close-of-day.
-  let unpaidOrders: { order_number: string; total: number; amount_paid: number; status: string; pay_later: boolean }[] = [];
+  // Unresolved orders — anything this shift that's neither paid, cancelled,
+  // nor explicitly marked Pay Later. By close-of-day every order must land
+  // in one of those three buckets; this list is what's blocking Close Day
+  // until staff either take payment or mark it Pay Later.
+  let unresolvedOrders: { order_number: string; total: number; amount_paid: number; status: string }[] = [];
 
   // Discounts + Refunds — against orders belonging to THIS period
   // specifically, whenever the refund itself happens, mirroring how Sales
@@ -167,13 +167,12 @@ export async function GET(req: NextRequest) {
       .eq("work_period_id", period.id);
 
     for (const o of periodOrders || []) {
-      if (o.status !== "paid" && o.status !== "cancelled") {
-        unpaidOrders.push({
+      if (o.status !== "paid" && o.status !== "cancelled" && !o.pay_later) {
+        unresolvedOrders.push({
           order_number: o.order_number,
           total: Number(o.total),
           amount_paid: Number(o.amount_paid),
           status: o.status,
-          pay_later: o.pay_later,
         });
       }
       if (o.status === "paid") discountTotal += Number(o.discount || 0);
@@ -213,7 +212,7 @@ export async function GET(req: NextRequest) {
       open_orders: openOrdersCount || 0,
       pending_bills_total: pendingBillsTotal,
       pending_bills: pendingBills,
-      unpaid_orders: unpaidOrders,
+      unresolved_orders: unresolvedOrders,
       cash_paid_out_total: cashPaidOutTotal,
       cash_paid_outs: cashPaidOuts,
       collected: {
@@ -277,6 +276,27 @@ export async function PUT(req: NextRequest) {
       .is("work_period_id", null)
       .gte("created_at", todayStart.toISOString())
       .lte("created_at", todayEnd.toISOString());
+  }
+
+  // Every order this shift must be resolved to paid, cancelled, or
+  // explicitly Pay Later before the day can close — no leaving one just
+  // sitting there unpaid and unaccounted for. Checked server-side, not just
+  // in the UI, since this is the one thing Close Day must never skip.
+  const { data: unresolved, error: unresolvedError } = await supabase
+    .from("orders")
+    .select("order_number")
+    .eq("work_period_id", period.id)
+    .not("status", "eq", "paid")
+    .not("status", "eq", "cancelled")
+    .eq("pay_later", false);
+  if (unresolvedError) return NextResponse.json({ error: unresolvedError.message }, { status: 500 });
+  if ((unresolved || []).length > 0) {
+    return NextResponse.json(
+      {
+        error: `${unresolved.length} order${unresolved.length > 1 ? "s" : ""} still need${unresolved.length > 1 ? "" : "s"} to be paid or marked Pay Later before closing: ${unresolved.map((o) => o.order_number).join(", ")}`,
+      },
+      { status: 400 }
+    );
   }
 
   const { data: updated, error: updateError } = await supabase

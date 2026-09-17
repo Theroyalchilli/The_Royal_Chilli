@@ -44,40 +44,30 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> =
   cancelled:       { label: "Cancelled",  color: "text-red-600",     bg: "bg-red-50 border-red-300" },
 };
 
-type TypeFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online";
-type StatusFilter = "all" | "paid" | "pending";
+type CategoryFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online" | "pending";
 
 function todayStr() {
   return toDateInputValue(new Date());
 }
 
-// Mirrors the categorization already used live in the POS (Dine-in /
-// Takeaway / Delivery / Online tabs) — "Online" isn't its own order_type in
-// the database, it's a takeaway/delivery order with no staff_id because a
-// customer placed it on the website rather than a till.
-function matchesType(order: OrderRow, type: TypeFilter): boolean {
-  if (type === "all") return true;
-  if (type === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
-  if (type === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
-  if (type === "delivery") return order.order_type === "delivery" && !!order.staff_id;
-  return order.order_type === type;
-}
-
-// Independent of Type, so the two rows AND-combine — Delivery + Pending
-// shows only delivery orders that aren't settled yet, regardless of why.
-function matchesStatus(order: OrderRow, status: StatusFilter): boolean {
-  if (status === "all") return true;
-  if (status === "paid") return order.status === "paid";
-  return order.status !== "paid" && order.status !== "cancelled"; // pending
+// One row, mutually exclusive. "Online" isn't its own order_type in the
+// database, it's a takeaway/delivery order with no staff_id because a
+// customer placed it on the website rather than a till. "Pending" cuts
+// across every type — any order not yet paid off, regardless of how it
+// was ordered or why it's unpaid.
+function matchesCategory(order: OrderRow, category: CategoryFilter): boolean {
+  if (category === "all") return true;
+  if (category === "pending") return order.status !== "paid" && order.status !== "cancelled";
+  if (category === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
+  if (category === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
+  if (category === "delivery") return order.order_type === "delivery" && !!order.staff_id;
+  return order.order_type === category;
 }
 
 export default function HistoryPage() {
   const router = useRouter();
   const [date, setDate] = useState(todayStr());
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  // Defaults to Pending, not All — surfaces unpaid orders first, since this
-  // screen is mainly used to find and act on them.
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [category, setCategory] = useState<CategoryFilter>("all");
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,8 +184,7 @@ export default function HistoryPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = orders
-    .filter(o => matchesType(o, typeFilter))
-    .filter(o => matchesStatus(o, statusFilter))
+    .filter(o => matchesCategory(o, category))
     .filter(o =>
       !q ||
       o.order_number.toLowerCase().includes(q) ||
@@ -207,22 +196,17 @@ export default function HistoryPage() {
   const dayTotal = filtered.filter(o => o.status !== "cancelled").reduce((s, o) => s + Number(o.total), 0);
 
   const clearFilters = () => {
-    setTypeFilter("all");
-    setStatusFilter("all");
+    setCategory("all");
     setSearch("");
   };
 
-  const typeOptions: { key: TypeFilter; label: string; icon: string }[] = [
+  const categories: { key: CategoryFilter; label: string; icon: string }[] = [
     { key: "all",      label: "All",      icon: "📋" },
     { key: "dine_in",  label: "Dine-in",  icon: "🍽️" },
     { key: "takeaway", label: "Takeaway", icon: "🥡" },
     { key: "delivery", label: "Delivery", icon: "🛵" },
     { key: "online",   label: "Online",   icon: "🌐" },
-  ];
-  const statusOptions: { key: StatusFilter; label: string; icon: string }[] = [
-    { key: "all",     label: "All",     icon: "📋" },
-    { key: "paid",    label: "Paid",    icon: "✅" },
-    { key: "pending", label: "Pending", icon: "⏳" },
+    { key: "pending",  label: "Pending",  icon: "📌" },
   ];
 
   return (
@@ -258,35 +242,18 @@ export default function HistoryPage() {
             className="h-10 flex-1 min-w-[200px] border border-border bg-background rounded-lg px-3 text-sm outline-none focus:border-red-500"
           />
         </div>
-        {/* Row 1: service type — independent of Row 2, they AND-combine */}
         <div className="flex flex-wrap gap-2">
-          {typeOptions.map(t => (
+          {categories.map(c => (
             <button
-              key={t.key}
-              onClick={() => setTypeFilter(t.key)}
+              key={c.key}
+              onClick={() => setCategory(c.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors no-select ${
-                typeFilter === t.key
+                category === c.key
                   ? "bg-red-600 border-red-600 text-white"
                   : "bg-surface-hover border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
-        {/* Row 2: payment status */}
-        <div className="flex flex-wrap gap-2">
-          {statusOptions.map(s => (
-            <button
-              key={s.key}
-              onClick={() => setStatusFilter(s.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors no-select ${
-                statusFilter === s.key
-                  ? "bg-blue-600 border-blue-600 text-white"
-                  : "bg-surface-hover border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {s.icon} {s.label}
+              {c.icon} {c.label}
             </button>
           ))}
         </div>

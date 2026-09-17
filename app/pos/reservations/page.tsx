@@ -390,6 +390,21 @@ export default function ReservationsPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
 
+      {/* Top nav */}
+      <div className="bg-surface border-b border-border px-4 py-3 flex gap-3">
+        <Link href="/pos" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
+          ← Back to POS
+        </Link>
+        <Link href="/pos/kitchen" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
+          🍳 Kitchen Display
+        </Link>
+        {canSeeStaffHub && (
+          <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
+            👥 Staff Hub
+          </Link>
+        )}
+      </div>
+
       {/* Header */}
       <div className="bg-surface border-b border-border px-4 py-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -534,21 +549,6 @@ export default function ReservationsPage() {
             ))
           )}
         </div>
-      </div>
-
-      {/* Footer nav */}
-      <div className="bg-surface border-t border-border px-4 py-3 flex gap-3">
-        <Link href="/pos" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-          ← Back to POS
-        </Link>
-        <Link href="/pos/kitchen" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-          🍳 Kitchen Display
-        </Link>
-        {canSeeStaffHub && (
-          <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-            👥 Staff Hub
-          </Link>
-        )}
       </div>
 
       {/* Table picker modal */}

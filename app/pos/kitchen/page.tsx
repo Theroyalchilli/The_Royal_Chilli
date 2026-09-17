@@ -9,10 +9,7 @@ export default async function KitchenPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <div className="flex-1 overflow-hidden">
-        <KitchenBoard />
-      </div>
-      <div className="bg-surface border-t border-border px-4 py-2 flex gap-3">
+      <div className="bg-surface border-b border-border px-4 py-2 flex gap-3">
         <Link
           href="/pos"
           className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors"
@@ -25,6 +22,9 @@ export default async function KitchenPage() {
         >
           📅 Reservations
         </Link>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <KitchenBoard />
       </div>
     </div>
   );

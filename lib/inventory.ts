@@ -27,6 +27,18 @@ export type ReconciliationReport = {
 // bookkeeping, never a condition for the sale itself, so callers should
 // never let a failure here affect the payment response.
 export async function depleteStockForOrder(orderId: number, staffId: number): Promise<void> {
+  // Both Pay Later and an eventual full payment call this for the same
+  // order — without this guard, a Pay Later order that later gets paid off
+  // has its stock deducted twice for the same food.
+  const { data: existing } = await supabase
+    .from("stock_movements")
+    .select("id")
+    .eq("reference_type", "order")
+    .eq("reference_id", orderId)
+    .eq("movement_type", "usage")
+    .limit(1);
+  if (existing && existing.length > 0) return;
+
   const { data: items } = await supabase
     .from("order_items")
     .select("menu_item_id, quantity")

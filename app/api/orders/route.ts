@@ -178,36 +178,46 @@ export async function POST(req: NextRequest) {
     });
     const { tax, total } = bill;
 
-    const orderNumber = await generateOrderNumber();
     const customerId = customer_phone ? await findOrCreateCustomerByPhone(customer_phone, customer_name || "Guest") : null;
 
-    const { data: newOrder, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-        order_number: orderNumber,
-        order_type,
-        table_id: table_id || null,
-        customer_id: customerId,
-        customer_name: customer_name || null,
-        customer_phone: customer_phone || null,
-        customer_address: customer_address || null,
-        staff_id: session.id,
-        work_period_id: workPeriod?.id || null,
-        subtotal,
-        discount: discountAmt,
-        discount_type: discountAmt > 0 ? "amount" : null,
-        discount_reason: discount_reason || null,
-        tax,
-        total,
-        notes: notes || null,
-        status: "open",
-      })
-      .select()
-      .single();
+    // generateOrderNumber() isn't locked against a concurrent request landing
+    // on the same next number — retry a couple of times with a freshly
+    // regenerated number if the unique constraint catches a collision.
+    let newOrder: { id: number; order_number: string } | null = null;
+    let orderError: { code?: string; message?: string } | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const orderNumber = await generateOrderNumber();
+      const result = await supabase
+        .from("orders")
+        .insert({
+          order_number: orderNumber,
+          order_type,
+          table_id: table_id || null,
+          customer_id: customerId,
+          customer_name: customer_name || null,
+          customer_phone: customer_phone || null,
+          customer_address: customer_address || null,
+          staff_id: session.id,
+          work_period_id: workPeriod?.id || null,
+          subtotal,
+          discount: discountAmt,
+          discount_type: discountAmt > 0 ? "amount" : null,
+          discount_reason: discount_reason || null,
+          tax,
+          total,
+          notes: notes || null,
+          status: "open",
+        })
+        .select()
+        .single();
+      newOrder = result.data;
+      orderError = result.error;
+      if (!orderError || orderError.code !== "23505") break;
+    }
 
     if (orderError) throw orderError;
 
-    const orderId = newOrder.id;
+    const orderId = newOrder!.id;
 
     // Insert order items
     type IncomingItem = {

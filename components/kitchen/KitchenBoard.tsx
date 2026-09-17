@@ -154,6 +154,10 @@ export default function KitchenBoard() {
       {/* Header */}
       <div className="bg-surface border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link href="/pos"
+            className="px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors flex-shrink-0">
+            ← Back
+          </Link>
           <span className="text-xl sm:text-2xl">🍳</span>
           <div>
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>
@@ -164,6 +168,18 @@ export default function KitchenBoard() {
           <div className="hidden md:flex items-center gap-2" title="New orders auto-print to this device's default printer">
             <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />
             <span className="text-blue-600 text-xs font-medium">🖨️ Auto-print ON</span>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-yellow-500 inline-block" />
+            <span className="text-yellow-600 text-xs sm:text-sm font-medium">
+              New: {orders.filter((o) => o.status === "sent_to_kitchen").length}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-green-500 inline-block" />
+            <span className="text-green-600 text-xs sm:text-sm font-medium">
+              Ready: {orders.filter((o) => o.status === "ready").length}
+            </span>
           </div>
           {orders.some((o) => o.just_cancelled) && (
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -181,6 +197,12 @@ export default function KitchenBoard() {
               second: "2-digit",
             })}
           </div>
+          <button
+            onClick={fetchOrders}
+            className="px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors"
+          >
+            ↻ Refresh
+          </button>
         </div>
       </div>
 
@@ -348,31 +370,6 @@ export default function KitchenBoard() {
         )}
       </div>
 
-      {/* Bottom bar — Back, live counts, and manual refresh */}
-      <div className="bg-surface border-t border-border px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center gap-2 sm:gap-4 flex-shrink-0">
-        <Link href="/pos"
-          className="px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors flex-shrink-0">
-          ← Back
-        </Link>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-yellow-500 inline-block" />
-          <span className="text-yellow-600 text-xs sm:text-sm font-medium">
-            New: {orders.filter((o) => o.status === "sent_to_kitchen").length}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-green-500 inline-block" />
-          <span className="text-green-600 text-xs sm:text-sm font-medium">
-            Ready: {orders.filter((o) => o.status === "ready").length}
-          </span>
-        </div>
-        <button
-          onClick={fetchOrders}
-          className="ml-auto px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors"
-        >
-          ↻ Refresh
-        </button>
-      </div>
     </div>
     </>
   );

@@ -7,8 +7,17 @@ type Customer = {
   id: number; name: string; phone: string; email: string | null; date_of_birth: string | null;
   loyalty_points: number; referral_code: string | null; lifetime_spend: number; visit_count: number; tier: string;
 };
-type Reward = { id: number; name: string; description: string | null; points_cost: number };
+type Reward = {
+  id: number; name: string; description: string | null; points_cost: number;
+  discount_amount: number | null; min_spend: number; eligible_tier_name: string | null;
+  valid_days: number; per_customer_limit: number | null;
+};
 type Birthday = { id: number; name: string; phone: string; days_away: number };
+type Tier = { id: number; name: string; min_lifetime_spend: number; points_multiplier: number; sort_order: number; active: number };
+type Redemption = {
+  id: number; code: string; status: string; issued_at: string; expires_at: string; redeemed_at: string | null;
+  points_spent: number; reward: { name: string } | null; customer: { name: string; phone: string } | null;
+};
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 const tierColor: Record<string, string> = { Gold: "text-amber-600", Silver: "text-foreground", Bronze: "text-red-700" };
@@ -66,6 +75,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
   };
   const [detail, setDetail] = useState<Detail | null>(null);
   const [adjustPoints, setAdjustPoints] = useState("");
+  const [issuedCode, setIssuedCode] = useState<{ code: string; reward_name: string; expires_at: string } | null>(null);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -75,11 +85,15 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
   }, [customerId]);
   useEffect(() => { load(); }, [load]);
 
-  async function redeem(rewardId: number, rewardName: string) {
-    const res = await fetch("/api/loyalty/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, reward_id: rewardId }) });
+  // Issues a redemption code (points are debited now) rather than applying
+  // the reward instantly — staff relay the code to the customer, who brings
+  // it back to redeem at the till, same visit or a later one.
+  async function issueReward(rewardId: number, rewardName: string) {
+    const res = await fetch("/api/loyalty/redemptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, reward_id: rewardId }) });
     const data = await res.json();
-    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't redeem reward", description: data.error });
-    toast({ variant: "success", title: "Reward redeemed", description: rewardName });
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't issue reward", description: data.error });
+    setIssuedCode({ code: data.redemption.code, reward_name: rewardName, expires_at: data.redemption.expires_at });
+    toast({ variant: "success", title: "Reward code issued", description: rewardName });
     load(); onChange();
   }
 
@@ -118,15 +132,22 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
         {c.referral_code && <p className="mt-1 text-xs text-muted-foreground">Referral code: <span className="text-red-600">{c.referral_code}</span></p>}
 
         <div className="mt-4">
-          <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Redeem a Reward</h3>
+          <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Issue a Reward Code</h3>
           <div className="mt-2 flex flex-wrap gap-2">
             {rewards.map((r) => (
-              <button key={r.id} onClick={() => redeem(r.id, r.name)} disabled={c.loyalty_points < r.points_cost}
+              <button key={r.id} onClick={() => issueReward(r.id, r.name)} disabled={c.loyalty_points < r.points_cost}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated disabled:opacity-40 text-foreground text-xs font-semibold rounded-lg border border-border">
                 {r.name} · {r.points_cost}pts
               </button>
             ))}
           </div>
+          {issuedCode && (
+            <div className="mt-3 rounded-lg border border-emerald-400/50 bg-emerald-50 p-3">
+              <p className="text-emerald-800 text-sm font-semibold">{issuedCode.reward_name} — give this code to the customer:</p>
+              <p className="text-emerald-900 text-2xl font-black tracking-[0.15em] mt-1">{issuedCode.code}</p>
+              <p className="text-emerald-700 text-xs mt-1">Valid until {new Date(issuedCode.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — enter it at the till to redeem.</p>
+            </div>
+          )}
         </div>
 
         {isManager && (
@@ -153,14 +174,17 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
 }
 
 export default function CustomersView({ isManager }: { isManager: boolean }) {
-  const [tab, setTab] = useState<"customers" | "rewards">("customers");
+  const [tab, setTab] = useState<"customers" | "rewards" | "tiers" | "redemptions">("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [tiers, setTiers] = useState<Tier[]>([]);
+  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [modal, setModal] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
-  const [newReward, setNewReward] = useState({ name: "", points_cost: "" });
+  const [newReward, setNewReward] = useState({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7" });
+  const { toast } = useToast();
 
   const loadCustomers = useCallback(async () => {
     const res = await fetch(`/api/customers${search ? `?search=${encodeURIComponent(search)}` : ""}`);
@@ -172,6 +196,16 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
     const data = await res.json();
     setRewards(data.rewards || []);
   }, []);
+  const loadTiers = useCallback(async () => {
+    const res = await fetch("/api/loyalty/tiers");
+    const data = await res.json();
+    setTiers(data.tiers || []);
+  }, []);
+  const loadRedemptions = useCallback(async () => {
+    const res = await fetch("/api/loyalty/redemptions/log");
+    const data = await res.json();
+    setRedemptions(data.redemptions || []);
+  }, []);
   const loadBirthdays = useCallback(async () => {
     const res = await fetch("/api/customers/birthdays");
     const data = await res.json();
@@ -179,13 +213,36 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
   }, []);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
-  useEffect(() => { loadRewards(); loadBirthdays(); }, [loadRewards, loadBirthdays]);
+  useEffect(() => { loadRewards(); loadTiers(); loadBirthdays(); }, [loadRewards, loadTiers, loadBirthdays]);
+  useEffect(() => { if (tab === "redemptions") loadRedemptions(); }, [tab, loadRedemptions]);
 
   async function addReward() {
     if (!newReward.name || !newReward.points_cost) return;
-    await fetch("/api/loyalty/rewards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newReward.name, points_cost: Number(newReward.points_cost) }) });
-    setNewReward({ name: "", points_cost: "" });
+    const res = await fetch("/api/loyalty/rewards", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newReward.name, points_cost: Number(newReward.points_cost),
+        discount_amount: newReward.discount_amount || undefined,
+        min_spend: newReward.min_spend || undefined,
+        valid_days: newReward.valid_days || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't add reward", description: data.error });
+    setNewReward({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7" });
     loadRewards();
+  }
+
+  async function toggleRewardActive(reward: Reward & { active?: number }) {
+    await fetch(`/api/loyalty/rewards/${reward.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: false }) });
+    loadRewards();
+  }
+
+  async function updateTier(id: number, field: "min_lifetime_spend" | "points_multiplier", value: string) {
+    if (value === "" || isNaN(Number(value))) return;
+    const res = await fetch(`/api/loyalty/tiers/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: Number(value) }) });
+    if (!res.ok) { const data = await res.json(); toast({ variant: "destructive", title: "Couldn't update tier", description: data.error }); }
+    loadTiers();
   }
 
   return (
@@ -202,6 +259,8 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
             <button onClick={() => setTab("customers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "customers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Customers</button>
             <button onClick={() => setTab("rewards")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rewards" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Catalog</button>
+            <button onClick={() => setTab("tiers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "tiers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Tiers</button>
+            <button onClick={() => setTab("redemptions")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "redemptions" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Redemptions</button>
           </div>
         </div>
       </div>
@@ -246,20 +305,99 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
         {tab === "rewards" && (
           <div className="mt-5">
             {isManager && (
-              <div className="flex gap-2">
-                <input placeholder="Reward name" value={newReward.name} onChange={(e) => setNewReward({ ...newReward, name: e.target.value })} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-                <input type="number" placeholder="Points cost" value={newReward.points_cost} onChange={(e) => setNewReward({ ...newReward, points_cost: e.target.value })} className="w-32 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-                <button onClick={addReward} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
+              <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <input placeholder="Reward name" value={newReward.name} onChange={(e) => setNewReward({ ...newReward, name: e.target.value })} className="flex-1 min-w-[140px] bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                  <input type="number" placeholder="Points cost" value={newReward.points_cost} onChange={(e) => setNewReward({ ...newReward, points_cost: e.target.value })} className="w-28 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input type="number" placeholder="£ off (optional)" value={newReward.discount_amount} onChange={(e) => setNewReward({ ...newReward, discount_amount: e.target.value })} className="w-32 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                  <input type="number" placeholder="Min spend £ (optional)" value={newReward.min_spend} onChange={(e) => setNewReward({ ...newReward, min_spend: e.target.value })} className="w-40 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                  <input type="number" placeholder="Valid days" value={newReward.valid_days} onChange={(e) => setNewReward({ ...newReward, valid_days: e.target.value })} className="w-28 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+                  <button onClick={addReward} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
+                </div>
+                <p className="text-muted-foreground text-xs">Leave &quot;£ off&quot; blank for a comped item (e.g. free dessert) — staff hand it over on a valid code, no automatic price change.</p>
               </div>
             )}
             <div className="mt-3 space-y-2">
               {rewards.map((r) => (
-                <div key={r.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3">
-                  <p className="text-foreground font-semibold">{r.name} <span className="text-red-600">· {r.points_cost} pts</span></p>
-                  {r.description && <p className="text-muted-foreground text-sm">{r.description}</p>}
+                <div key={r.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-foreground font-semibold">{r.name} <span className="text-red-600">· {r.points_cost} pts</span></p>
+                    {r.description && <p className="text-muted-foreground text-sm">{r.description}</p>}
+                    <p className="text-muted-foreground text-xs mt-1">
+                      {r.discount_amount ? `£${Number(r.discount_amount).toFixed(2)} off` : "Comped item"}
+                      {r.min_spend > 0 ? ` · min spend £${Number(r.min_spend).toFixed(2)}` : ""}
+                      {r.eligible_tier_name ? ` · ${r.eligible_tier_name}+ only` : ""}
+                      {` · code valid ${r.valid_days}d`}
+                    </p>
+                  </div>
+                  {isManager && (
+                    <button onClick={() => toggleRewardActive(r)} className="flex-shrink-0 text-xs text-muted-foreground hover:text-red-600 font-semibold">Remove</button>
+                  )}
                 </div>
               ))}
               {rewards.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No rewards in the catalog yet.</p>}
+            </div>
+          </div>
+        )}
+
+        {tab === "tiers" && (
+          <div className="mt-5">
+            <p className="text-muted-foreground text-sm">Tier is based on lifetime spend and multiplies points earned on every purchase.</p>
+            <div className="mt-3 rounded-xl border border-border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Tier</th><th className="text-right px-3 py-2">Min lifetime spend</th><th className="text-right px-3 py-2">Points multiplier</th></tr></thead>
+                <tbody className="divide-y divide-border">
+                  {tiers.map((t) => (
+                    <tr key={t.id} className="bg-background">
+                      <td className={`px-3 py-2 font-semibold ${tierColor[t.name] ?? "text-foreground"}`}>{t.name}</td>
+                      <td className="px-3 py-2 text-right">
+                        {isManager ? (
+                          <input type="number" defaultValue={t.min_lifetime_spend} onBlur={(e) => updateTier(t.id, "min_lifetime_spend", e.target.value)}
+                            className="w-24 text-right bg-surface-hover border border-border rounded px-2 py-1 text-foreground" />
+                        ) : <>£{t.min_lifetime_spend}</>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {isManager ? (
+                          <input type="number" step="0.05" defaultValue={t.points_multiplier} onBlur={(e) => updateTier(t.id, "points_multiplier", e.target.value)}
+                            className="w-20 text-right bg-surface-hover border border-border rounded px-2 py-1 text-foreground" />
+                        ) : <>×{t.points_multiplier}</>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {tiers.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No tiers configured.</p>}
+            </div>
+          </div>
+        )}
+
+        {tab === "redemptions" && (
+          <div className="mt-5">
+            <div className="rounded-xl border border-border overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Code</th><th className="text-left px-3 py-2">Reward</th><th className="text-left px-3 py-2">Customer</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Points</th><th className="text-left px-3 py-2">Issued</th></tr></thead>
+                <tbody className="divide-y divide-border">
+                  {redemptions.map((r) => (
+                    <tr key={r.id} className="bg-background">
+                      <td className="px-3 py-2 font-mono text-foreground">{r.code}</td>
+                      <td className="px-3 py-2 text-foreground">{r.reward?.name ?? "—"}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{r.customer?.name ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        <span className={
+                          r.status === "redeemed" ? "text-emerald-600 font-semibold" :
+                          r.status === "issued" ? "text-blue-600 font-semibold" :
+                          "text-muted-foreground"
+                        }>{r.status}</span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-foreground">{r.points_spent}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{new Date(r.issued_at).toLocaleDateString("en-GB")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {redemptions.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No redemptions yet.</p>}
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
-import { tierFromSpend } from "@/lib/crm";
+import { getActiveTiers, tierForSpend } from "@/lib/crm";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -28,10 +28,11 @@ export async function GET(req: NextRequest) {
     spendByCustomer.set(o.customer_id, cur);
   }
 
+  const tiers = await getActiveTiers();
   const enriched = (customers || []).map((c) => {
     const stats = spendByCustomer.get(c.id) || { spend: 0, visits: 0 };
     const lifetimeSpend = Math.round(stats.spend * 100) / 100;
-    return { ...c, lifetime_spend: lifetimeSpend, visit_count: stats.visits, tier: tierFromSpend(lifetimeSpend) };
+    return { ...c, lifetime_spend: lifetimeSpend, visit_count: stats.visits, tier: tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze" };
   });
 
   return NextResponse.json({ customers: enriched });

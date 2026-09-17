@@ -57,6 +57,13 @@ export default function PaymentModal({
   const [localTotal, setLocalTotal] = useState(total);
   const [discountApplying, setDiscountApplying] = useState(false);
 
+  // Loyalty reward redemption — staff enter a code issued earlier from the
+  // Customers & Loyalty screen; a successful redeem may adjust the discount.
+  const [rewardCodeInput, setRewardCodeInput] = useState("");
+  const [rewardApplying, setRewardApplying] = useState(false);
+  const [rewardError, setRewardError] = useState("");
+  const [appliedReward, setAppliedReward] = useState<string | null>(null);
+
   // Service charge
   const [serviceChargeInput, setServiceChargeInput] = useState("");
   const [localServiceCharge, setLocalServiceCharge] = useState(0);
@@ -109,6 +116,9 @@ export default function PaymentModal({
       setTerminalPiId(null);
       setUseManualCard(false);
       setPayLaterNote("");
+      setRewardCodeInput("");
+      setRewardError("");
+      setAppliedReward(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderId]);
@@ -163,6 +173,31 @@ export default function PaymentModal({
       }
     } catch { setError("Failed to remove discount"); }
     finally { setDiscountApplying(false); }
+  };
+
+  const applyRewardCode = async () => {
+    if (!orderId || !rewardCodeInput.trim()) return;
+    setRewardApplying(true);
+    setRewardError("");
+    try {
+      const res = await fetch("/api/loyalty/redemptions/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: rewardCodeInput.trim(), order_id: orderId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRewardError(data.message || data.error || "Couldn't redeem this code"); return; }
+      setAppliedReward(data.reward_name);
+      setRewardCodeInput("");
+      if (data.bill) {
+        setLocalDiscount(data.bill.discount ?? localDiscount);
+        setLocalTax(data.bill.tax ?? localTax);
+        setLocalTotal(data.bill.total ?? localTotal);
+        setRemainingBalance(data.bill.total ?? localTotal);
+      }
+      toast({ variant: "success", title: "Reward applied", description: data.reward_name });
+    } catch { setRewardError("Couldn't redeem this code"); }
+    finally { setRewardApplying(false); }
   };
 
   const applyServiceCharge = async (pct: number) => {
@@ -438,6 +473,32 @@ export default function PaymentModal({
                   onChange={e => setDiscountReasonInput(e.target.value)}
                   className="w-full bg-elevated border border-elevated rounded-lg px-3 py-1.5 text-foreground text-xs focus:outline-none focus:border-red-500"
                 />
+              </div>
+
+              {/* Loyalty reward code */}
+              <div className="bg-surface-hover/60 rounded-xl px-3 py-2.5 space-y-2">
+                <div className="text-xs text-muted-foreground font-semibold">Loyalty Reward Code</div>
+                {appliedReward ? (
+                  <div className="text-emerald-600 text-xs font-semibold">✓ {appliedReward} applied</div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. 7K4M9PQ2"
+                      value={rewardCodeInput}
+                      onChange={(e) => setRewardCodeInput(e.target.value.toUpperCase())}
+                      className="flex-1 bg-elevated border border-elevated rounded-lg px-3 py-1.5 text-foreground text-sm font-mono tracking-wider focus:outline-none focus:border-red-500"
+                    />
+                    <button
+                      onClick={applyRewardCode}
+                      disabled={!rewardCodeInput.trim() || rewardApplying}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-all"
+                    >
+                      {rewardApplying ? "…" : "Redeem"}
+                    </button>
+                  </div>
+                )}
+                {rewardError && <div className="text-red-600 text-xs">{rewardError}</div>}
               </div>
 
               {/* Service charge */}

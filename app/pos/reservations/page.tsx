@@ -41,10 +41,6 @@ interface Reservation {
   source?: string;
 }
 
-interface SessionUser {
-  role: string;
-}
-
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -284,8 +280,6 @@ function NewReservationModal({ onClose, onCreated }: { onClose: () => void; onCr
 
 // ── Main Page ─────────────────────────────────────────────────────────────
 export default function ReservationsPage() {
-  const [session, setSession] = useState<SessionUser | null>(null);
-
   const [tables, setTables] = useState<RestaurantTable[]>([]);
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -319,10 +313,6 @@ export default function ReservationsPage() {
     const data = await res.json();
     setReservations(data.reservations || []);
     setResvLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => d && setSession(d.user)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -385,7 +375,6 @@ export default function ReservationsPage() {
   }, [reservations]);
 
   const pendingCount = reservations.filter(r => r.status === "pending").length;
-  const canSeeStaffHub = !session || session.role !== "employee";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -393,16 +382,8 @@ export default function ReservationsPage() {
       {/* Top nav */}
       <div className="bg-surface border-b border-border px-4 py-3 flex gap-3">
         <Link href="/pos" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-          ← Back to POS
+          ← Back
         </Link>
-        <Link href="/pos/kitchen" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-          🍳 Kitchen Display
-        </Link>
-        {canSeeStaffHub && (
-          <Link href="/staff" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-            👥 Staff Hub
-          </Link>
-        )}
       </div>
 
       {/* Header */}

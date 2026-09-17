@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getOrderForPrint } from "@/lib/kot";
 import AutoPrint from "./AutoPrint";
+import PrintNav from "./PrintNav";
 
 export default async function KotPrintPage({
   params,
@@ -20,6 +21,7 @@ export default async function KotPrintPage({
   return (
     <>
       <AutoPrint />
+      <PrintNav />
       <div className="kot-ticket">
         <p className="center bold big">THE ROYAL CHILLI</p>
         <p className="center">KITCHEN ORDER TICKET</p>
@@ -62,6 +64,7 @@ export default async function KotPrintPage({
         @media print {
           @page { size: 80mm auto; margin: 0; }
           body { margin: 0; }
+          .no-print { display: none; }
         }
       `}</style>
     </>

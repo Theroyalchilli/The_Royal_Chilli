@@ -14,13 +14,7 @@ export default async function KitchenPage() {
           href="/pos"
           className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors"
         >
-          ← Back to POS
-        </Link>
-        <Link
-          href="/pos/reservations"
-          className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors"
-        >
-          📅 Reservations
+          ← Back
         </Link>
       </div>
       <div className="flex-1 overflow-hidden">

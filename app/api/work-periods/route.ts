@@ -134,16 +134,88 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Cash Paid Out — cash physically removed from the till during this shift
+  // (a driver tip, petty cash for supplies) — subtracted from Expected Cash.
+  let cashPaidOutTotal = 0;
+  let cashPaidOuts: { amount: number; reason: string; created_at: string }[] = [];
+  if (period?.id) {
+    const { data: paidOuts } = await supabase
+      .from("cash_paid_outs")
+      .select("amount, reason, created_at")
+      .eq("work_period_id", period.id);
+    cashPaidOuts = (paidOuts || []).map((p) => ({ amount: Number(p.amount), reason: p.reason, created_at: p.created_at }));
+    cashPaidOutTotal = Math.round(cashPaidOuts.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  }
+
+  // Unpaid Orders — every currently-unpaid order for this shift, one
+  // itemized list covering both ordinary in-progress orders and ones
+  // explicitly marked Pay Later, replacing a bare count with something
+  // staff can actually act on at close-of-day.
+  let unpaidOrders: { order_number: string; total: number; amount_paid: number; status: string; pay_later: boolean }[] = [];
+
+  // Discounts + Refunds — against orders belonging to THIS period
+  // specifically, whenever the refund itself happens, mirroring how Sales
+  // already only cares about the order's own period, not payment timing.
+  let discountTotal = 0;
+  let refundsTotal = 0;
+  let refunds: { order_number: string; amount: number; created_at: string }[] = [];
+
+  if (period?.id) {
+    const { data: periodOrders } = await supabase
+      .from("orders")
+      .select("id, order_number, total, amount_paid, discount, status, pay_later")
+      .eq("work_period_id", period.id);
+
+    for (const o of periodOrders || []) {
+      if (o.status !== "paid" && o.status !== "cancelled") {
+        unpaidOrders.push({
+          order_number: o.order_number,
+          total: Number(o.total),
+          amount_paid: Number(o.amount_paid),
+          status: o.status,
+          pay_later: o.pay_later,
+        });
+      }
+      if (o.status === "paid") discountTotal += Number(o.discount || 0);
+    }
+    discountTotal = Math.round(discountTotal * 100) / 100;
+
+    const periodOrderIds = (periodOrders || []).map((o) => o.id);
+    const orderNumberById: Record<number, string> = Object.fromEntries((periodOrders || []).map((o) => [o.id, o.order_number]));
+    if (periodOrderIds.length > 0) {
+      const { data: refundPayments } = await supabase
+        .from("payments")
+        .select("amount, order_id, created_at")
+        .in("order_id", periodOrderIds)
+        .lt("amount", 0);
+      for (const p of refundPayments || []) {
+        refunds.push({
+          order_number: orderNumberById[p.order_id] ?? `#${p.order_id}`,
+          amount: Math.round(Number(p.amount) * 100) / 100,
+          created_at: p.created_at,
+        });
+      }
+      refundsTotal = Math.round(refunds.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+    }
+  }
+
   return NextResponse.json({
     period,
     summary: {
       total_revenue: Math.round(totalRevenue * 100) / 100,
+      net_sales: Math.round((totalRevenue + refundsTotal) * 100) / 100,
+      discount_total: discountTotal,
+      refunds_total: refundsTotal,
+      refunds,
       total_orders: totalOrders,
       cash_total: Math.round(cashTotal * 100) / 100,
       card_total: Math.round(cardTotal * 100) / 100,
       open_orders: openOrdersCount || 0,
       pending_bills_total: pendingBillsTotal,
       pending_bills: pendingBills,
+      unpaid_orders: unpaidOrders,
+      cash_paid_out_total: cashPaidOutTotal,
+      cash_paid_outs: cashPaidOuts,
       collected: {
         own_total: Math.round(collectedOwn * 100) / 100,
         prior_total: Math.round(collectedPriorTotal * 100) / 100,

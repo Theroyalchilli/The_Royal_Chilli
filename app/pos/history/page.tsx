@@ -77,6 +77,13 @@ export default function HistoryPage() {
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const [payItems, setPayItems] = useState<CartItem[]>([]);
 
+  const [refundOrder, setRefundOrder] = useState<OrderRow | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundMethod, setRefundMethod] = useState<"cash" | "card" | "card_online">("cash");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundSaving, setRefundSaving] = useState(false);
+  const [refundError, setRefundError] = useState("");
+
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
@@ -133,6 +140,45 @@ export default function HistoryPage() {
     setPayOrder(null);
     setPayItems([]);
     fetchOrders();
+  };
+
+  const openRefund = (order: OrderRow) => {
+    setRefundOrder(order);
+    setRefundAmount(order.amount_paid.toFixed(2));
+    setRefundMethod("cash");
+    setRefundReason("");
+    setRefundError("");
+  };
+
+  const closeRefund = () => {
+    setRefundOrder(null);
+    setRefundAmount("");
+    setRefundReason("");
+    setRefundError("");
+  };
+
+  const submitRefund = async () => {
+    if (!refundOrder) return;
+    setRefundError("");
+    const amt = parseFloat(refundAmount);
+    if (!amt || amt <= 0) { setRefundError("Enter an amount"); return; }
+    if (!refundReason.trim()) { setRefundError("A reason is required"); return; }
+    setRefundSaving(true);
+    try {
+      const res = await fetch(`/api/orders/${refundOrder.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: amt, method: refundMethod, reason: refundReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRefundError(data.error || "Failed to process refund"); return; }
+      closeRefund();
+      fetchOrders();
+    } catch {
+      setRefundError("Failed to process refund");
+    } finally {
+      setRefundSaving(false);
+    }
   };
 
   const q = search.trim().toLowerCase();
@@ -326,6 +372,14 @@ export default function HistoryPage() {
                           🖨️ Reprint Receipt
                         </button>
                       </div>
+                      {Number(order.amount_paid) > 0 && order.status !== "cancelled" && (
+                        <button
+                          onClick={() => openRefund(order)}
+                          className="w-full h-9 bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-700 text-xs font-bold rounded-lg transition-all no-select flex items-center justify-center gap-2"
+                        >
+                          ↩️ Refund
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -349,6 +403,57 @@ export default function HistoryPage() {
           total={payOrder.total}
           onPaymentComplete={fetchOrders}
         />
+      )}
+
+      {refundOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={closeRefund}>
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center">
+              <div className="text-3xl mb-2">↩️</div>
+              <h2 className="text-foreground font-bold text-lg">Refund {refundOrder.order_number}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Up to {formatCurrency(refundOrder.amount_paid)} paid on this order.</p>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input
+                type="number" min="0" max={refundOrder.amount_paid} step="0.01" placeholder="Refund amount (£)"
+                value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)}
+                className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500"
+              />
+              <div className="flex rounded-lg overflow-hidden border border-elevated">
+                {(["cash", "card", "card_online"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setRefundMethod(m)}
+                    className={`flex-1 py-2 text-xs font-bold transition-all ${refundMethod === m ? "bg-red-600 text-white" : "bg-elevated text-muted-foreground"}`}
+                  >
+                    {m === "cash" ? "Cash" : m === "card" ? "Card" : "Online"}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text" placeholder="Reason — e.g. customer complaint"
+                value={refundReason} onChange={(e) => setRefundReason(e.target.value)}
+                className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500"
+              />
+              {refundError && <p className="text-red-600 text-xs text-center">{refundError}</p>}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={closeRefund}
+                className="flex-1 h-11 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRefund}
+                disabled={refundSaving}
+                className="flex-1 h-11 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
+              >
+                {refundSaving ? "Saving…" : "Confirm Refund"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

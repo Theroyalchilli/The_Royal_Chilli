@@ -70,6 +70,11 @@ export default function POSPage() {
   const [clickPos, setClickPos] = useState<{ x: number; y: number } | null>(null);
   const [onlineBadge, setOnlineBadge] = useState(0);
   const [reservationBadge, setReservationBadge] = useState(0);
+  const [showCashOutModal, setShowCashOutModal] = useState(false);
+  const [cashOutAmount, setCashOutAmount] = useState("");
+  const [cashOutReason, setCashOutReason] = useState("");
+  const [cashOutSaving, setCashOutSaving] = useState(false);
+  const [cashOutError, setCashOutError] = useState("");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
 
@@ -77,12 +82,19 @@ export default function POSPage() {
   const [endOfDayOpen, setEndOfDayOpen] = useState(false);
   const [eodData, setEodData] = useState<{
     total_revenue: number;
+    net_sales: number;
+    discount_total: number;
+    refunds_total: number;
+    refunds: { order_number: string; amount: number; created_at: string }[];
     cash_total: number;
     card_total: number;
     total_orders: number;
     open_orders: number;
     pending_bills_total: number;
     pending_bills: { order_number: string; total: number; customer_name: string | null }[];
+    unpaid_orders: { order_number: string; total: number; amount_paid: number; status: string; pay_later: boolean }[];
+    cash_paid_out_total: number;
+    cash_paid_outs: { amount: number; reason: string; created_at: string }[];
     collected: {
       own_total: number;
       prior_total: number;
@@ -563,6 +575,30 @@ export default function POSPage() {
     router.push("/login");
   };
 
+  const handleCashOut = async () => {
+    setCashOutError("");
+    const amt = parseFloat(cashOutAmount);
+    if (!amt || amt <= 0) { setCashOutError("Enter an amount"); return; }
+    if (!cashOutReason.trim()) { setCashOutError("A reason is required"); return; }
+    setCashOutSaving(true);
+    try {
+      const res = await fetch("/api/work-periods/cash-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: amt, reason: cashOutReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCashOutError(data.error || "Failed to record cash out"); return; }
+      setShowCashOutModal(false);
+      setCashOutAmount("");
+      setCashOutReason("");
+    } catch {
+      setCashOutError("Failed to record cash out");
+    } finally {
+      setCashOutSaving(false);
+    }
+  };
+
   const openEndOfDay = async () => {
     setEndOfDayOpen(true);
     setEodClosed(false);
@@ -633,7 +669,10 @@ export default function POSPage() {
     <div class="sub">${date} · ${time}</div>
     <div class="divider"></div>
     <div class="row"><span class="label">Total Orders</span><span class="value">${eodData.total_orders}</span></div>
-    <div class="row"><span class="label">Sales (this shift)</span><span class="value total">£${eodData.total_revenue.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Sales (this shift)</span><span class="value">£${eodData.total_revenue.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Discounts</span><span class="value">−£${eodData.discount_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Refunds</span><span class="value">£${eodData.refunds_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Net Sales</span><span class="value total">£${eodData.net_sales.toFixed(2)}</span></div>
     <div class="divider"></div>
     <div class="row"><span class="label">Collected Today</span><span class="value total">£${eodData.collected.total.toFixed(2)}</span></div>
     <div class="row"><span class="label">💵 Cash</span><span class="value">£${eodData.collected.cash_total.toFixed(2)}</span></div>
@@ -644,15 +683,22 @@ export default function POSPage() {
     ` : ""}
     <div class="divider"></div>
     <div class="row"><span class="label">Opening Float</span><span class="value">£${eodOpeningCash.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total).toFixed(2)}</span></div>
+    <div class="row"><span class="label">Cash Paid Out</span><span class="value">−£${eodData.cash_paid_out_total.toFixed(2)}</span></div>
+    ${eodData.cash_paid_outs.map(p => `<div class="row"><span class="label">  ${p.reason}</span><span class="value">£${p.amount.toFixed(2)}</span></div>`).join("")}
+    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total).toFixed(2)}</span></div>
     <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
-    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total)).toFixed(2)}</span></div>
-    ${eodData.pending_bills.length > 0 ? `
+    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)).toFixed(2)}</span></div>
+    ${eodData.unpaid_orders.length > 0 ? `
     <div class="divider"></div>
-    <div class="row"><span class="label">📌 Pending Bills</span><span class="value total">£${eodData.pending_bills_total.toFixed(2)}</span></div>
-    ${eodData.pending_bills.map(o => `<div class="row"><span class="label">${o.order_number}${o.customer_name ? ` — ${o.customer_name}` : ""}</span><span class="value">£${o.total.toFixed(2)}</span></div>`).join("")}
+    <div class="row"><span class="label">⚠️ Unpaid Orders</span><span class="value total">£${eodData.unpaid_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}</span></div>
+    ${eodData.unpaid_orders.map(o => `<div class="row"><span class="label">${o.order_number} — ${o.pay_later ? "Pay Later" : "In Progress"}</span><span class="value">£${(o.total - o.amount_paid).toFixed(2)}</span></div>`).join("")}
     ` : ""}
+    <div class="divider"></div>
     <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
+    <div style="margin-top:20px; font-size:11px;">
+      Manager: ________________________________<br><br>
+      Signature: ________________________________
+    </div>
     </body></html>`;
     const w = window.open("", "_blank", "width=400,height=600");
     if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
@@ -816,6 +862,10 @@ export default function POSPage() {
               className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               📜 History
             </button>
+            <button onClick={() => setShowCashOutModal(true)}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+              💵 Cash Out
+            </button>
             <button
               onClick={() => {
                 localStorage.setItem("pos_reservations_last_seen", new Date().toISOString());
@@ -876,6 +926,10 @@ export default function POSPage() {
                   <button onClick={() => { setShowMobileMenu(false); router.push("/pos/history"); }}
                     className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                     📜 History
+                  </button>
+                  <button onClick={() => { setShowMobileMenu(false); setShowCashOutModal(true); }}
+                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                    💵 Cash Out
                   </button>
                   <button
                     onClick={() => {
@@ -1293,6 +1347,48 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Cash Out — cash physically leaving the till mid-shift, so EOD's
+          Expected Cash can subtract it back out */}
+      {showCashOutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowCashOutModal(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center">
+              <div className="text-3xl mb-2">💵</div>
+              <h2 className="text-foreground font-bold text-lg">Cash Out</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Record cash taken out of the till right now — a driver tip, petty cash, etc.</p>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input
+                type="number" min="0" step="0.01" placeholder="Amount (£)"
+                value={cashOutAmount} onChange={(e) => setCashOutAmount(e.target.value)}
+                className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500"
+              />
+              <input
+                type="text" placeholder="Reason — e.g. paid delivery driver"
+                value={cashOutReason} onChange={(e) => setCashOutReason(e.target.value)}
+                className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500"
+              />
+              {cashOutError && <p className="text-red-600 text-xs text-center">{cashOutError}</p>}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => { setShowCashOutModal(false); setCashOutAmount(""); setCashOutReason(""); setCashOutError(""); }}
+                className="flex-1 h-11 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCashOut}
+                disabled={cashOutSaving}
+                className="flex-1 h-11 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
+              >
+                {cashOutSaving ? "Saving…" : "Record"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Customer details popup — takeaway/delivery, asked for on Send to Kitchen / Pay */}
       {showCustomerPopup && (orderType === "takeaway" || orderType === "delivery") && (
         <CustomerDetailsModal
@@ -1388,6 +1484,20 @@ export default function POSPage() {
                         <div className="text-blue-600 text-xl font-bold">{eodData?.total_orders || 0}</div>
                       </div>
                     </div>
+                    <div className="mt-2 bg-surface-hover rounded-xl px-3 py-2 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Discounts given</span>
+                        <span className="text-yellow-600 font-semibold">−£{(eodData?.discount_total || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Refunds</span>
+                        <span className="text-red-600 font-semibold">£{(eodData?.refunds_total || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold pt-1 border-t border-border">
+                        <span className="text-foreground">Net Sales</span>
+                        <span className="text-red-600">£{(eodData?.net_sales || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Collected — till reconciliation: money that actually landed today,
@@ -1423,26 +1533,46 @@ export default function POSPage() {
                     )}
                   </div>
 
-                  {(eodData?.open_orders || 0) > 0 && (
-                    <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5">
-                      <span className="text-amber-600">⚠️</span>
-                      <p className="text-amber-700 text-xs font-semibold">
-                        {eodData?.open_orders} open order{(eodData?.open_orders || 0) > 1 ? "s" : ""} still outstanding
-                      </p>
+                  {/* Unpaid Orders — one itemized list for every currently-unpaid order
+                      this shift, whether it's just mid-service or explicitly Pay Later,
+                      instead of a bare count staff can't act on. */}
+                  {(eodData?.unpaid_orders?.length || 0) > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-700 text-xs font-bold">⚠️ Unpaid Orders (this shift)</span>
+                        <span className="text-amber-700 text-sm font-black">
+                          £{eodData?.unpaid_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {eodData?.unpaid_orders.map((o) => (
+                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-amber-800">
+                            <span>
+                              {o.order_number}
+                              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide opacity-70">
+                                {o.pay_later ? "Pay Later" : "In Progress"}
+                              </span>
+                            </span>
+                            <span className="font-semibold">£{(o.total - o.amount_paid).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {(eodData?.pending_bills?.length || 0) > 0 && (
-                    <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                  {/* Cash Paid Out — cash physically removed from the till this shift,
+                      subtracted from Expected Cash below. */}
+                  {(eodData?.cash_paid_outs?.length || 0) > 0 && (
+                    <div className="bg-red-500/10 border border-red-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-amber-700 text-xs font-bold">📌 Pending Bills (this shift)</span>
-                        <span className="text-amber-700 text-sm font-black">£{(eodData?.pending_bills_total || 0).toFixed(2)}</span>
+                        <span className="text-red-700 text-xs font-bold">💵 Cash Paid Out</span>
+                        <span className="text-red-700 text-sm font-black">−£{(eodData?.cash_paid_out_total || 0).toFixed(2)}</span>
                       </div>
                       <div className="space-y-1">
-                        {eodData?.pending_bills.map((o) => (
-                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-amber-800">
-                            <span>{o.order_number}{o.customer_name ? ` — ${o.customer_name}` : ""}</span>
-                            <span className="font-semibold">£{o.total.toFixed(2)}</span>
+                        {eodData?.cash_paid_outs.map((p, i) => (
+                          <div key={i} className="flex items-center justify-between text-[11px] text-red-800">
+                            <span>{p.reason}</span>
+                            <span className="font-semibold">£{p.amount.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -1450,11 +1580,14 @@ export default function POSPage() {
                   )}
 
                   {/* Opening float + expected cash — based on Collected (cash physically
-                      taken this shift), not Sales, since a prior-shift settlement adds
-                      real cash to the drawer today even though it isn't today's sale. */}
+                      taken this shift) minus any Cash Paid Out, not Sales, since a
+                      prior-shift settlement adds real cash to the drawer today even
+                      though it isn't today's sale, and a cash-out removes it. */}
                   <div className="flex items-center justify-between bg-surface-hover rounded-xl px-3 py-2.5 text-xs">
-                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Collected</span>
-                    <span className="text-foreground font-bold">£{(eodOpeningCash + (eodData?.collected.cash_total || 0)).toFixed(2)} expected</span>
+                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Collected − Paid Out</span>
+                    <span className="text-foreground font-bold">
+                      £{(eodOpeningCash + (eodData?.collected.cash_total || 0) - (eodData?.cash_paid_out_total || 0)).toFixed(2)} expected
+                    </span>
                   </div>
 
                   {/* Closing Cash Input */}
@@ -1472,8 +1605,8 @@ export default function POSPage() {
                       className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
                     />
                     {eodClosingCash && eodData && (
-                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
-                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total)).toFixed(2)}
+                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
+                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)).toFixed(2)}
                       </p>
                     )}
                   </div>

@@ -792,6 +792,10 @@ export default function POSPage() {
               className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
               🍳 Kitchen
             </button>
+            <button onClick={() => router.push("/pos/history")}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
+              📜 History
+            </button>
             <button
               onClick={() => {
                 localStorage.setItem("pos_reservations_last_seen", new Date().toISOString());
@@ -848,6 +852,10 @@ export default function POSPage() {
                   <button onClick={() => { setShowMobileMenu(false); router.push("/pos/kitchen"); }}
                     className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                     🍳 Kitchen
+                  </button>
+                  <button onClick={() => { setShowMobileMenu(false); router.push("/pos/history"); }}
+                    className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
+                    📜 History
                   </button>
                   <button
                     onClick={() => {

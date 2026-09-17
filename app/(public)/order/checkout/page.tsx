@@ -34,6 +34,7 @@ export default function CheckoutPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [payOnline, setPayOnline] = useState(false);
   const [address, setAddress] = useState("");
   const [postcode, setPostcode] = useState("");
@@ -149,6 +150,7 @@ export default function CheckoutPage() {
           customer_name: name.trim(),
           customer_phone: phone.trim(),
           customer_email: email.trim(),
+          marketing_consent: marketingConsent,
           customer_address: orderType === "delivery" ? address.trim() : undefined,
           customer_postcode: orderType === "delivery" ? postcode.trim() : undefined,
           notes: notes.trim() || undefined,
@@ -320,6 +322,10 @@ export default function CheckoutPage() {
           required
           className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"
         />
+        <label className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={marketingConsent} onChange={(e) => setMarketingConsent(e.target.checked)} className="mt-0.5" />
+          <span>Email me offers, rewards updates and news from The Royal Chilli</span>
+        </label>
         {orderType === "delivery" && (
           <>
             <textarea

@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
 import { recalcTotals } from "@/lib/order-totals";
+import { findOrCreateCustomerByPhone } from "@/lib/customers";
 
 export async function GET(
   req: NextRequest,
@@ -68,7 +69,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { status, discount_type, discount_value, discount_reason, notes } = body;
+    const { status, discount_type, discount_value, discount_reason, notes, customer_name, customer_phone, customer_email, marketing_consent } = body;
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
@@ -141,6 +142,20 @@ export async function PUT(
 
     if (notes !== undefined) {
       const { error } = await supabase.from("orders").update({ notes, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+    }
+
+    // Attaches a customer to an order after the fact — needed for dine-in,
+    // where the order is usually already created (Send to Kitchen) by the
+    // time a phone number is captured at payment. Same link-or-create as a
+    // brand-new order (POST /api/orders); loyalty then picks it up
+    // automatically off orders.customer_id once payment completes.
+    if (customer_phone !== undefined && String(customer_phone).trim()) {
+      const customerId = await findOrCreateCustomerByPhone(String(customer_phone).trim(), customer_name || "Guest", customer_email, marketing_consent === true);
+      const { error } = await supabase
+        .from("orders")
+        .update({ customer_id: customerId, customer_name: customer_name || null, customer_phone: String(customer_phone).trim(), updated_at: new Date().toISOString() })
+        .eq("id", id);
       if (error) throw error;
     }
 

@@ -47,6 +47,8 @@ export default function POSPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [notes, setNotes] = useState("");
 
   // Dine-in: must pick a table before adding items. Takeaway/delivery: items
@@ -481,6 +483,8 @@ export default function POSPage() {
             customer_name: customerName || null,
             customer_phone: customerPhone || null,
             customer_address: customerAddress || null,
+            customer_email: customerEmail || null,
+            marketing_consent: marketingConsent,
             items: cartItems,
             notes,
             discount,
@@ -495,6 +499,15 @@ export default function POSPage() {
         setCurrentOrderId(data.order.id);
         setCurrentOrderNumber(data.order.order_number);
         setAllOrderIds([data.order.id]);
+      } else if (customerPhone.trim()) {
+        // Order already exists (e.g. dine-in sent to kitchen earlier) — a
+        // phone just captured at payment time needs attaching after the
+        // fact so loyalty picks it up when this payment completes.
+        await fetch(`/api/orders/${currentOrderId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customer_name: customerName || null, customer_phone: customerPhone, customer_email: customerEmail || null, marketing_consent: marketingConsent }),
+        }).catch(() => {});
       }
       setPaymentOpen(true);
     } catch {
@@ -521,7 +534,7 @@ export default function POSPage() {
   };
 
   const requestPayment = () => {
-    if ((orderType === "takeaway" || orderType === "delivery") && !customerDetailsCollected) {
+    if ((orderType === "takeaway" || orderType === "delivery" || orderType === "dine_in") && !customerDetailsCollected) {
       setPendingAction("payment");
       setShowCustomerPopup(true);
       return;
@@ -558,6 +571,8 @@ export default function POSPage() {
     setCustomerName("");
     setCustomerPhone("");
     setCustomerAddress("");
+    setCustomerEmail("");
+    setMarketingConsent(false);
     setNotes("");
     setCurrentOrderId(null);
     setCurrentOrderNumber("");
@@ -718,6 +733,14 @@ export default function POSPage() {
       setCurrentOrderNumber("");
       setAllOrderIds([]);
       setStatus("");
+      // A fresh table is a fresh (potential) customer — the loyalty prompt
+      // at payment must ask again, not carry over "skipped" from whichever
+      // table was open before.
+      setCustomerName("");
+      setCustomerPhone("");
+      setCustomerEmail("");
+      setMarketingConsent(false);
+      setCustomerDetailsCollected(false);
     }
     setSelectedTable(t.id);
     setMobileTab("menu");
@@ -1394,16 +1417,20 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Customer details popup — takeaway/delivery, asked for on Send to Kitchen / Pay */}
-      {showCustomerPopup && (orderType === "takeaway" || orderType === "delivery") && (
+      {/* Customer details popup — takeaway/delivery on Send to Kitchen or Pay; dine-in on Pay only */}
+      {showCustomerPopup && (orderType === "takeaway" || orderType === "delivery" || orderType === "dine_in") && (
         <CustomerDetailsModal
           orderType={orderType}
           name={customerName}
           phone={customerPhone}
           address={customerAddress}
+          email={customerEmail}
+          marketingConsent={marketingConsent}
           onChangeName={setCustomerName}
           onChangePhone={setCustomerPhone}
           onChangeAddress={setCustomerAddress}
+          onChangeEmail={setCustomerEmail}
+          onChangeMarketingConsent={setMarketingConsent}
           onConfirm={handleCustomerDetailsConfirm}
           onClose={handleCustomerDetailsCancel}
         />

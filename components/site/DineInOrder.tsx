@@ -34,6 +34,54 @@ export default function DineInOrder({
   const [requestMsg, setRequestMsg] = useState("");
   const [error, setError] = useState("");
 
+  // Optional loyalty capture — a customer can add this any time, not just
+  // before ordering. Remembered in this browser so it isn't re-typed if the
+  // page reloads mid-visit.
+  const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const [loyaltySaved, setLoyaltySaved] = useState(false);
+  const [loyaltyName, setLoyaltyName] = useState("");
+  const [loyaltyPhone, setLoyaltyPhone] = useState("");
+  const [loyaltyEmail, setLoyaltyEmail] = useState("");
+  const [loyaltyConsent, setLoyaltyConsent] = useState(false);
+  const [loyaltySaving, setLoyaltySaving] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("rc_dine_in_loyalty");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        setLoyaltyName(saved.name || "");
+        setLoyaltyPhone(saved.phone || "");
+        setLoyaltyEmail(saved.email || "");
+        setLoyaltyConsent(!!saved.consent);
+        if (saved.phone) setLoyaltySaved(true);
+      }
+    } catch {
+      // ignore — a fresh session just starts blank
+    }
+  }, []);
+
+  async function saveLoyaltyDetails() {
+    if (!loyaltyPhone.trim()) return;
+    setLoyaltySaving(true);
+    try {
+      try {
+        localStorage.setItem("rc_dine_in_loyalty", JSON.stringify({ name: loyaltyName, phone: loyaltyPhone, email: loyaltyEmail, consent: loyaltyConsent }));
+      } catch {
+        // ignore — saving to the API still works without local persistence
+      }
+      await fetch(`/api/public/tables/${tableNumber}/customer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: loyaltyPhone, name: loyaltyName, email: loyaltyEmail || undefined, marketing_consent: loyaltyConsent }),
+      });
+      setLoyaltySaved(true);
+      setLoyaltyOpen(false);
+    } finally {
+      setLoyaltySaving(false);
+    }
+  }
+
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/public/tables/${tableNumber}`);
@@ -91,6 +139,10 @@ export default function DineInOrder({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: pending.map((l) => ({ menu_item_id: l.menu_item_id, quantity: l.quantity, selected_options: l.selectedOptions.map((o) => o.id) })),
+          customer_phone: loyaltyPhone.trim() || undefined,
+          customer_name: loyaltyName.trim() || undefined,
+          customer_email: loyaltyEmail.trim() || undefined,
+          marketing_consent: loyaltyConsent,
         }),
       });
       const data = await res.json();
@@ -139,6 +191,64 @@ export default function DineInOrder({
           </button>
         </div>
         {requestMsg && <p className="mt-3 text-center text-sm text-primary">{requestMsg}</p>}
+
+        <div className="mt-6">
+          {loyaltySaved ? (
+            <p className="text-center text-xs text-muted-foreground">🎁 Loyalty points will be tracked for this visit.</p>
+          ) : !loyaltyOpen ? (
+            <button onClick={() => setLoyaltyOpen(true)} className="mx-auto block text-xs uppercase tracking-[0.1em] text-primary underline underline-offset-4">
+              🎁 Earn loyalty points on this visit
+            </button>
+          ) : (
+            <div className="mx-auto max-w-sm border border-border p-4">
+              <p className="text-sm font-medium">Add your phone to earn points — completely optional.</p>
+              <div className="mt-3 space-y-2">
+                <input
+                  value={loyaltyName}
+                  onChange={(e) => setLoyaltyName(e.target.value)}
+                  placeholder="Name"
+                  className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+                <input
+                  value={loyaltyPhone}
+                  onChange={(e) => setLoyaltyPhone(e.target.value)}
+                  placeholder="Phone number"
+                  type="tel"
+                  className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+                {loyaltyPhone.trim() && (
+                  <>
+                    <input
+                      value={loyaltyEmail}
+                      onChange={(e) => setLoyaltyEmail(e.target.value)}
+                      placeholder="Email (optional)"
+                      type="email"
+                      className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                    {loyaltyEmail.trim() && (
+                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <input type="checkbox" checked={loyaltyConsent} onChange={(e) => setLoyaltyConsent(e.target.checked)} className="mt-0.5" />
+                        <span>Email me offers, rewards updates and news</span>
+                      </label>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => setLoyaltyOpen(false)} className="flex-1 border border-border py-2 text-xs uppercase tracking-[0.1em] text-muted-foreground">
+                  Not now
+                </button>
+                <button
+                  onClick={saveLoyaltyDetails}
+                  disabled={!loyaltyPhone.trim() || loyaltySaving}
+                  className="flex-1 bg-primary py-2 text-xs uppercase tracking-[0.1em] text-primary-foreground disabled:opacity-50"
+                >
+                  {loyaltySaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {items.length > 0 && (
           <div className="mt-8 border border-border p-4">

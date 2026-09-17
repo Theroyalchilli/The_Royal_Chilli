@@ -12,12 +12,17 @@ export async function POST(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    const { items } = await req.json();
+    const { items, customer_phone, customer_name, customer_email, marketing_consent } = await req.json();
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "No items provided" }, { status: 400 });
     }
 
-    const orderId = await addItemsToTable(table.id, items);
+    const orderId = await addItemsToTable(table.id, items, {
+      phone: customer_phone,
+      name: customer_name,
+      email: customer_email,
+      marketingConsent: marketing_consent === true,
+    });
     const order = await getOpenOrderForTable(table.id);
     const orderItems = await getOrderItems(orderId);
 

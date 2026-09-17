@@ -5,22 +5,35 @@ import { getPointsExpiryTimestamp } from "@/lib/loyalty";
 // Finds a customer by phone, or creates one. Used by public checkout/reservation
 // and POS order creation so CRM data accumulates from flows that already exist,
 // instead of requiring a separate "sign up" step.
-export async function findOrCreateCustomerByPhone(phone: string, name: string, email?: string | null): Promise<number | null> {
+//
+// marketingConsent is one-directional here: a `true` (the customer just
+// ticked "email me offers") turns consent on; anything else leaves whatever
+// is already stored untouched — an order where the box wasn't ticked must
+// never silently revoke consent given on an earlier order.
+export async function findOrCreateCustomerByPhone(
+  phone: string,
+  name: string,
+  email?: string | null,
+  marketingConsent?: boolean
+): Promise<number | null> {
   const cleanPhone = phone.trim();
   if (!cleanPhone) return null;
 
   const { data: existing } = await supabase.from("customers").select("id, email").eq("phone", cleanPhone).maybeSingle();
   if (existing) {
+    const updates: Record<string, unknown> = {};
     // Backfill email if we now have one and didn't before — never overwrite an existing value.
-    if (email && !existing.email) {
-      await supabase.from("customers").update({ email }).eq("id", existing.id);
+    if (email && !existing.email) updates.email = email;
+    if (marketingConsent === true) updates.marketing_consent = true;
+    if (Object.keys(updates).length > 0) {
+      await supabase.from("customers").update(updates).eq("id", existing.id);
     }
     return existing.id;
   }
 
   const { data: created, error } = await supabase
     .from("customers")
-    .insert({ name: name.trim() || "Guest", phone: cleanPhone, email: email || null })
+    .insert({ name: name.trim() || "Guest", phone: cleanPhone, email: email || null, marketing_consent: marketingConsent === true })
     .select("id")
     .single();
   if (error) {

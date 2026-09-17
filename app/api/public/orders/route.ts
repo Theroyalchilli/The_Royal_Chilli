@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       customer_email,
       customer_address,
       customer_postcode,
+      marketing_consent,
       notes,
       scheduled_for, // ISO string, optional — omitted/null means ASAP
       pay_online, // customer picked "Pay Online Now" — a checkout session follows this call
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     const orderNumber = await generateOrderNumber();
-    const customerId = await findOrCreateCustomerByPhone(customer_phone, customer_name, customer_email);
+    const customerId = await findOrCreateCustomerByPhone(customer_phone, customer_name, customer_email, marketing_consent === true);
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")

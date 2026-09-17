@@ -2,6 +2,7 @@ import supabase from "@/lib/supabase";
 import { generateOrderNumber } from "@/lib/orders";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { recalcTotals } from "@/lib/order-totals";
+import { findOrCreateCustomerByPhone } from "@/lib/customers";
 
 const OPEN_STATUSES = ["open", "sent_to_kitchen", "ready"];
 
@@ -53,7 +54,8 @@ export async function getOrderItems(orderId: number) {
 
 export async function addItemsToTable(
   tableId: number,
-  rawItems: { menu_item_id: number; quantity: number; notes?: string; selected_options?: number[] }[]
+  rawItems: { menu_item_id: number; quantity: number; notes?: string; selected_options?: number[] }[],
+  customer?: { phone?: string; name?: string; email?: string; marketingConsent?: boolean }
 ) {
   const itemRows = await Promise.all(
     rawItems.map(async (item) => {
@@ -95,6 +97,18 @@ export async function addItemsToTable(
   } else if (order.status === "ready") {
     // A new round arrived after the previous round was marked ready — back to the kitchen queue.
     await supabase.from("orders").update({ status: "sent_to_kitchen" }).eq("id", order.id);
+  }
+
+  // Optional self-service loyalty capture — a customer may submit their
+  // phone on any round, not just the first, so this attaches (or
+  // re-attaches, e.g. to backfill an email/consent given on a later round)
+  // regardless of whether the order already had a customer.
+  if (customer?.phone?.trim()) {
+    const customerId = await findOrCreateCustomerByPhone(customer.phone.trim(), customer.name || "Guest", customer.email, customer.marketingConsent === true);
+    await supabase
+      .from("orders")
+      .update({ customer_id: customerId, customer_name: customer.name || null, customer_phone: customer.phone.trim() })
+      .eq("id", order!.id);
   }
 
   for (const item of itemRows) {

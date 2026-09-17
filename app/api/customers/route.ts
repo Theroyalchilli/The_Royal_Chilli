@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
-import { getActiveTiers, tierForSpend } from "@/lib/crm";
+import { getActiveTiers, tierForSpend, computeSegment } from "@/lib/crm";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -19,20 +19,33 @@ export async function GET(req: NextRequest) {
   const { data: customers, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
 
-  const { data: paidOrders } = await supabase.from("orders").select("customer_id, total").eq("status", "paid").not("customer_id", "is", null);
-  const spendByCustomer = new Map<number, { spend: number; visits: number }>();
+  const { data: paidOrders } = await supabase.from("orders").select("customer_id, total, created_at").eq("status", "paid").not("customer_id", "is", null);
+  const spendByCustomer = new Map<number, { spend: number; visits: number; lastVisit: string | null }>();
   for (const o of paidOrders || []) {
-    const cur = spendByCustomer.get(o.customer_id) || { spend: 0, visits: 0 };
+    const cur = spendByCustomer.get(o.customer_id) || { spend: 0, visits: 0, lastVisit: null };
     cur.spend += Number(o.total);
     cur.visits += 1;
+    if (!cur.lastVisit || o.created_at > cur.lastVisit) cur.lastVisit = o.created_at;
     spendByCustomer.set(o.customer_id, cur);
   }
 
   const tiers = await getActiveTiers();
+  const { data: winbackSetting } = await supabase.from("app_settings").select("value").eq("key", "loyalty_winback_days").maybeSingle();
+  const winbackDays = Number(winbackSetting?.value ?? 45);
+  const now = Date.now();
+
   const enriched = (customers || []).map((c) => {
-    const stats = spendByCustomer.get(c.id) || { spend: 0, visits: 0 };
+    const stats = spendByCustomer.get(c.id) || { spend: 0, visits: 0, lastVisit: null };
     const lifetimeSpend = Math.round(stats.spend * 100) / 100;
-    return { ...c, lifetime_spend: lifetimeSpend, visit_count: stats.visits, tier: tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze" };
+    const daysSinceLastVisit = stats.lastVisit ? Math.floor((now - new Date(stats.lastVisit).getTime()) / 86_400_000) : null;
+    return {
+      ...c,
+      lifetime_spend: lifetimeSpend,
+      visit_count: stats.visits,
+      last_visit: stats.lastVisit,
+      tier: tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze",
+      segment: computeSegment({ visitCount: stats.visits, daysSinceLastVisit, lifetimeSpend, winbackDays }),
+    };
   });
 
   return NextResponse.json({ customers: enriched });
@@ -65,12 +78,9 @@ export async function POST(req: NextRequest) {
       .single();
     if (error) throw error;
 
-    if (referredByCustomerId) {
-      await supabase.from("loyalty_transactions").insert([
-        { customer_id: referredByCustomerId, points_delta: 50, reason: "referral_bonus", reference_type: "customer", reference_id: customer.id },
-        { customer_id: customer.id, points_delta: 25, reason: "referral_bonus", reference_type: "customer", reference_id: referredByCustomerId },
-      ]);
-    }
+    // Referral points are NOT awarded here — only once the referred customer
+    // completes a real qualifying purchase (see checkReferralCompletion in
+    // lib/customers.ts), so registration alone can't be used to farm points.
 
     return NextResponse.json({ success: true, customer }, { status: 201 });
   } catch (error) {

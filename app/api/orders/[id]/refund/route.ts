@@ -33,7 +33,7 @@ export async function POST(
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, amount_paid")
+      .select("id, total, amount_paid, customer_id")
       .eq("id", id)
       .single();
     if (fetchError || !order) {
@@ -57,6 +57,10 @@ export async function POST(
     });
     if (insertError) throw insertError;
 
+    if (order.customer_id) {
+      await reverseLoyaltyPointsForRefund(Number(id), order.customer_id, refundAmount, Number(order.total));
+    }
+
     const { data: refreshed } = await supabase.from("orders").select("total, amount_paid").eq("id", id).single();
 
     return NextResponse.json({ success: true, amount_paid: refreshed?.amount_paid ?? null });
@@ -64,4 +68,50 @@ export async function POST(
     console.error("Refund error:", error);
     return NextResponse.json({ error: "Failed to process refund" }, { status: 500 });
   }
+}
+
+// Reverses the proportional share of points this order originally earned —
+// a £10 refund on a £100 order reverses 10% of the points that order's
+// earned_purchase/tier_bonus rows awarded. Tracks cumulative reversals
+// against the order (via prior refund_reversal rows) so several partial
+// refunds on the same order can never over-reverse it, and caps at the
+// customer's current balance so it can never go negative. Never touches or
+// deletes the original earning rows — this is a separate ledger entry.
+async function reverseLoyaltyPointsForRefund(orderId: number, customerId: number, refundAmount: number, orderTotal: number) {
+  if (orderTotal <= 0) return;
+
+  const { data: earnRows } = await supabase
+    .from("loyalty_transactions")
+    .select("points_delta")
+    .eq("reference_type", "order")
+    .eq("reference_id", orderId)
+    .in("reason", ["earned_purchase", "tier_bonus"]);
+  const originalEarned = (earnRows || []).reduce((s, r) => s + Number(r.points_delta), 0);
+  if (originalEarned <= 0) return;
+
+  const { data: priorReversals } = await supabase
+    .from("loyalty_transactions")
+    .select("points_delta")
+    .eq("reference_type", "order")
+    .eq("reference_id", orderId)
+    .eq("reason", "refund_reversal");
+  const alreadyReversed = Math.abs((priorReversals || []).reduce((s, r) => s + Number(r.points_delta), 0));
+  const remainingReversible = Math.max(0, originalEarned - alreadyReversed);
+  if (remainingReversible <= 0) return;
+
+  const refundFraction = Math.min(1, refundAmount / orderTotal);
+  let reversalAmount = Math.floor(originalEarned * refundFraction);
+  reversalAmount = Math.min(reversalAmount, remainingReversible);
+
+  const { data: customer } = await supabase.from("customers").select("loyalty_points").eq("id", customerId).single();
+  reversalAmount = Math.min(reversalAmount, Math.max(0, Number(customer?.loyalty_points ?? 0)));
+  if (reversalAmount <= 0) return;
+
+  await supabase.from("loyalty_transactions").insert({
+    customer_id: customerId,
+    points_delta: -reversalAmount,
+    reason: "refund_reversal",
+    reference_type: "order",
+    reference_id: orderId,
+  });
 }

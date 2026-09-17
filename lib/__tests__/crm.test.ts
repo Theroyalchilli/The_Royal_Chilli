@@ -3,7 +3,7 @@ jest.mock("../supabase", () => ({
   default: { from: () => ({ select: () => Promise.resolve({ data: null, error: null }) }) },
 }));
 
-import { tierForSpend, type LoyaltyTier } from "@/lib/crm";
+import { tierForSpend, computeSegment, type LoyaltyTier } from "@/lib/crm";
 
 describe("tierForSpend", () => {
   const tiers: LoyaltyTier[] = [
@@ -33,5 +33,39 @@ describe("tierForSpend", () => {
 
   it("returns null when no tiers are configured", () => {
     expect(tierForSpend([], 500)).toBeNull();
+  });
+});
+
+describe("computeSegment", () => {
+  const winbackDays = 45;
+
+  it("is NEW for a customer with zero visits, regardless of recency data", () => {
+    expect(computeSegment({ visitCount: 0, daysSinceLastVisit: null, lifetimeSpend: 0, winbackDays })).toBe("NEW");
+  });
+
+  it("is AT_RISK past the win-back threshold but not yet double it", () => {
+    expect(computeSegment({ visitCount: 3, daysSinceLastVisit: 46, lifetimeSpend: 50, winbackDays })).toBe("AT_RISK");
+    expect(computeSegment({ visitCount: 3, daysSinceLastVisit: 45, lifetimeSpend: 50, winbackDays })).not.toBe("AT_RISK");
+  });
+
+  it("is INACTIVE once recency passes double the win-back threshold", () => {
+    expect(computeSegment({ visitCount: 3, daysSinceLastVisit: 91, lifetimeSpend: 50, winbackDays })).toBe("INACTIVE");
+  });
+
+  it("recency overrides a high spend/visit count — a lapsed VIP is still AT_RISK, not VIP", () => {
+    expect(computeSegment({ visitCount: 20, daysSinceLastVisit: 60, lifetimeSpend: 900, winbackDays })).toBe("AT_RISK");
+  });
+
+  it("is VIP for high spend or high visit count within the recency window", () => {
+    expect(computeSegment({ visitCount: 2, daysSinceLastVisit: 5, lifetimeSpend: 600, winbackDays })).toBe("VIP");
+    expect(computeSegment({ visitCount: 16, daysSinceLastVisit: 5, lifetimeSpend: 50, winbackDays })).toBe("VIP");
+  });
+
+  it("is LOYAL for a frequent but lower-spend recent customer", () => {
+    expect(computeSegment({ visitCount: 6, daysSinceLastVisit: 5, lifetimeSpend: 100, winbackDays })).toBe("LOYAL");
+  });
+
+  it("is ACTIVE for a recent customer who is neither loyal nor VIP yet", () => {
+    expect(computeSegment({ visitCount: 2, daysSinceLastVisit: 5, lifetimeSpend: 40, winbackDays })).toBe("ACTIVE");
   });
 });

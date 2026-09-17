@@ -29,16 +29,20 @@ export async function POST(req: NextRequest) {
     }
     const {
       name, description, points_cost, discount_amount, min_spend,
-      eligible_tier_id, valid_days, per_customer_limit, start_date, end_date,
+      eligible_tier_id, valid_days, per_customer_limit, start_date, end_date, is_birthday_reward,
     } = await req.json();
-    if (!name || !points_cost) return NextResponse.json({ error: "Name and points_cost are required" }, { status: 400 });
+    // points_cost may legitimately be 0 (a free birthday/win-back reward),
+    // so this checks presence, not truthiness.
+    if (!name || points_cost == null || points_cost === "") {
+      return NextResponse.json({ error: "Name and points_cost are required" }, { status: 400 });
+    }
 
     const { data, error } = await supabase
       .from("loyalty_rewards")
       .insert({
         name,
         description: description || null,
-        points_cost,
+        points_cost: Number(points_cost),
         discount_amount: discount_amount != null && discount_amount !== "" ? Number(discount_amount) : null,
         min_spend: min_spend != null && min_spend !== "" ? Number(min_spend) : 0,
         eligible_tier_id: eligible_tier_id || null,
@@ -46,6 +50,7 @@ export async function POST(req: NextRequest) {
         per_customer_limit: per_customer_limit != null && per_customer_limit !== "" ? Number(per_customer_limit) : null,
         start_date: start_date || null,
         end_date: end_date || null,
+        is_birthday_reward: !!is_birthday_reward,
       })
       .select()
       .single();

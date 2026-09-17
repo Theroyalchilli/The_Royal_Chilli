@@ -41,6 +41,22 @@ export async function tierFromSpend(lifetimeSpend: number): Promise<string> {
   return tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze";
 }
 
+export type CustomerSegment = "NEW" | "ACTIVE" | "LOYAL" | "VIP" | "AT_RISK" | "INACTIVE";
+
+// Computed at read-time from visit recency/count rather than stored — always
+// correct, no background job needed to keep a segment column in sync.
+// AT_RISK/INACTIVE take priority over spend-based segments (a Gold-tier
+// customer who hasn't visited in 3 months is still someone to win back).
+export function computeSegment(params: { visitCount: number; daysSinceLastVisit: number | null; lifetimeSpend: number; winbackDays: number }): CustomerSegment {
+  const { visitCount, daysSinceLastVisit, lifetimeSpend, winbackDays } = params;
+  if (visitCount === 0) return "NEW";
+  if (daysSinceLastVisit != null && daysSinceLastVisit > winbackDays * 2) return "INACTIVE";
+  if (daysSinceLastVisit != null && daysSinceLastVisit > winbackDays) return "AT_RISK";
+  if (lifetimeSpend >= 500 || visitCount >= 15) return "VIP";
+  if (visitCount >= 5) return "LOYAL";
+  return "ACTIVE";
+}
+
 export async function getCustomerStats(customerId: number) {
   const { data: orders } = await supabase
     .from("orders")

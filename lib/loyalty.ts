@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import supabase from "@/lib/supabase";
+import { getActiveTiers, tierForSpend } from "@/lib/crm";
 
 // Unambiguous alphabet — no 0/O, 1/I/L — so a code read aloud or handwritten
 // isn't misheard/miscopied. Not sequential/guessable (doc §23): drawn from
@@ -20,4 +21,97 @@ export async function generateUniqueRedemptionCode(): Promise<string> {
     if (!data) return code;
   }
   throw new Error("Could not generate a unique redemption code");
+}
+
+export type IssueRedemptionResult =
+  | { ok: true; redemption: Record<string, unknown> & { id: number; code: string }; rewardName: string }
+  | { ok: false; error: string };
+
+// Shared by the staff-facing "issue a reward" endpoint and the birthday
+// cron — same validation, same code/expiry generation, same audit trail,
+// whichever triggers it. `staffId` is null for an automatic (cron) issue.
+export async function issueRedemption(customerId: number, rewardId: number, staffId: number | null): Promise<IssueRedemptionResult> {
+  const { data: customer, error: custErr } = await supabase
+    .from("customers")
+    .select("id, loyalty_points")
+    .eq("id", customerId)
+    .single();
+  if (custErr || !customer) return { ok: false, error: "Customer not found" };
+
+  const { data: reward, error: rewardErr } = await supabase
+    .from("loyalty_rewards")
+    .select("*")
+    .eq("id", rewardId)
+    .single();
+  if (rewardErr || !reward) return { ok: false, error: "Reward not found" };
+  if (!reward.active) return { ok: false, error: "This reward is no longer available" };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (reward.start_date && todayStr < reward.start_date) return { ok: false, error: "This reward isn't available yet" };
+  if (reward.end_date && todayStr > reward.end_date) return { ok: false, error: "This reward has ended" };
+
+  if (customer.loyalty_points < reward.points_cost) {
+    return { ok: false, error: `Not enough points — needs ${reward.points_cost}, has ${customer.loyalty_points}` };
+  }
+
+  if (reward.eligible_tier_id) {
+    const { data: paidOrders } = await supabase.from("orders").select("total").eq("customer_id", customerId).eq("status", "paid");
+    const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
+    const tiers = await getActiveTiers();
+    const customerTier = tierForSpend(tiers, lifetimeSpend);
+    const requiredTier = tiers.find((t) => t.id === reward.eligible_tier_id);
+    const customerRank = tiers.findIndex((t) => t.id === customerTier?.id);
+    const requiredRank = tiers.findIndex((t) => t.id === requiredTier?.id);
+    if (requiredTier && customerRank < requiredRank) {
+      return { ok: false, error: `This reward requires ${requiredTier.name} tier or above` };
+    }
+  }
+
+  if (reward.per_customer_limit != null) {
+    const { count } = await supabase
+      .from("loyalty_redemptions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", customerId)
+      .eq("reward_id", rewardId)
+      .in("status", ["issued", "redeemed"]);
+    if ((count ?? 0) >= reward.per_customer_limit) {
+      return { ok: false, error: "This customer has already used this reward the maximum number of times" };
+    }
+  }
+
+  const code = await generateUniqueRedemptionCode();
+  const expiresAt = new Date(Date.now() + Number(reward.valid_days || 7) * 24 * 60 * 60 * 1000);
+
+  const { data: redemption, error: redemptionErr } = await supabase
+    .from("loyalty_redemptions")
+    .insert({
+      code,
+      customer_id: customerId,
+      reward_id: rewardId,
+      points_spent: reward.points_cost,
+      status: "issued",
+      issued_by_staff_id: staffId,
+      expires_at: expiresAt.toISOString(),
+    })
+    .select()
+    .single();
+  if (redemptionErr) return { ok: false, error: "Failed to issue redemption" };
+
+  if (reward.points_cost > 0) {
+    const { error: ledgerErr } = await supabase.from("loyalty_transactions").insert({
+      customer_id: customerId,
+      points_delta: -reward.points_cost,
+      reason: "redeemed_reward",
+      reference_type: "redemption",
+      reference_id: redemption.id,
+      staff_id: staffId,
+    });
+    if (ledgerErr) {
+      // Compensate — don't leave an issued redemption whose points were never debited.
+      await supabase.from("loyalty_redemptions").delete().eq("id", redemption.id);
+      return { ok: false, error: "Failed to issue redemption" };
+    }
+  }
+
+  return { ok: true, redemption, rewardName: reward.name };
 }

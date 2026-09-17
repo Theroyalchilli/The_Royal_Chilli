@@ -3,16 +3,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
+type Segment = "NEW" | "ACTIVE" | "LOYAL" | "VIP" | "AT_RISK" | "INACTIVE";
 type Customer = {
   id: number; name: string; phone: string; email: string | null; date_of_birth: string | null;
   loyalty_points: number; referral_code: string | null; lifetime_spend: number; visit_count: number; tier: string;
+  segment: Segment; last_visit: string | null; marketing_consent: boolean;
 };
 type Reward = {
   id: number; name: string; description: string | null; points_cost: number;
   discount_amount: number | null; min_spend: number; eligible_tier_name: string | null;
-  valid_days: number; per_customer_limit: number | null;
+  valid_days: number; per_customer_limit: number | null; is_birthday_reward?: boolean;
 };
 type Birthday = { id: number; name: string; phone: string; days_away: number };
+
+const segmentStyle: Record<Segment, string> = {
+  NEW: "text-blue-600 bg-blue-50 border-blue-200",
+  ACTIVE: "text-foreground bg-surface-hover border-border",
+  LOYAL: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  VIP: "text-amber-700 bg-amber-50 border-amber-200",
+  AT_RISK: "text-orange-700 bg-orange-50 border-orange-200",
+  INACTIVE: "text-red-700 bg-red-50 border-red-200",
+};
 type Tier = { id: number; name: string; min_lifetime_spend: number; points_multiplier: number; sort_order: number; active: number };
 type Redemption = {
   id: number; code: string; status: string; issued_at: string; expires_at: string; redeemed_at: string | null;
@@ -76,6 +87,8 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
   const [detail, setDetail] = useState<Detail | null>(null);
   const [adjustPoints, setAdjustPoints] = useState("");
   const [issuedCode, setIssuedCode] = useState<{ code: string; reward_name: string; expires_at: string } | null>(null);
+  const [winbackRewardId, setWinbackRewardId] = useState<string>("");
+  const [winbackSending, setWinbackSending] = useState(false);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -95,6 +108,25 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
     setIssuedCode({ code: data.redemption.code, reward_name: rewardName, expires_at: data.redemption.expires_at });
     toast({ variant: "success", title: "Reward code issued", description: rewardName });
     load(); onChange();
+  }
+
+  async function toggleConsent(consent: boolean) {
+    const res = await fetch(`/api/customers/${customerId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ marketing_consent: consent }) });
+    if (!res.ok) { const data = await res.json(); return toast({ variant: "destructive", title: "Couldn't update consent", description: data.error }); }
+    load(); onChange();
+  }
+
+  async function sendWinback() {
+    if (!winbackRewardId) return;
+    setWinbackSending(true);
+    try {
+      const res = await fetch("/api/loyalty/winback/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, reward_id: Number(winbackRewardId) }) });
+      const data = await res.json();
+      if (!res.ok) return toast({ variant: "destructive", title: "Couldn't send win-back offer", description: data.error });
+      toast({ variant: "success", title: "Win-back offer sent", description: `Code ${data.code} emailed.` });
+      setWinbackRewardId("");
+      load(); onChange();
+    } finally { setWinbackSending(false); }
   }
 
   async function adjust() {
@@ -120,7 +152,10 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
             <h2 className="text-foreground font-bold text-lg">{c.name}</h2>
             <p className="text-muted-foreground text-sm">{c.phone} {c.email && `· ${c.email}`}</p>
           </div>
-          <span className={`text-sm font-bold ${tierColor[c.tier]}`}>{c.tier}</span>
+          <div className="flex flex-col items-end gap-1">
+            <span className={`text-sm font-bold ${tierColor[c.tier]}`}>{c.tier}</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${segmentStyle[c.segment]}`}>{c.segment.replace("_", " ")}</span>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -130,6 +165,37 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
         </div>
         {c.favourite_dish && <p className="mt-2 text-sm text-muted-foreground">⭐ Favourite: {c.favourite_dish}</p>}
         {c.referral_code && <p className="mt-1 text-xs text-muted-foreground">Referral code: <span className="text-red-600">{c.referral_code}</span></p>}
+        {c.last_visit && <p className="mt-1 text-xs text-muted-foreground">Last visit: {new Date(c.last_visit).toLocaleDateString("en-GB")}</p>}
+
+        {isManager && (
+          <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={c.marketing_consent} onChange={(e) => toggleConsent(e.target.checked)} />
+            Opted in to marketing emails
+          </label>
+        )}
+
+        {(c.segment === "AT_RISK" || c.segment === "INACTIVE") && isManager && (
+          <div className="mt-3 rounded-lg border border-orange-300/50 bg-orange-50 p-3">
+            <p className="text-orange-800 text-xs font-semibold">This customer hasn&apos;t visited in a while.</p>
+            {!c.marketing_consent ? (
+              <p className="text-orange-700 text-xs mt-1">Opt them in above to send a win-back offer.</p>
+            ) : !c.email ? (
+              <p className="text-orange-700 text-xs mt-1">No email on file — can&apos;t send a win-back offer.</p>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <select value={winbackRewardId} onChange={(e) => setWinbackRewardId(e.target.value)}
+                  className="flex-1 bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-xs">
+                  <option value="">Choose a reward…</option>
+                  {rewards.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+                <button onClick={sendWinback} disabled={!winbackRewardId || winbackSending}
+                  className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg">
+                  {winbackSending ? "…" : "Send"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-4">
           <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Issue a Reward Code</h3>
@@ -177,13 +243,14 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
   const [tab, setTab] = useState<"customers" | "rewards" | "tiers" | "redemptions">("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
+  const [segmentFilter, setSegmentFilter] = useState<Segment | "all">("all");
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [redemptions, setRedemptions] = useState<Redemption[]>([]);
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [modal, setModal] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
-  const [newReward, setNewReward] = useState({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7" });
+  const [newReward, setNewReward] = useState({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7", is_birthday_reward: false });
   const { toast } = useToast();
 
   const loadCustomers = useCallback(async () => {
@@ -225,11 +292,12 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
         discount_amount: newReward.discount_amount || undefined,
         min_spend: newReward.min_spend || undefined,
         valid_days: newReward.valid_days || undefined,
+        is_birthday_reward: newReward.is_birthday_reward || undefined,
       }),
     });
     const data = await res.json();
     if (!res.ok) return toast({ variant: "destructive", title: "Couldn't add reward", description: data.error });
-    setNewReward({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7" });
+    setNewReward({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7", is_birthday_reward: false });
     loadRewards();
   }
 
@@ -277,15 +345,22 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
 
         {tab === "customers" && (
           <div className="mt-5">
-            <div className="flex gap-2">
-              <input placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <div className="flex flex-wrap gap-2">
+              <input placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 min-w-[160px] bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              <select value={segmentFilter} onChange={(e) => setSegmentFilter(e.target.value as Segment | "all")}
+                className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+                <option value="all">All segments</option>
+                {(["NEW", "ACTIVE", "LOYAL", "VIP", "AT_RISK", "INACTIVE"] as Segment[]).map((s) => (
+                  <option key={s} value={s}>{s.replace("_", " ")}</option>
+                ))}
+              </select>
               <button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
             </div>
             <div className="mt-3 rounded-xl border border-border overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Phone</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Visits</th><th className="text-right px-3 py-2">Points</th><th className="text-right px-3 py-2">Tier</th></tr></thead>
+                <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Phone</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Visits</th><th className="text-right px-3 py-2">Points</th><th className="text-right px-3 py-2">Tier</th><th className="text-right px-3 py-2">Segment</th></tr></thead>
                 <tbody className="divide-y divide-border">
-                  {customers.map((c) => (
+                  {customers.filter((c) => segmentFilter === "all" || c.segment === segmentFilter).map((c) => (
                     <tr key={c.id} onClick={() => setDetailId(c.id)} className="bg-background hover:bg-surface cursor-pointer">
                       <td className="px-3 py-2 text-foreground font-medium">{c.name}</td>
                       <td className="px-3 py-2 text-muted-foreground">{c.phone}</td>
@@ -293,6 +368,9 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
                       <td className="px-3 py-2 text-right text-foreground">{c.visit_count}</td>
                       <td className="px-3 py-2 text-right text-foreground">{c.loyalty_points}</td>
                       <td className={`px-3 py-2 text-right font-semibold ${tierColor[c.tier]}`}>{c.tier}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${segmentStyle[c.segment]}`}>{c.segment.replace("_", " ")}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -316,6 +394,10 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
                   <input type="number" placeholder="Valid days" value={newReward.valid_days} onChange={(e) => setNewReward({ ...newReward, valid_days: e.target.value })} className="w-28 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
                   <button onClick={addReward} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
                 </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={newReward.is_birthday_reward} onChange={(e) => setNewReward({ ...newReward, is_birthday_reward: e.target.checked })} />
+                  🎂 Auto-issue this to every customer on their birthday (set points cost to 0 for a free gift)
+                </label>
                 <p className="text-muted-foreground text-xs">Leave &quot;£ off&quot; blank for a comped item (e.g. free dessert) — staff hand it over on a valid code, no automatic price change.</p>
               </div>
             )}
@@ -323,7 +405,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
               {rewards.map((r) => (
                 <div key={r.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-foreground font-semibold">{r.name} <span className="text-red-600">· {r.points_cost} pts</span></p>
+                    <p className="text-foreground font-semibold">{r.name} <span className="text-red-600">· {r.points_cost} pts</span> {r.is_birthday_reward && <span className="text-amber-600">🎂</span>}</p>
                     {r.description && <p className="text-muted-foreground text-sm">{r.description}</p>}
                     <p className="text-muted-foreground text-xs mt-1">
                       {r.discount_amount ? `£${Number(r.discount_amount).toFixed(2)} off` : "Comped item"}

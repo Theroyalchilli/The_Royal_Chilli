@@ -51,7 +51,7 @@ export async function PATCH(
     }
     const { id } = await params;
     const body = await req.json();
-    const editable = ["name", "email", "date_of_birth", "address", "notes"];
+    const editable = ["name", "email", "date_of_birth", "address", "notes", "marketing_consent"];
     const updates: Record<string, unknown> = {};
     for (const f of editable) if (f in body) updates[f] = body[f];
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });

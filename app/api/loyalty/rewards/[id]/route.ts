@@ -16,7 +16,7 @@ export async function PATCH(
     const body = await req.json();
     const fields = [
       "name", "description", "points_cost", "discount_amount", "min_spend",
-      "eligible_tier_id", "valid_days", "per_customer_limit", "start_date", "end_date", "active",
+      "eligible_tier_id", "valid_days", "per_customer_limit", "start_date", "end_date", "active", "is_birthday_reward",
     ];
     const updates: Record<string, unknown> = {};
     for (const f of fields) {

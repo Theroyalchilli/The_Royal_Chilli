@@ -297,3 +297,36 @@ export async function sendReservationConfirmationEmail(
     shell(body)
   );
 }
+
+// Win-back offer — only ever sent to a customer with marketing_consent set
+// (checked by the caller, app/api/loyalty/winback/send). The offer is an
+// already-issued reward code, not an automatic discount — the customer has
+// to bring it back in to use it.
+export async function sendWinBackEmail(
+  to: string | null | undefined,
+  data: { customerName: string; rewardName: string; code: string; expiresAt: string }
+) {
+  if (!to) return;
+
+  const expiryLabel = new Date(data.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+
+  const body = `
+    <tr><td style="padding:28px 32px 8px;">
+      ${cardLabel("We miss you")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">A little something for you, ${data.customerName.split(" ")[0]}</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:6px; line-height:1.6;">
+        It's been a while since your last visit — here's ${data.rewardName.toLowerCase().startsWith("free") ? "" : "a "}<strong style="color:${C.ink};">${data.rewardName}</strong> on us, next time you're in.
+      </div>
+    </td></tr>
+    <tr><td style="padding:8px 32px 28px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px dashed ${C.gold}; border-radius:10px;">
+        <tr><td align="center" style="padding:24px;">
+          ${cardLabel("Show this code at the till")}
+          <div style="font-family:${SANS}; font-size:28px; font-weight:700; letter-spacing:4px; color:${C.chilli}; margin-top:8px;">${data.code}</div>
+          <div style="font-family:${SANS}; font-size:12px; color:${C.muted}; margin-top:8px;">Valid until ${expiryLabel}</div>
+        </td></tr>
+      </table>
+    </td></tr>`;
+
+  await sendBrevoEmail(to, `A gift from The Royal Chilli — ${data.rewardName}`, shell(body));
+}

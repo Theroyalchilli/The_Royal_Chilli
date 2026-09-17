@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { toDateInputValue } from "@/lib/hours";
+import PaymentModal from "@/components/pos/PaymentModal";
+import type { CartItem } from "@/lib/types";
 
 interface OrderRow {
   id: number;
@@ -12,6 +14,7 @@ interface OrderRow {
   status: string;
   total: number;
   amount_paid: number;
+  pay_later: boolean;
   subtotal: number;
   tax?: number;
   table_number?: string | null;
@@ -39,7 +42,7 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> =
   cancelled:       { label: "Cancelled",  color: "text-red-600",     bg: "bg-red-50 border-red-300" },
 };
 
-type CategoryFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online";
+type CategoryFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online" | "pending_bills";
 
 function todayStr() {
   return toDateInputValue(new Date());
@@ -48,9 +51,12 @@ function todayStr() {
 // Mirrors the categorization already used live in the POS (Dine-in /
 // Takeaway / Delivery / Online tabs) — "Online" isn't its own order_type in
 // the database, it's a takeaway/delivery order with no staff_id because a
-// customer placed it on the website rather than a till.
+// customer placed it on the website rather than a till. "Pending Bills" cuts
+// across all three order types — anything marked Pay Later and still not
+// settled, regardless of how it was ordered.
 function matchesCategory(order: OrderRow, category: CategoryFilter): boolean {
   if (category === "all") return true;
+  if (category === "pending_bills") return order.pay_later && order.status !== "paid" && order.status !== "cancelled";
   if (category === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
   if (category === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
   if (category === "delivery") return order.order_type === "delivery" && !!order.staff_id;
@@ -67,6 +73,10 @@ export default function HistoryPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [itemsCache, setItemsCache] = useState<Record<number, OrderItem[]>>({});
 
+  const [payOpen, setPayOpen] = useState(false);
+  const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
+  const [payItems, setPayItems] = useState<CartItem[]>([]);
+
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
@@ -82,19 +92,47 @@ export default function HistoryPage() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  const fetchItems = async (orderId: number) => {
-    if (itemsCache[orderId]) return;
+  const fetchItems = async (orderId: number): Promise<OrderItem[]> => {
+    if (itemsCache[orderId]) return itemsCache[orderId];
     try {
       const res = await fetch(`/api/orders/${orderId}/items`);
       const data = await res.json();
-      setItemsCache(prev => ({ ...prev, [orderId]: data.items || [] }));
-    } catch { /* silent */ }
+      const items: OrderItem[] = data.items || [];
+      setItemsCache(prev => ({ ...prev, [orderId]: items }));
+      return items;
+    } catch { return []; }
   };
 
   const toggleExpand = (orderId: number) => {
     if (expanded === orderId) { setExpanded(null); return; }
     setExpanded(orderId);
     fetchItems(orderId);
+  };
+
+  const handleTakePayment = async (order: OrderRow) => {
+    const raw = await fetchItems(order.id);
+    const cartItems: CartItem[] = raw
+      .filter(i => i.status !== "cancelled")
+      .map(i => ({
+        menu_item_id: 0,
+        item_name: i.item_name,
+        item_price: i.item_price,
+        quantity: i.quantity,
+        is_veg: 0,
+        sent: true,
+        db_id: i.id,
+        order_id: order.id,
+      }));
+    setPayOrder(order);
+    setPayItems(cartItems);
+    setPayOpen(true);
+  };
+
+  const handlePaymentClose = () => {
+    setPayOpen(false);
+    setPayOrder(null);
+    setPayItems([]);
+    fetchOrders();
   };
 
   const q = search.trim().toLowerCase();
@@ -116,6 +154,7 @@ export default function HistoryPage() {
     { key: "takeaway", label: "Takeaway", icon: "🥡" },
     { key: "delivery", label: "Delivery", icon: "🛵" },
     { key: "online",   label: "Online",   icon: "🌐" },
+    { key: "pending_bills", label: "Pending Bills", icon: "📌" },
   ];
 
   return (
@@ -207,6 +246,11 @@ export default function HistoryPage() {
                             🌐 Online
                           </span>
                         )}
+                        {order.pay_later && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-500/15 border-amber-500/40 text-amber-700">
+                            📌 Pay Later
+                          </span>
+                        )}
                         {order.order_type !== "dine_in" && (
                           <span className="text-[10px] text-muted-foreground font-semibold">
                             {order.order_type === "delivery" ? "🛵 Delivery" : "🥡 Takeaway"}
@@ -266,12 +310,22 @@ export default function HistoryPage() {
                         </div>
                       )}
 
-                      <button
-                        onClick={() => window.open(`/pos/kitchen/print/${order.id}`, "_blank")}
-                        className="w-full h-9 mt-1 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-all no-select flex items-center justify-center gap-2"
-                      >
-                        🖨️ Reprint Receipt
-                      </button>
+                      <div className="flex gap-2">
+                        {order.status !== "paid" && order.status !== "cancelled" && Number(order.amount_paid) < Number(order.total) && (
+                          <button
+                            onClick={() => handleTakePayment(order)}
+                            className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all no-select flex items-center justify-center gap-2"
+                          >
+                            💰 Take Payment — {formatCurrency(Number(order.total) - Number(order.amount_paid))}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => window.open(`/pos/kitchen/print/${order.id}`, "_blank")}
+                          className="flex-1 h-9 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-all no-select flex items-center justify-center gap-2"
+                        >
+                          🖨️ Reprint Receipt
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -280,6 +334,22 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {payOrder && (
+        <PaymentModal
+          open={payOpen}
+          onClose={handlePaymentClose}
+          orderId={payOrder.id}
+          orderNumber={payOrder.order_number}
+          extraOrderIds={[]}
+          items={payItems}
+          subtotal={payOrder.subtotal ?? payOrder.total}
+          discount={0}
+          tax={payOrder.tax ?? Math.round((payOrder.subtotal ?? payOrder.total) * 0.2 * 100) / 100}
+          total={payOrder.total}
+          onPaymentComplete={fetchOrders}
+        />
+      )}
     </div>
   );
 }

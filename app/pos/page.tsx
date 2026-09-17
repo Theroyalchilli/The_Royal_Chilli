@@ -81,6 +81,8 @@ export default function POSPage() {
     card_total: number;
     total_orders: number;
     open_orders: number;
+    pending_bills_total: number;
+    pending_bills: { order_number: string; total: number; customer_name: string | null }[];
   } | null>(null);
   const [eodClosingCash, setEodClosingCash] = useState("");
   const [eodOpeningCash, setEodOpeningCash] = useState(0);
@@ -632,6 +634,11 @@ export default function POSPage() {
     <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.cash_total).toFixed(2)}</span></div>
     <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
     <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.cash_total)).toFixed(2)}</span></div>
+    ${eodData.pending_bills.length > 0 ? `
+    <div class="divider"></div>
+    <div class="row"><span class="label">📌 Pending Bills</span><span class="value total">£${eodData.pending_bills_total.toFixed(2)}</span></div>
+    ${eodData.pending_bills.map(o => `<div class="row"><span class="label">${o.order_number}${o.customer_name ? ` — ${o.customer_name}` : ""}</span><span class="value">£${o.total.toFixed(2)}</span></div>`).join("")}
+    ` : ""}
     <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
     </body></html>`;
     const w = window.open("", "_blank", "width=400,height=600");
@@ -1381,6 +1388,23 @@ export default function POSPage() {
                       <p className="text-amber-700 text-xs font-semibold">
                         {eodData?.open_orders} open order{(eodData?.open_orders || 0) > 1 ? "s" : ""} still outstanding
                       </p>
+                    </div>
+                  )}
+
+                  {(eodData?.pending_bills?.length || 0) > 0 && (
+                    <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-700 text-xs font-bold">📌 Pending Bills (this shift)</span>
+                        <span className="text-amber-700 text-sm font-black">£{(eodData?.pending_bills_total || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {eodData?.pending_bills.map((o) => (
+                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-amber-800">
+                            <span>{o.order_number}{o.customer_name ? ` — ${o.customer_name}` : ""}</span>
+                            <span className="font-semibold">£{o.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 

@@ -31,11 +31,16 @@ export async function GET(req: NextRequest) {
 
     const ordersData = orders ?? [];
 
-    // Summary stats
+    // Summary stats — revenue only counts orders actually paid. A Pay Later
+    // order sits in this date range (it was placed that day) but hasn't
+    // produced real money yet, so it must not inflate "revenue" — it shows
+    // up separately via Staff Hub → Reports → Pending Bills instead. Order
+    // *counts* still include it, since it genuinely was placed that day.
     const totalOrders = ordersData.length;
-    const totalRevenue = ordersData.reduce((s, o) => s + Number(o.total), 0);
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const paidOrders = ordersData.filter((o) => o.status === "paid").length;
+    const paidOrdersData = ordersData.filter((o) => o.status === "paid");
+    const totalRevenue = paidOrdersData.reduce((s, o) => s + Number(o.total), 0);
+    const avgOrderValue = paidOrdersData.length > 0 ? totalRevenue / paidOrdersData.length : 0;
+    const paidOrders = paidOrdersData.length;
 
     const summary = {
       total_orders: totalOrders,
@@ -141,14 +146,16 @@ export async function GET(req: NextRequest) {
       voidValue = Math.round(voidValue * 100) / 100;
     }
 
-    // Payment split
+    // Payment split — keyed by which order the payment belongs to (i.e. the
+    // day the order was placed), not by when the payment itself happened.
+    // A Pay Later order paid off days later must still land back in the
+    // original order's day here, not the day it was actually collected.
     let paymentSplit: { method: string; count: number; total: number }[] = [];
     if (orderIds.length > 0) {
       const { data: payments, error: paymentsError } = await supabase
         .from("payments")
-        .select("method, amount, created_at")
-        .gte("created_at", dayStart)
-        .lte("created_at", dayEnd);
+        .select("method, amount, order_id")
+        .in("order_id", orderIds);
 
       if (paymentsError) throw paymentsError;
 

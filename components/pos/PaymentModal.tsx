@@ -25,7 +25,7 @@ interface Props {
   onPaymentComplete: () => void;
 }
 
-type PayStep = "method" | "cash_amount" | "card_confirm" | "partial" | "receipt";
+type PayStep = "method" | "cash_amount" | "card_confirm" | "partial" | "receipt" | "pay_later_confirm" | "pay_later_done";
 
 export default function PaymentModal({
   open,
@@ -45,6 +45,7 @@ export default function PaymentModal({
   const [cashInput, setCashInput] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [payLaterNote, setPayLaterNote] = useState("");
   const { toast } = useToast();
 
   // Discount state — overrides props once applied
@@ -107,6 +108,7 @@ export default function PaymentModal({
       setTerminalError("");
       setTerminalPiId(null);
       setUseManualCard(false);
+      setPayLaterNote("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderId]);
@@ -256,6 +258,33 @@ export default function PaymentModal({
     }
   };
 
+  const handlePayLater = async () => {
+    if (!orderId) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/orders/${orderId}/pay-later`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          note: payLaterNote || undefined,
+          extraOrderIds: extraOrderIds.length > 0 ? extraOrderIds : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to mark pay later");
+        return;
+      }
+      setStep("pay_later_done");
+      onPaymentComplete();
+    } catch {
+      setError("Failed to mark pay later. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Pushes a real charge to the restaurant's registered Stripe Terminal
   // reader for the card leg of the bill (bill amount + tip in one real
   // transaction), then polls until the customer has tapped/inserted their
@@ -332,7 +361,7 @@ export default function PaymentModal({
       <DialogContent className="bg-surface border-border max-w-md w-full">
         <DialogHeader>
           <DialogTitle className="text-foreground text-xl">
-            {step === "receipt" ? "Payment Complete" : step === "partial" ? "Partial Payment Recorded" : "Payment"}
+            {step === "receipt" ? "Payment Complete" : step === "partial" ? "Partial Payment Recorded" : step === "pay_later_done" ? "Pay Later" : "Payment"}
             {orderNumber && (
               <span className="text-red-600 text-sm font-normal ml-2">
                 #{orderNumber}
@@ -514,6 +543,12 @@ export default function PaymentModal({
                 </button>
               </div>
 
+              <button onClick={() => setStep("pay_later_confirm")}
+                className="pos-btn no-select w-full flex items-center justify-center gap-2 py-3 bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 rounded-xl text-amber-700 transition-all">
+                <span className="text-xl">📌</span>
+                <span className="font-bold text-sm">PAY LATER — card declined / customer will return</span>
+              </button>
+
               {error && <div className="text-red-600 text-sm text-center">{error}</div>}
             </div>
           );
@@ -692,6 +727,61 @@ export default function PaymentModal({
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pay Later confirm */}
+        {step === "pay_later_confirm" && (
+          <div className="space-y-4">
+            <div className="bg-amber-100 border border-amber-300 rounded-xl p-6 text-center">
+              <div className="text-5xl mb-2">📌</div>
+              <div className="text-amber-700 text-lg font-bold">Mark this order Pay Later?</div>
+              <div className="text-foreground text-2xl font-bold mt-1">{formatCurrency(remainingBalance)}</div>
+              <p className="text-muted-foreground text-xs mt-2">
+                No payment is taken now. The order stays on record as owed, and will show up in
+                Order History → Pending Bills until it's paid.
+              </p>
+            </div>
+            <input
+              type="text"
+              placeholder="Reason (optional) — e.g. card declined, will return Friday"
+              value={payLaterNote}
+              onChange={(e) => setPayLaterNote(e.target.value)}
+              className="w-full bg-elevated border border-elevated rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:border-amber-500"
+            />
+            {error && <div className="text-red-600 text-sm text-center">{error}</div>}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setStep("method")}
+                className="pos-btn no-select h-12 bg-elevated hover:bg-elevated-hover border border-elevated rounded-xl text-foreground font-semibold"
+              >
+                Back
+              </button>
+              <button
+                onClick={handlePayLater}
+                disabled={loading}
+                className="pos-btn no-select h-12 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
+              >
+                {loading ? "Saving…" : "Confirm Pay Later"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Pay Later confirmed */}
+        {step === "pay_later_done" && (
+          <div className="space-y-4">
+            <div className="bg-amber-100 border border-amber-300 rounded-xl p-6 text-center">
+              <div className="text-5xl mb-2">📌</div>
+              <div className="text-amber-700 text-xl font-bold">Marked Pay Later</div>
+              <div className="text-foreground text-sm mt-2">Find it later in Order History → Pending Bills to take payment.</div>
+            </div>
+            <button
+              onClick={handleClose}
+              className="pos-btn no-select w-full h-12 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl"
+            >
+              New Order
+            </button>
           </div>
         )}
 

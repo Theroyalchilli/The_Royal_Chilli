@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { formatCurrency } from "@/lib/utils";
 
 export default function StaffReportsView() {
-  const [tab, setTab] = useState<"sales" | "staff">("sales");
+  const [tab, setTab] = useState<"sales" | "staff" | "pending">("sales");
 
   return (
     <>
@@ -29,15 +29,112 @@ export default function StaffReportsView() {
           >
             🧑‍🤝‍🧑 Staff
           </button>
+          <button
+            onClick={() => setTab("pending")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${tab === "pending" ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            📌 Pending Bills
+          </button>
         </div>
       </div>
 
       <div className="px-4 py-6">
         <div className="mx-auto max-w-5xl">
-          {tab === "sales" ? <SalesReport /> : <StaffLabourReport />}
+          {tab === "sales" ? <SalesReport /> : tab === "staff" ? <StaffLabourReport /> : <PendingBillsReport />}
         </div>
       </div>
     </>
+  );
+}
+
+// ── Pending Bills ────────────────────────────────────────────────────────
+// View-only, admin-wide: every currently-outstanding Pay Later order across
+// all dates. Actually collecting payment still only happens at the till, via
+// the POS History screen's per-day Pending Bills filter — this is oversight,
+// not a place to take money from.
+
+interface PendingBill {
+  id: number;
+  order_number: string;
+  order_type: string;
+  total: number;
+  amount_paid: number;
+  outstanding: number;
+  customer_name: string | null;
+  customer_phone: string | null;
+  table_number: string | null;
+  staff_name: string | null;
+  pay_later_note: string | null;
+  created_at: string;
+}
+
+function PendingBillsReport() {
+  const [bills, setBills] = useState<PendingBill[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/reports/pending-bills")
+      .then((r) => r.json())
+      .then((d) => { setBills(d.orders || []); setTotal(d.total || 0); })
+      .catch(() => { setBills([]); setTotal(0); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="text-center text-muted-foreground text-sm py-12">Loading…</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-5 py-4 flex items-center justify-between">
+        <div>
+          <div className="text-amber-700 text-xs font-bold uppercase tracking-widest">Total Outstanding</div>
+          <div className="text-muted-foreground text-xs mt-0.5">{bills.length} order{bills.length === 1 ? "" : "s"} still owed, across all dates</div>
+        </div>
+        <div className="text-amber-700 text-3xl font-black">{formatCurrency(total)}</div>
+      </div>
+
+      {bills.length === 0 ? (
+        <div className="text-center text-muted-foreground text-sm py-12">Nothing outstanding — every Pay Later order has been settled.</div>
+      ) : (
+        <div className="rounded-2xl border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-hover text-muted-foreground text-xs uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold">Order</th>
+                <th className="text-left px-4 py-2.5 font-semibold">Customer</th>
+                <th className="text-left px-4 py-2.5 font-semibold">Type</th>
+                <th className="text-left px-4 py-2.5 font-semibold">Placed</th>
+                <th className="text-left px-4 py-2.5 font-semibold">Staff</th>
+                <th className="text-left px-4 py-2.5 font-semibold">Note</th>
+                <th className="text-right px-4 py-2.5 font-semibold">Owed</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {bills.map((b) => (
+                <tr key={b.id} className="hover:bg-surface-hover/60">
+                  <td className="px-4 py-2.5 text-foreground font-semibold">{b.order_number}</td>
+                  <td className="px-4 py-2.5 text-foreground">
+                    {b.order_type === "dine_in" ? `Table ${b.table_number ?? "?"}` : (b.customer_name || "Guest")}
+                    {b.customer_phone && <span className="text-muted-foreground"> · {b.customer_phone}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-muted-foreground">
+                    {ORDER_TYPE_ICONS[b.order_type] ?? ""} {ORDER_TYPE_LABELS[b.order_type] ?? b.order_type}
+                  </td>
+                  <td className="px-4 py-2.5 text-muted-foreground">
+                    {new Date(b.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{b.staff_name || "—"}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{b.pay_later_note || "—"}</td>
+                  <td className="px-4 py-2.5 text-right text-amber-700 font-bold">{formatCurrency(b.outstanding)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

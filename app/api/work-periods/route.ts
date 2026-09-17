@@ -66,6 +66,27 @@ export async function GET(req: NextRequest) {
     .select("id", { count: "exact", head: true })
     .in("status", ["open", "sent_to_kitchen", "ready"]);
 
+  // Pending Bills — orders from *this specific till shift* marked Pay Later
+  // and still not fully paid off. Scoped to work_period_id, not calendar
+  // date, since a late-night shift can run past midnight.
+  let pendingBills: { order_number: string; total: number; customer_name: string | null }[] = [];
+  let pendingBillsTotal = 0;
+  if (period?.id) {
+    const { data: pending } = await supabase
+      .from("orders")
+      .select("order_number, total, amount_paid, customer_name")
+      .eq("work_period_id", period.id)
+      .eq("pay_later", true)
+      .not("status", "eq", "cancelled")
+      .not("status", "eq", "paid");
+    pendingBills = (pending || []).map((o) => ({
+      order_number: o.order_number,
+      total: Number(o.total) - Number(o.amount_paid),
+      customer_name: o.customer_name,
+    }));
+    pendingBillsTotal = Math.round(pendingBills.reduce((s, o) => s + o.total, 0) * 100) / 100;
+  }
+
   return NextResponse.json({
     period,
     summary: {
@@ -74,6 +95,8 @@ export async function GET(req: NextRequest) {
       cash_total: Math.round(cashTotal * 100) / 100,
       card_total: Math.round(cardTotal * 100) / 100,
       open_orders: openOrdersCount || 0,
+      pending_bills_total: pendingBillsTotal,
+      pending_bills: pendingBills,
     },
   });
 }

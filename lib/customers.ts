@@ -1,5 +1,6 @@
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
+import { getPointsExpiryTimestamp } from "@/lib/loyalty";
 
 // Finds a customer by phone, or creates one. Used by public checkout/reservation
 // and POS order creation so CRM data accumulates from flows that already exist,
@@ -42,13 +43,6 @@ async function getPointsRate(): Promise<number> {
   return rate <= 0 ? 1 : rate;
 }
 
-function expiryTimestamp(months: number): string | null {
-  if (!months || months <= 0) return null;
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString();
-}
-
 // Base earn + tier-multiplier bonus, awarded once a payment fully settles an
 // order. Tier is read from the customer's spend *before* this order, so a
 // purchase that itself tips someone into a new tier earns at the old rate —
@@ -72,8 +66,7 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
   const basePoints = Math.floor(orderTotal * rate);
   if (basePoints <= 0) return;
 
-  const expiryMonths = await getSetting("loyalty_points_expiry_months", 12);
-  const expiresAt = expiryTimestamp(expiryMonths);
+  const expiresAt = await getPointsExpiryTimestamp();
 
   const { data: priorOrders } = await supabase
     .from("orders")
@@ -140,6 +133,7 @@ async function checkReferralCompletion(customerId: number, orderTotal: number) {
 
   const refereePoints = await getSetting("loyalty_referral_referee_points", 500);
   const referrerPoints = await getSetting("loyalty_referral_referrer_points", 1000);
+  const expiresAt = await getPointsExpiryTimestamp();
 
   // Mark completed first (guards against a second concurrent purchase racing
   // the same reward) — if either insert below fails, the referral simply
@@ -152,7 +146,7 @@ async function checkReferralCompletion(customerId: number, orderTotal: number) {
   if (markErr) return;
 
   await supabase.from("loyalty_transactions").insert([
-    { customer_id: customerId, points_delta: refereePoints, reason: "referral_bonus", reference_type: "customer", reference_id: customer.referred_by_customer_id },
-    { customer_id: customer.referred_by_customer_id, points_delta: referrerPoints, reason: "referral_bonus", reference_type: "customer", reference_id: customerId },
+    { customer_id: customerId, points_delta: refereePoints, reason: "referral_bonus", reference_type: "customer", reference_id: customer.referred_by_customer_id, expires_at: expiresAt },
+    { customer_id: customer.referred_by_customer_id, points_delta: referrerPoints, reason: "referral_bonus", reference_type: "customer", reference_id: customerId, expires_at: expiresAt },
   ]);
 }

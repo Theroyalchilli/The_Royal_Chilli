@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
-import { issueRedemption } from "@/lib/loyalty";
+import { issueRedemption, getPointsExpiryTimestamp } from "@/lib/loyalty";
 
 // Daily job: award birthday points (if configured) and auto-issue any
 // reward flagged is_birthday_reward, for every customer whose birthday is
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
   const birthdayPoints = Number(setting?.value ?? 0);
 
   const { data: birthdayRewards } = await supabase.from("loyalty_rewards").select("id, name").eq("is_birthday_reward", true).eq("active", 1);
+  const expiresAt = await getPointsExpiryTimestamp();
 
   const results: { customer_id: number; name: string; points_awarded: number; rewards_issued: string[]; skipped: boolean }[] = [];
 
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
         reason: "birthday_bonus",
         reference_type: "birthday",
         reference_id: c.id,
+        expires_at: expiresAt,
       });
     }
 

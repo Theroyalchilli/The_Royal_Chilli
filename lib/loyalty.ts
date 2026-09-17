@@ -2,6 +2,24 @@ import { randomBytes } from "crypto";
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
 
+export async function getLoyaltySetting(key: string, fallback: number): Promise<number> {
+  const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
+  const n = Number(data?.value ?? fallback);
+  return isNaN(n) ? fallback : n;
+}
+
+// Shared by every code path that awards earning-type points (purchase,
+// tier bonus, referral, birthday) so they're all swept by the same expiry
+// cron consistently — a reason listed in EXPIRABLE_REASONS but never given
+// an expires_at here would simply never expire, silently.
+export async function getPointsExpiryTimestamp(): Promise<string | null> {
+  const months = await getLoyaltySetting("loyalty_points_expiry_months", 12);
+  if (!months || months <= 0) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
+
 // Unambiguous alphabet — no 0/O, 1/I/L — so a code read aloud or handwritten
 // isn't misheard/miscopied. Not sequential/guessable (doc §23): drawn from
 // crypto.randomBytes, not Math.random().

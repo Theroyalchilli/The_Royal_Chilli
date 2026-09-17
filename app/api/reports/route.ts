@@ -63,8 +63,10 @@ export async function GET(req: NextRequest) {
       cancellation_rate: totalOrdersIncCancelled > 0 ? Math.round(((cancelledCount ?? 0) / totalOrdersIncCancelled) * 1000) / 10 : 0,
     };
 
-    // Discounts given — a straight sum of the discount field on these orders.
-    const discountTotal = Math.round(ordersData.reduce((s, o) => s + Number(o.discount || 0), 0) * 100) / 100;
+    // Discounts given — only on orders actually paid, same reasoning as
+    // total_revenue: a discount on a still-pending Pay Later order hasn't
+    // really cost anything yet.
+    const discountTotal = Math.round(paidOrdersData.reduce((s, o) => s + Number(o.discount || 0), 0) * 100) / 100;
 
     // New vs returning customers — "returning" means they have an order before this range started.
     const customerIds = [...new Set(ordersData.map((o) => o.customer_id).filter((id): id is number => id != null))];
@@ -82,11 +84,14 @@ export async function GET(req: NextRequest) {
     }
     const customers = { new: newCustomers, returning: returningCustomers };
 
-    // By order type
+    // By order type — count includes every order placed (Pay Later included,
+    // it's still a real order), revenue only counts what's actually been paid.
     const byTypeMap: Record<string, { count: number; revenue: number }> = {};
     for (const o of ordersData) {
       if (!byTypeMap[o.order_type]) byTypeMap[o.order_type] = { count: 0, revenue: 0 };
       byTypeMap[o.order_type].count += 1;
+    }
+    for (const o of paidOrdersData) {
       byTypeMap[o.order_type].revenue += Number(o.total);
     }
     const byType = Object.entries(byTypeMap).map(([order_type, v]) => ({
@@ -95,13 +100,17 @@ export async function GET(req: NextRequest) {
       revenue: Math.round(v.revenue * 100) / 100,
     }));
 
-    // Hourly breakdown
+    // Hourly breakdown — same split: order counts include everything placed,
+    // revenue only what's actually paid.
     const hourlyMap: Record<string, { orders: number; revenue: number }> = {};
     for (const o of ordersData) {
       const hour = new Date(o.created_at).getUTCHours().toString().padStart(2, "0");
       if (!hourlyMap[hour]) hourlyMap[hour] = { orders: 0, revenue: 0 };
       hourlyMap[hour].orders += 1;
-      hourlyMap[hour].revenue += Number(o.total);
+    }
+    for (const o of paidOrdersData) {
+      const hour = new Date(o.created_at).getUTCHours().toString().padStart(2, "0");
+      if (hourlyMap[hour]) hourlyMap[hour].revenue += Number(o.total);
     }
     const hourly = Object.entries(hourlyMap)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -111,15 +120,18 @@ export async function GET(req: NextRequest) {
         revenue: Math.round(v.revenue * 100) / 100,
       }));
 
-    // Top items: fetch order_items for these orders
+    // Top items: fetch order_items for these orders. Quantity counts
+    // everything actually served (food was made regardless of payment
+    // status); revenue only counts items on orders actually paid.
     const orderIds = ordersData.map((o) => o.id);
+    const paidOrderIdSet = new Set(paidOrdersData.map((o) => o.id));
     let topItems: { item_name: string; quantity_sold: number; revenue: number }[] = [];
     let voidValue = 0;
 
     if (orderIds.length > 0) {
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
-        .select("item_name, item_price, quantity, status")
+        .select("order_id, item_name, item_price, quantity, status")
         .in("order_id", orderIds);
 
       if (itemsError) throw itemsError;
@@ -133,7 +145,7 @@ export async function GET(req: NextRequest) {
         }
         if (!itemMap[oi.item_name]) itemMap[oi.item_name] = { quantity_sold: 0, revenue: 0 };
         itemMap[oi.item_name].quantity_sold += oi.quantity;
-        itemMap[oi.item_name].revenue += lineValue;
+        if (paidOrderIdSet.has(oi.order_id)) itemMap[oi.item_name].revenue += lineValue;
       }
       topItems = Object.entries(itemMap)
         .map(([item_name, v]) => ({

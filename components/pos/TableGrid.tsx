@@ -9,18 +9,16 @@ interface Props {
   onSelect: (table: RestaurantTable) => void;
 }
 
-const locationLabel: Record<string, string> = {
-  main: "Main",
-  outdoor: "Outdoor",
-  private: "Private",
-};
-
 export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
-  const grouped = {
-    main:    tables.filter(t => t.location === "main"),
-    outdoor: tables.filter(t => t.location === "outdoor"),
-    private: tables.filter(t => t.location === "private"),
-  };
+  // Single floor, no location zones — tables are laid out purely by table
+  // number: the first 9 as a 3x3 block, the rest as a 4-wide row beneath it.
+  const sorted = [...tables].sort(
+    (a, b) => parseInt(a.table_number.replace(/\D/g, ""), 10) - parseInt(b.table_number.replace(/\D/g, ""), 10)
+  );
+  const groups = [
+    { cols: 3, tables: sorted.slice(0, 9) },
+    { cols: 4, tables: sorted.slice(9) },
+  ].filter(g => g.tables.length > 0);
 
   const stats = {
     free:     tables.filter(t => t.status === "available").length,
@@ -46,19 +44,11 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
       </div>
 
       {/* Table groups */}
-      {(["main", "outdoor", "private"] as const).map(loc => {
-        const group = grouped[loc];
-        if (group.length === 0) return null;
+      {groups.map((group, i) => {
         return (
-          <div key={loc}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                {locationLabel[loc]}
-              </span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {group.map(table => {
+          <div key={i}>
+            <div className={cn("grid gap-2", group.cols === 3 ? "grid-cols-3" : "grid-cols-4")}>
+              {group.tables.map(table => {
                 const isSelected = selectedTable === table.id;
                 const status = table.status as "available" | "occupied" | "reserved";
                 const elapsedMins = table.occupied_since ? minutesSince(table.occupied_since) : null;

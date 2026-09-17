@@ -9,14 +9,30 @@ interface Props {
   onSelect: (table: RestaurantTable) => void;
 }
 
+// Fills a grid column-by-column instead of row-by-row, each column
+// top-to-bottom highest-to-lowest — e.g. 9 items over 3 columns reads
+// 3,6,9 / 2,5,8 / 1,4,7 rather than the plain ascending 1,2,3 / 4,5,6 / 7,8,9.
+function columnMajor<T>(items: T[], cols: number): T[] {
+  const rows = Math.ceil(items.length / cols);
+  const columns = Array.from({ length: cols }, (_, c) => items.slice(c * rows, c * rows + rows).reverse());
+  const flat: T[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (columns[c][r] !== undefined) flat.push(columns[c][r]);
+    }
+  }
+  return flat;
+}
+
 export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
   // Single floor, no location zones — tables are laid out purely by table
-  // number: the first 9 as a 3x3 block, the rest as a 4-wide row beneath it.
+  // number: the first 9 as a 3x3 block (column-major, matching the
+  // restaurant's physical layout), the rest as a 4-wide row beneath it.
   const sorted = [...tables].sort(
     (a, b) => parseInt(a.table_number.replace(/\D/g, ""), 10) - parseInt(b.table_number.replace(/\D/g, ""), 10)
   );
   const groups = [
-    { cols: 3, tables: sorted.slice(0, 9) },
+    { cols: 3, tables: columnMajor(sorted.slice(0, 9), 3) },
     { cols: 4, tables: sorted.slice(9) },
   ].filter(g => g.tables.length > 0);
 

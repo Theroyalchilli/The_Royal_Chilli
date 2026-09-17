@@ -379,27 +379,22 @@ export default function ReservationsPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
 
-      {/* Top nav */}
-      <div className="bg-surface border-b border-border px-4 py-3 flex gap-3">
-        <Link href="/pos" className="px-4 py-2 bg-surface-hover hover:bg-elevated text-foreground text-sm font-semibold rounded-lg border border-border transition-colors">
-          ← Back
-        </Link>
-      </div>
-
-      {/* Header */}
-      <div className="bg-surface border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">📅</span>
-            <div>
-              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-lg tracking-[-0.02em]">Reservations</h1>
-              <p className="text-muted-foreground text-xs">
-                The Royal Chilli · Hounslow{pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
-              </p>
-            </div>
+      {/* Header — Back, title, and the primary action all on one line, even on mobile */}
+      <div className="bg-surface border-b border-border px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link href="/pos"
+            className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors flex-shrink-0">
+            ← Back
+          </Link>
+          <span className="text-xl sm:text-2xl flex-shrink-0">📅</span>
+          <div className="min-w-0">
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-lg leading-tight tracking-[-0.02em] truncate">Reservations</h1>
+            <p className="text-muted-foreground text-[10px] sm:text-xs hidden sm:block">
+              The Royal Chilli · Hounslow{pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
+            </p>
           </div>
           <button onClick={() => setAdding(true)}
-            className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-colors no-select pos-btn">
+            className="ml-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm font-bold rounded-lg transition-colors no-select pos-btn flex-shrink-0">
             + New Reservation
           </button>
         </div>

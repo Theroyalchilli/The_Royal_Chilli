@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 
 interface OrderWithItems extends Order {
@@ -153,6 +154,10 @@ export default function KitchenBoard() {
       {/* Header */}
       <div className="bg-surface border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link href="/pos"
+            className="px-2 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors flex-shrink-0">
+            ← Back
+          </Link>
           <span className="text-xl sm:text-2xl">🍳</span>
           <div>
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>

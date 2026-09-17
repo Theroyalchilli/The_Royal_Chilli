@@ -58,6 +58,27 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Site-wide horizontal-overflow safety net — the page itself must only ever
+   scroll vertically. Anything genuinely wide (a table, a long code/receipt
+   block) is expected to wrap itself in .scroll-x below instead of pushing
+   the page sideways. */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img, video, svg, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Wrap any wide content (data tables, receipts, code) in this so it scrolls
+   within its own box on small screens, never the whole page. */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

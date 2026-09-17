@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
     const tableId = searchParams.get("table_id");
     const orderType = searchParams.get("order_type");
     const source = searchParams.get("source"); // 'website' = customer self-service (takeaway/delivery), not a staff-created POS order
+    // Item count + payment method need extra joins other callers (Online/Open
+    // Orders panels, polling every 15s) don't need — opt-in only, for History.
+    const detailed = searchParams.get("detailed") === "true";
 
     let query = supabase
       .from("orders")
@@ -78,6 +81,30 @@ export async function GET(req: NextRequest) {
       flatOrders = flatOrders.filter(
         (o) => !o.stripe_session_id || Number(o.amount_paid) >= Number(o.total)
       );
+    }
+
+    if (detailed && flatOrders.length > 0) {
+      const orderIds = flatOrders.map((o) => o.id);
+      const [{ data: itemRows }, { data: paymentRows }] = await Promise.all([
+        supabase.from("order_items").select("order_id").in("order_id", orderIds).neq("status", "cancelled"),
+        supabase.from("payments").select("order_id, method, amount").in("order_id", orderIds),
+      ]);
+
+      const itemCountMap: Record<number, number> = {};
+      for (const i of itemRows || []) itemCountMap[i.order_id] = (itemCountMap[i.order_id] || 0) + 1;
+
+      const methodLabel: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
+      const methodMap: Record<number, Set<string>> = {};
+      for (const p of paymentRows || []) {
+        if (Number(p.amount) <= 0) continue; // a refund isn't "how this order was paid"
+        (methodMap[p.order_id] ??= new Set()).add(methodLabel[p.method] ?? p.method);
+      }
+
+      flatOrders = flatOrders.map((o) => ({
+        ...o,
+        item_count: itemCountMap[o.id] || 0,
+        payment_method: methodMap[o.id] ? [...methodMap[o.id]].join(" + ") : null,
+      }));
     }
 
     return NextResponse.json({ orders: flatOrders });

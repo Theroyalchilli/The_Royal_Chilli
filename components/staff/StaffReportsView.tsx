@@ -98,7 +98,7 @@ function PendingBillsReport() {
       {bills.length === 0 ? (
         <div className="text-center text-muted-foreground text-sm py-12">Nothing outstanding — every Pay Later order has been settled.</div>
       ) : (
-        <div className="rounded-2xl border border-border overflow-hidden">
+        <div className="rounded-2xl border border-border scroll-x">
           <table className="w-full text-sm">
             <thead className="bg-surface-hover text-muted-foreground text-xs uppercase tracking-wide">
               <tr>

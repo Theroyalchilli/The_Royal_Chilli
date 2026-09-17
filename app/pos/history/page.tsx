@@ -23,6 +23,8 @@ interface OrderRow {
   staff_id: number | null;
   staff_name?: string | null;
   created_at: string;
+  item_count?: number;
+  payment_method?: string | null;
 }
 
 interface OrderItem {
@@ -42,7 +44,8 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> =
   cancelled:       { label: "Cancelled",  color: "text-red-600",     bg: "bg-red-50 border-red-300" },
 };
 
-type CategoryFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online" | "pending_bills";
+type TypeFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online";
+type StatusFilter = "all" | "paid" | "pending";
 
 function todayStr() {
   return toDateInputValue(new Date());
@@ -51,22 +54,30 @@ function todayStr() {
 // Mirrors the categorization already used live in the POS (Dine-in /
 // Takeaway / Delivery / Online tabs) — "Online" isn't its own order_type in
 // the database, it's a takeaway/delivery order with no staff_id because a
-// customer placed it on the website rather than a till. "Pending Bills" cuts
-// across all three order types — anything marked Pay Later and still not
-// settled, regardless of how it was ordered.
-function matchesCategory(order: OrderRow, category: CategoryFilter): boolean {
-  if (category === "all") return true;
-  if (category === "pending_bills") return order.pay_later && order.status !== "paid" && order.status !== "cancelled";
-  if (category === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
-  if (category === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
-  if (category === "delivery") return order.order_type === "delivery" && !!order.staff_id;
-  return order.order_type === category;
+// customer placed it on the website rather than a till.
+function matchesType(order: OrderRow, type: TypeFilter): boolean {
+  if (type === "all") return true;
+  if (type === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
+  if (type === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
+  if (type === "delivery") return order.order_type === "delivery" && !!order.staff_id;
+  return order.order_type === type;
+}
+
+// Independent of Type, so the two rows AND-combine — Delivery + Pending
+// shows only delivery orders that aren't settled yet, regardless of why.
+function matchesStatus(order: OrderRow, status: StatusFilter): boolean {
+  if (status === "all") return true;
+  if (status === "paid") return order.status === "paid";
+  return order.status !== "paid" && order.status !== "cancelled"; // pending
 }
 
 export default function HistoryPage() {
   const router = useRouter();
   const [date, setDate] = useState(todayStr());
-  const [category, setCategory] = useState<CategoryFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  // Defaults to Pending, not All — surfaces unpaid orders first, since this
+  // screen is mainly used to find and act on them.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +98,7 @@ export default function HistoryPage() {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/orders?date=${date}`, { cache: "no-store" });
+      const res = await fetch(`/api/orders?date=${date}&detailed=true`, { cache: "no-store" });
       const data = await res.json();
       setOrders(data.orders || []);
     } catch {
@@ -183,7 +194,8 @@ export default function HistoryPage() {
 
   const q = search.trim().toLowerCase();
   const filtered = orders
-    .filter(o => matchesCategory(o, category))
+    .filter(o => matchesType(o, typeFilter))
+    .filter(o => matchesStatus(o, statusFilter))
     .filter(o =>
       !q ||
       o.order_number.toLowerCase().includes(q) ||
@@ -194,13 +206,23 @@ export default function HistoryPage() {
 
   const dayTotal = filtered.filter(o => o.status !== "cancelled").reduce((s, o) => s + Number(o.total), 0);
 
-  const categories: { key: CategoryFilter; label: string; icon: string }[] = [
+  const clearFilters = () => {
+    setTypeFilter("all");
+    setStatusFilter("all");
+    setSearch("");
+  };
+
+  const typeOptions: { key: TypeFilter; label: string; icon: string }[] = [
     { key: "all",      label: "All",      icon: "📋" },
     { key: "dine_in",  label: "Dine-in",  icon: "🍽️" },
     { key: "takeaway", label: "Takeaway", icon: "🥡" },
     { key: "delivery", label: "Delivery", icon: "🛵" },
     { key: "online",   label: "Online",   icon: "🌐" },
-    { key: "pending_bills", label: "Pending Bills", icon: "📌" },
+  ];
+  const statusOptions: { key: StatusFilter; label: string; icon: string }[] = [
+    { key: "all",     label: "All",     icon: "📋" },
+    { key: "paid",    label: "Paid",    icon: "✅" },
+    { key: "pending", label: "Pending", icon: "⏳" },
   ];
 
   return (
@@ -236,18 +258,35 @@ export default function HistoryPage() {
             className="h-10 flex-1 min-w-[200px] border border-border bg-background rounded-lg px-3 text-sm outline-none focus:border-red-500"
           />
         </div>
+        {/* Row 1: service type — independent of Row 2, they AND-combine */}
         <div className="flex flex-wrap gap-2">
-          {categories.map(c => (
+          {typeOptions.map(t => (
             <button
-              key={c.key}
-              onClick={() => setCategory(c.key)}
+              key={t.key}
+              onClick={() => setTypeFilter(t.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors no-select ${
-                category === c.key
+                typeFilter === t.key
                   ? "bg-red-600 border-red-600 text-white"
                   : "bg-surface-hover border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              {c.icon} {c.label}
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+        {/* Row 2: payment status */}
+        <div className="flex flex-wrap gap-2">
+          {statusOptions.map(s => (
+            <button
+              key={s.key}
+              onClick={() => setStatusFilter(s.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors no-select ${
+                statusFilter === s.key
+                  ? "bg-blue-600 border-blue-600 text-white"
+                  : "bg-surface-hover border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {s.icon} {s.label}
             </button>
           ))}
         </div>
@@ -260,9 +299,15 @@ export default function HistoryPage() {
             Loading orders…
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
             <span className="text-3xl">📭</span>
             <p className="text-sm">No orders match</p>
+            <button
+              onClick={clearFilters}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-colors no-select"
+            >
+              Clear filters
+            </button>
           </div>
         ) : (
           <div className="space-y-2 max-w-3xl mx-auto">
@@ -303,12 +348,24 @@ export default function HistoryPage() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-[11px] text-muted-foreground">{order.order_number}</span>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-[11px] text-muted-foreground">
                           {new Date(order.created_at).toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" })}
                         </span>
+                        {typeof order.item_count === "number" && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-[11px] text-muted-foreground">{order.item_count} item{order.item_count === 1 ? "" : "s"}</span>
+                          </>
+                        )}
+                        {order.payment_method && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-[11px] text-muted-foreground">{order.payment_method}</span>
+                          </>
+                        )}
                         {order.staff_name && (
                           <>
                             <span className="text-muted-foreground">·</span>

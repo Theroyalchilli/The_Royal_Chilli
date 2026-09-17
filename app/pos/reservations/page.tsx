@@ -379,13 +379,9 @@ export default function ReservationsPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
 
-      {/* Header — Back, title, and the primary action all on one line, even on mobile */}
+      {/* Header — title on top, Back button underneath it */}
       <div className="bg-surface border-b border-border px-3 sm:px-4 py-2.5 sm:py-3">
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/pos"
-            className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors flex-shrink-0">
-            ← Back
-          </Link>
           <span className="text-xl sm:text-2xl flex-shrink-0">📅</span>
           <div className="min-w-0">
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-lg leading-tight tracking-[-0.02em] truncate">Reservations</h1>
@@ -398,6 +394,10 @@ export default function ReservationsPage() {
             + New Reservation
           </button>
         </div>
+        <Link href="/pos"
+          className="mt-2 inline-block px-2.5 sm:px-4 py-1.5 sm:py-2 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors">
+          ← Back
+        </Link>
       </div>
 
       {/* Table requests banner — live "call waiter" / "request bill" alerts */}

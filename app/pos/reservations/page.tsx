@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { RestaurantTable } from "@/lib/types";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
+import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 
 const tableStatusCfg = {
   available: { color: "bg-green-100 border-green-300 text-green-700", dot: "bg-green-500", ring: "ring-green-500" },
@@ -19,13 +20,6 @@ const resvStatusCfg: Record<string, { label: string; color: string; bg: string }
   no_show:   { label: "No Show",   color: "text-muted-foreground",   bg: "bg-surface-hover/60 border-border"       },
   waitlisted:{ label: "Waitlisted",color: "text-purple-700",  bg: "bg-purple-500/10 border-purple-500/40" },
 };
-
-interface TableRequest {
-  id: number;
-  type: "waiter" | "bill";
-  table_number: string | null;
-  created_at: string;
-}
 
 interface Reservation {
   id: number;
@@ -290,17 +284,6 @@ export default function ReservationsPage() {
   // Table picker modal
   const [seatResv, setSeatResv] = useState<Reservation | null>(null);
 
-  const [tableRequests, setTableRequests] = useState<TableRequest[]>([]);
-  const fetchTableRequests = useCallback(async () => {
-    const res = await fetch("/api/table-requests");
-    const data = await res.json();
-    setTableRequests(data.requests || []);
-  }, []);
-  const resolveTableRequest = async (id: number) => {
-    await fetch("/api/table-requests", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-    fetchTableRequests();
-  };
-
   const fetchTables = useCallback(async () => {
     const res = await fetch("/api/tables");
     const data = await res.json();
@@ -320,12 +303,6 @@ export default function ReservationsPage() {
     const t = setInterval(fetchTables, 15000);
     return () => clearInterval(t);
   }, [fetchTables]);
-
-  useEffect(() => {
-    fetchTableRequests();
-    const t = setInterval(fetchTableRequests, 8000);
-    return () => clearInterval(t);
-  }, [fetchTableRequests]);
 
   useEffect(() => {
     fetchReservations();
@@ -400,24 +377,7 @@ export default function ReservationsPage() {
         </Link>
       </div>
 
-      {/* Table requests banner — live "call waiter" / "request bill" alerts */}
-      {tableRequests.length > 0 && (
-        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 space-y-1.5">
-          {tableRequests.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-3 max-w-2xl mx-auto">
-              <span className="text-amber-800 text-sm font-medium">
-                {r.type === "waiter" ? "🙋" : "🧾"} Table {r.table_number} {r.type === "waiter" ? "wants a waiter" : "requested the bill"}
-              </span>
-              <button
-                onClick={() => resolveTableRequest(r.id)}
-                className="px-3 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-semibold rounded-lg transition-colors"
-              >
-                Resolve
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <TableRequestsBanner />
 
       {/* Content — upcoming reservations, grouped by date, no date picker needed */}
       <div className="flex-1 p-4 overflow-y-auto">

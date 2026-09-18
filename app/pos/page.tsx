@@ -11,6 +11,7 @@ import PaymentModal from "@/components/pos/PaymentModal";
 import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
 import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
+import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import type {
   MenuCategory,
   MenuItem,
@@ -993,6 +994,8 @@ export default function POSPage() {
           </div>
         </div>
       </div>
+
+      <TableRequestsBanner />
 
       {/* ══════════════════════════════════════════
           DESKTOP LAYOUT  (lg = 1024px and above)

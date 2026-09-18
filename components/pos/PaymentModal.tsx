@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   orderId: number | null;
   orderNumber: string;
+  customerId?: number | null;
   extraOrderIds: number[];
   items: CartItem[];
   subtotal: number;
@@ -32,6 +33,7 @@ export default function PaymentModal({
   onClose,
   orderId,
   orderNumber,
+  customerId,
   extraOrderIds,
   items,
   subtotal,
@@ -56,6 +58,11 @@ export default function PaymentModal({
   const [localTax, setLocalTax] = useState(tax);
   const [localTotal, setLocalTotal] = useState(total);
   const [discountApplying, setDiscountApplying] = useState(false);
+
+  // Loyalty balance/earn preview — shown whenever this order is linked to a
+  // customer. Both numbers are real (same calc the actual award uses), not
+  // guesses, so they never disagree with what posts once payment completes.
+  const [loyaltyPreview, setLoyaltyPreview] = useState<{ customerName: string; currentBalance: number; willEarn: number; tierName: string | null } | null>(null);
 
   // Loyalty reward redemption — staff enter a code issued earlier from the
   // Customers & Loyalty screen; a successful redeem may adjust the discount.
@@ -91,6 +98,18 @@ export default function PaymentModal({
   useEffect(() => {
     fetch("/api/pos/terminal/config").then((r) => r.json()).then((d) => setReaderEnabled(!!d.enabled)).catch(() => setReaderEnabled(false));
   }, []);
+
+  useEffect(() => {
+    if (!open || !customerId) { setLoyaltyPreview(null); return; }
+    fetch(`/api/loyalty/estimate?customer_id=${customerId}&amount=${localTotal}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setLoyaltyPreview({ customerName: d.customer_name, currentBalance: d.current_balance, willEarn: d.will_earn, tierName: d.tier_name });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, customerId, localTotal]);
 
   // Reset everything whenever the modal opens for a (possibly new) order.
   useEffect(() => {
@@ -551,6 +570,12 @@ export default function PaymentModal({
                   <span className="text-red-600 text-xl">{formatCurrency(localTotal)}</span>
                 </div>
                 <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)}</div>
+                {loyaltyPreview && (
+                  <div className="flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 mt-1">
+                    <span className="text-rose-800 text-[11px] font-medium truncate">🎁 {loyaltyPreview.customerName} · {loyaltyPreview.currentBalance} pts{loyaltyPreview.tierName ? ` · ${loyaltyPreview.tierName}` : ""}</span>
+                    {loyaltyPreview.willEarn > 0 && <span className="text-rose-700 text-[11px] font-bold flex-shrink-0 ml-2">+{loyaltyPreview.willEarn} this visit</span>}
+                  </div>
+                )}
                 {remainingBalance < localTotal - 0.01 && (
                   <div className="flex justify-between text-emerald-600 text-xs">
                     <span>Already paid</span><span>{formatCurrency(localTotal - remainingBalance)}</span>

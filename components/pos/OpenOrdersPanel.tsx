@@ -20,6 +20,7 @@ interface OpenOrder {
   customer_name: string | null;
   customer_phone?: string;
   customer_address?: string;
+  customer_id?: number | null;
   status: string;
   total: number;
   subtotal: number;
@@ -253,6 +254,7 @@ export default function OpenOrdersPanel({ orderType }: Props) {
           onClose={handlePaymentClose}
           orderId={payOrder.id}
           orderNumber={payOrder.order_number}
+          customerId={payOrder.customer_id ?? null}
           extraOrderIds={[]}
           items={payItems}
           subtotal={payOrder.subtotal ?? payOrder.total}

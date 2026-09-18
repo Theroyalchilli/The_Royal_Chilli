@@ -318,6 +318,7 @@ export async function sendPaymentReceiptEmail(
     paymentMethod: string; // e.g. "Cash", "Card", "Cash + Card"
     paidAt: string; // ISO
     items: { name: string; quantity: number; unitPrice: number; notes?: string | null }[];
+    loyalty?: { pointsEarned: number; newBalance: number };
   }
 ) {
   if (!to) return;
@@ -387,6 +388,16 @@ export async function sendPaymentReceiptEmail(
         </td></tr>
       </table>
     </td></tr>
+
+    ${data.loyalty ? `
+    <tr><td align="center" style="padding:16px 24px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.rose}; border-radius:12px;">
+        <tr><td align="center" style="padding:16px 22px;">
+          <div style="font-family:${SANS}; font-size:13.5px; color:${C.roseText};">🎁 You earned <strong>${data.loyalty.pointsEarned} points</strong> this visit</div>
+          <div style="font-family:${SANS}; font-size:12px; color:${C.roseText}; margin-top:3px;">New balance: ${data.loyalty.newBalance} points</div>
+        </td></tr>
+      </table>
+    </td></tr>` : ""}
 
     <tr><td align="center" style="padding:16px 32px 4px; font-family:${SANS}; font-size:12.5px; color:${C.muted}; line-height:1.6;">
       Questions about this receipt? Just call us — quote <strong style="color:${C.ink};">Order #${data.orderNumber}</strong> and we'll sort it right away.

@@ -20,6 +20,7 @@ interface OrderRow {
   table_number?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
+  customer_id?: number | null;
   staff_id: number | null;
   staff_name?: string | null;
   created_at: string;
@@ -413,7 +414,7 @@ export default function HistoryPage() {
                           </button>
                         )}
                         <button
-                          onClick={() => window.open(`/pos/kitchen/print/${order.id}`, "_blank")}
+                          onClick={() => window.open(`/pos/receipt/${order.id}`, "_blank")}
                           className="flex-1 h-9 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-all no-select flex items-center justify-center gap-2"
                         >
                           🖨️ Reprint Receipt
@@ -442,6 +443,7 @@ export default function HistoryPage() {
           onClose={handlePaymentClose}
           orderId={payOrder.id}
           orderNumber={payOrder.order_number}
+          customerId={payOrder.customer_id ?? null}
           extraOrderIds={[]}
           items={payItems}
           subtotal={payOrder.subtotal ?? payOrder.total}

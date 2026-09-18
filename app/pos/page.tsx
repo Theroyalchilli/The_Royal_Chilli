@@ -64,6 +64,7 @@ export default function POSPage() {
   const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
   const [currentOrderNumber, setCurrentOrderNumber] = useState("");
   const [allOrderIds, setAllOrderIds] = useState<number[]>([]);
+  const [currentCustomerId, setCurrentCustomerId] = useState<number | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -371,6 +372,7 @@ export default function POSPage() {
     setCurrentOrderId(null);
     setCurrentOrderNumber("");
     setAllOrderIds([]);
+    setCurrentCustomerId(null);
     setShowCustomerForm(type !== "dine_in" && type !== "online");
     setShowTablePopup(false);
     setShowCustomerPopup(false);
@@ -383,7 +385,7 @@ export default function POSPage() {
     try {
       const res = await fetch(`/api/orders?table_id=${tableId}&status=open`);
       const data = await res.json();
-      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null }[] = data.orders || [];
+      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null }[] = data.orders || [];
       if (orders.length === 0) return false;
       const ordersOldFirst = [...orders].reverse();
       const allItems: CartItem[] = [];
@@ -411,6 +413,7 @@ export default function POSPage() {
       setAllOrderIds(ordersOldFirst.map(o => o.id));
       setDiscount(firstOrder.discount ?? 0);
       setDiscountReason(firstOrder.discount_reason ?? "");
+      setCurrentCustomerId(firstOrder.customer_id ?? null);
       return true;
     } catch {
       return false;
@@ -449,6 +452,7 @@ export default function POSPage() {
       if (!currentOrderId) {
         setCurrentOrderId(orderId);
         setCurrentOrderNumber(data.order.order_number);
+        setCurrentCustomerId(data.order.customer_id ?? null);
       }
       setAllOrderIds(prev => prev.includes(orderId) ? prev : [...prev, orderId]);
       const returnedItems: { id: number; menu_item_id: number }[] = data.items || [];
@@ -502,16 +506,19 @@ export default function POSPage() {
         }
         setCurrentOrderId(data.order.id);
         setCurrentOrderNumber(data.order.order_number);
+        setCurrentCustomerId(data.order.customer_id ?? null);
         setAllOrderIds([data.order.id]);
       } else if (customerPhone.trim()) {
         // Order already exists (e.g. dine-in sent to kitchen earlier) — a
         // phone just captured at payment time needs attaching after the
         // fact so loyalty picks it up when this payment completes.
-        await fetch(`/api/orders/${currentOrderId}`, {
+        const attachRes = await fetch(`/api/orders/${currentOrderId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ customer_name: customerName || null, customer_phone: customerPhone, customer_email: customerEmail || null, marketing_consent: marketingConsent }),
-        }).catch(() => {});
+        }).catch(() => null);
+        const attachData = attachRes && attachRes.ok ? await attachRes.json().catch(() => null) : null;
+        if (attachData?.order?.customer_id) setCurrentCustomerId(attachData.order.customer_id);
       }
       setPaymentOpen(true);
     } catch {
@@ -581,6 +588,7 @@ export default function POSPage() {
     setCurrentOrderId(null);
     setCurrentOrderNumber("");
     setAllOrderIds([]);
+    setCurrentCustomerId(null);
     setStatus("");
     setShowCustomerPopup(false);
     setCustomerDetailsCollected(false);
@@ -736,6 +744,7 @@ export default function POSPage() {
       setCurrentOrderId(null);
       setCurrentOrderNumber("");
       setAllOrderIds([]);
+      setCurrentCustomerId(null);
       setStatus("");
       // A fresh table is a fresh (potential) customer — the loyalty prompt
       // at payment must ask again, not carry over "skipped" from whichever
@@ -1038,7 +1047,7 @@ export default function POSPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground text-xs mt-3">Tap a table to start an order</p>
+                <p className="text-center text-muted-foreground text-[11px] mt-1.5">Tap a table to start an order</p>
               )}
             </div>
           )}
@@ -1174,7 +1183,7 @@ export default function POSPage() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-center text-muted-foreground text-xs">Tap a table to start an order</p>
+                      <p className="text-center text-muted-foreground text-[11px]">Tap a table to start an order</p>
                     )}
                   </>
                 )}
@@ -1448,6 +1457,7 @@ export default function POSPage() {
         onClose={handlePaymentClose}
         orderId={currentOrderId}
         orderNumber={currentOrderNumber}
+        customerId={currentCustomerId}
         extraOrderIds={allOrderIds.filter(id => id !== currentOrderId)}
         items={cartItems}
         subtotal={subtotal}

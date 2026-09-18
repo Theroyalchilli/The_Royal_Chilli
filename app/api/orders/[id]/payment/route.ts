@@ -72,7 +72,6 @@ export async function POST(
       // Best-effort stock depletion from recipes — never let this affect
       // whether the payment itself succeeds.
       depleteStockForOrder(Number(id), session.id).catch((e) => console.error("Stock depletion failed for order", id, e));
-      sendOrderPaymentReceipt(Number(id)).catch(() => {});
     }
 
     // Merged/extra orders are paid in full alongside the primary one — record a real
@@ -100,6 +99,13 @@ export async function POST(
 
     if (isFullyPaid && order.customer_id) {
       await awardPurchasePoints(order.customer_id, Number(order.total), order.id);
+    }
+
+    // Fired after awardPurchasePoints (not alongside the stock-depletion
+    // block above) specifically so the receipt can report the points this
+    // order actually just earned, not a stale pre-award balance.
+    if (isFullyPaid) {
+      sendOrderPaymentReceipt(Number(id)).catch(() => {});
     }
 
     const remainingAfter = refreshed ? Math.max(0, Math.round((Number(refreshed.total) - Number(refreshed.amount_paid)) * 100) / 100) : 0;

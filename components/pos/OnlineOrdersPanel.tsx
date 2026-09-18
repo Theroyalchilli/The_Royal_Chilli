@@ -21,6 +21,7 @@ interface OnlineOrder {
   customer_name: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_id?: number | null;
   status: string;
   total: number;
   amount_paid: number;
@@ -287,6 +288,7 @@ export default function OnlineOrdersPanel() {
           onClose={handlePaymentClose}
           orderId={payOrder.id}
           orderNumber={payOrder.order_number}
+          customerId={payOrder.customer_id ?? null}
           extraOrderIds={[]}
           items={payItems}
           subtotal={payOrder.subtotal ?? payOrder.total}

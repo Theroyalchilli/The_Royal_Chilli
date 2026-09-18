@@ -56,6 +56,29 @@ async function getPointsRate(): Promise<number> {
   return rate <= 0 ? 1 : rate;
 }
 
+// Read-only preview of what awardPurchasePoints would actually award for
+// this order right now — same rate/tier logic, just never writes anything.
+// Used to show staff a live "+N points" figure during payment, so it can
+// never disagree with what actually posts once the payment completes.
+export async function estimatePurchasePoints(customerId: number, orderTotal: number): Promise<{ base: number; bonus: number; total: number; tierName: string | null; multiplier: number }> {
+  const rate = await getPointsRate();
+  const base = Math.floor(orderTotal * rate);
+
+  const { data: paidOrders } = await supabase
+    .from("orders")
+    .select("total")
+    .eq("customer_id", customerId)
+    .eq("status", "paid");
+  const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
+
+  const tiers = await getActiveTiers();
+  const tier = tierForSpend(tiers, lifetimeSpend);
+  const multiplier = tier?.points_multiplier ?? 1;
+  const bonus = multiplier > 1 ? Math.floor(base * (multiplier - 1)) : 0;
+
+  return { base, bonus, total: base + bonus, tierName: tier?.name ?? null, multiplier };
+}
+
 // Base earn + tier-multiplier bonus, awarded once a payment fully settles an
 // order. Tier is read from the customer's spend *before* this order, so a
 // purchase that itself tips someone into a new tier earns at the old rate —

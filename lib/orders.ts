@@ -52,16 +52,33 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
   try {
     const { data: order } = await supabase
       .from("orders")
-      .select("order_number, customer_name, customer_email, order_type, subtotal, discount, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email)")
+      .select("order_number, customer_id, customer_name, customer_email, order_type, subtotal, discount, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email, loyalty_points)")
       .eq("id", orderId)
       .single();
     if (!order) return;
     // orders.customer_email is only ever set by the website's own checkout
     // — dine-in/QR/POS capture an email onto the linked customers row
     // instead, so that's the reliable source here.
-    const linkedCustomer = order.customers as unknown as { email: string | null } | null;
+    const linkedCustomer = order.customers as unknown as { email: string | null; loyalty_points: number } | null;
     const recipientEmail = order.customer_email || linkedCustomer?.email;
     if (!recipientEmail) return;
+
+    // Points this specific order earned — read back from the ledger rather
+    // than recomputed, since awardPurchasePoints (called just before this,
+    // in the payment route) has already posted the real amount.
+    let loyalty: { pointsEarned: number; newBalance: number } | undefined;
+    if (order.customer_id && linkedCustomer) {
+      const { data: earnRows } = await supabase
+        .from("loyalty_transactions")
+        .select("points_delta")
+        .eq("reference_type", "order")
+        .eq("reference_id", orderId)
+        .in("reason", ["earned_purchase", "tier_bonus"]);
+      const pointsEarned = (earnRows || []).reduce((s, r) => s + Number(r.points_delta), 0);
+      if (pointsEarned > 0) {
+        loyalty = { pointsEarned, newBalance: linkedCustomer.loyalty_points };
+      }
+    }
 
     const { data: items } = await supabase
       .from("order_items")
@@ -89,6 +106,7 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
       paymentMethod: [...methods].join(" + ") || "Cash",
       paidAt: order.updated_at,
       items: items.map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: Number(i.item_price), notes: i.notes })),
+      loyalty,
     });
   } catch (err) {
     console.error("Failed to send payment receipt email for order", orderId, err);

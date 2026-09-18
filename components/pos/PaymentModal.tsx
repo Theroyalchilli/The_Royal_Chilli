@@ -62,7 +62,12 @@ export default function PaymentModal({
   // Loyalty balance/earn preview — shown whenever this order is linked to a
   // customer. Both numbers are real (same calc the actual award uses), not
   // guesses, so they never disagree with what posts once payment completes.
-  const [loyaltyPreview, setLoyaltyPreview] = useState<{ customerName: string; currentBalance: number; willEarn: number; tierName: string | null } | null>(null);
+  const [loyaltyPreview, setLoyaltyPreview] = useState<{
+    customerName: string; currentBalance: number; willEarn: number; tierName: string | null;
+    cashCredit: { cap: number; convertedValue: number; eligible: boolean; redeemAmount: number } | null;
+  } | null>(null);
+  const [cashCreditApplying, setCashCreditApplying] = useState(false);
+  const [cashCreditApplied, setCashCreditApplied] = useState<number | null>(null);
 
   // Loyalty reward redemption — staff enter a code issued earlier from the
   // Customers & Loyalty screen; a successful redeem may adjust the discount.
@@ -144,11 +149,39 @@ export default function PaymentModal({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d) return;
-        setLoyaltyPreview({ customerName: d.customer_name, currentBalance: d.current_balance, willEarn: d.will_earn, tierName: d.tier_name });
+        setLoyaltyPreview({ customerName: d.customer_name, currentBalance: d.current_balance, willEarn: d.will_earn, tierName: d.tier_name, cashCredit: d.cash_credit ?? null });
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customerId, localTotal, total]);
+
+  useEffect(() => {
+    if (open) { setCashCreditApplied(null); setCashCreditApplying(false); }
+  }, [open, orderId]);
+
+  const applyCashCredit = async () => {
+    if (!orderId || !customerId) return;
+    setCashCreditApplying(true);
+    setError("");
+    try {
+      const res = await fetch("/api/loyalty/redeem-cash", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: customerId, order_id: orderId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Couldn't apply loyalty credit"); return; }
+      setCashCreditApplied(data.amount);
+      if (data.bill) {
+        setLocalDiscount(data.bill.discount ?? localDiscount);
+        setLocalTax(data.bill.tax ?? localTax);
+        setLocalTotal(data.bill.total ?? localTotal);
+        setRemainingBalance(data.bill.total ?? localTotal);
+      }
+      toast({ variant: "success", title: "Loyalty credit applied", description: `£${data.amount.toFixed(2)} off` });
+    } catch { setError("Couldn't apply loyalty credit"); }
+    finally { setCashCreditApplying(false); }
+  };
 
   const applyDiscount = async () => {
     if (!orderId || !discountInput) return;
@@ -584,6 +617,24 @@ export default function PaymentModal({
                     {loyaltyPreview.willEarn > 0 && <span className="text-rose-700 text-[11px] font-bold flex-shrink-0 ml-2">+{loyaltyPreview.willEarn} this visit</span>}
                   </div>
                 )}
+                {cashCreditApplied !== null ? (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+                    <span className="text-emerald-800 text-[11px] font-semibold">✓ Loyalty credit applied</span>
+                    <span className="text-emerald-800 text-[11px] font-bold">−{formatCurrency(cashCreditApplied)}</span>
+                  </div>
+                ) : loyaltyPreview?.cashCredit?.eligible ? (
+                  <button
+                    onClick={applyCashCredit}
+                    disabled={cashCreditApplying}
+                    className="w-full flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg px-2.5 py-2 transition-all"
+                  >
+                    {cashCreditApplying ? "Applying…" : `🎁 Use £${loyaltyPreview.cashCredit.cap.toFixed(2)} loyalty credit`}
+                  </button>
+                ) : loyaltyPreview?.cashCredit && loyaltyPreview.cashCredit.convertedValue > 0 ? (
+                  <p className="text-center text-muted-foreground text-[10px]">
+                    £{loyaltyPreview.cashCredit.convertedValue.toFixed(2)} of £{loyaltyPreview.cashCredit.cap.toFixed(2)} loyalty credit banked — keep earning
+                  </p>
+                ) : null}
                 {remainingBalance < localTotal - 0.01 && (
                   <div className="flex justify-between text-emerald-600 text-xs">
                     <span>Already paid</span><span>{formatCurrency(localTotal - remainingBalance)}</span>

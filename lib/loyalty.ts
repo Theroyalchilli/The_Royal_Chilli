@@ -20,6 +20,29 @@ export async function getPointsExpiryTimestamp(): Promise<string | null> {
   return d.toISOString();
 }
 
+// Direct points-to-money redemption — the everyday "use my points" button
+// on the payment screen, separate from the reward catalogue. Only ever
+// offered in fixed £-cap chunks: a balance worth less than the cap earns
+// no partial credit (keeps accumulating toward the next full chunk), and a
+// balance worth more than the cap still only redeems one chunk per
+// transaction (the rest stays banked for next time).
+export type CashCreditInfo = { rate: number; cap: number; convertedValue: number; eligible: boolean; redeemAmount: number; redeemPoints: number };
+
+export async function getCashCreditInfo(loyaltyPoints: number): Promise<CashCreditInfo> {
+  const rate = await getLoyaltySetting("loyalty_conversion_points_per_pound", 100);
+  const cap = await getLoyaltySetting("loyalty_max_redeem_per_visit", 5);
+  const convertedValue = Math.floor((loyaltyPoints / rate) * 100) / 100;
+  const eligible = convertedValue >= cap;
+  return {
+    rate,
+    cap,
+    convertedValue,
+    eligible,
+    redeemAmount: eligible ? cap : 0,
+    redeemPoints: eligible ? Math.round(cap * rate) : 0,
+  };
+}
+
 // Unambiguous alphabet — no 0/O, 1/I/L — so a code read aloud or handwritten
 // isn't misheard/miscopied. Not sequential/guessable (doc §23): drawn from
 // crypto.randomBytes, not Math.random().

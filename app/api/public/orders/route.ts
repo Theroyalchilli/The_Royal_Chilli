@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
     }
     const deliveryFee = deliverable ? computeDeliveryFee(subtotal) : 0;
     const total = Math.round((subtotal + deliveryFee) * 100) / 100;
+    // Menu prices are VAT-inclusive — nothing is added here, `tax` is just
+    // the 20% VAT component embedded in the food subtotal, reported for
+    // records/VAT-return purposes (matches lib/order-totals.ts computeBill;
+    // delivery fee isn't included in this figure).
+    const tax = Math.round((subtotal - subtotal / 1.2) * 100) / 100;
 
     const { data: workPeriod } = await supabase
       .from("work_periods")
@@ -116,7 +121,7 @@ export async function POST(req: NextRequest) {
         work_period_id: workPeriod?.id || null,
         subtotal: Math.round(subtotal * 100) / 100,
         discount: 0,
-        tax: 0,
+        tax,
         total,
         notes: [notes, deliverable ? `Delivery fee: £${deliveryFee.toFixed(2)}` : null]
           .filter(Boolean)

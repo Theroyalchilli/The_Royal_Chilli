@@ -146,12 +146,15 @@ export default function POSPage() {
   const breakfastTime = isBreakfastTime();
   const isManager = session?.role === "admin" || session?.role === "manager";
 
-  // Computed totals — exclude voided items
+  // Computed totals — exclude voided items. Item prices are VAT-inclusive
+  // (see lib/order-totals.ts computeBill) — total is just subtotal minus
+  // discount, never with VAT added on top; tax is the 20% VAT component
+  // embedded in that total, shown for information only.
   const subtotal = cartItems.filter(i => !i.voided).reduce(
     (sum, i) => sum + i.item_price * i.quantity, 0
   );
-  const tax = Math.round((subtotal - discount) * 0.2 * 100) / 100;
-  const total = Math.round((subtotal - discount + tax) * 100) / 100;
+  const total = Math.round((subtotal - discount) * 100) / 100;
+  const tax = Math.round((total - total / 1.2) * 100) / 100;
   const unsentCount = cartItems.filter(i => !i.sent && !i.voided).length;
   const cartCount = cartItems.filter(i => !i.voided).reduce((s, i) => s + i.quantity, 0);
 

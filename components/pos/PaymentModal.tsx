@@ -541,9 +541,6 @@ export default function PaymentModal({
                     <span>Discount</span><span>−{formatCurrency(localDiscount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-muted-foreground text-xs">
-                  <span>VAT (20%)</span><span>{formatCurrency(localTax)}</span>
-                </div>
                 {localServiceCharge > 0 && (
                   <div className="flex justify-between text-purple-700 text-xs">
                     <span>Service Charge</span><span>{formatCurrency(localServiceCharge)}</span>
@@ -553,6 +550,7 @@ export default function PaymentModal({
                   <span>Bill Total</span>
                   <span className="text-red-600 text-xl">{formatCurrency(localTotal)}</span>
                 </div>
+                <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)}</div>
                 {remainingBalance < localTotal - 0.01 && (
                   <div className="flex justify-between text-emerald-600 text-xs">
                     <span>Already paid</span><span>{formatCurrency(localTotal - remainingBalance)}</span>
@@ -902,9 +900,6 @@ export default function PaymentModal({
                     <span>Discount</span><span>−{formatCurrency(localDiscount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-muted-foreground text-xs">
-                  <span>VAT (20%)</span><span>{formatCurrency(localTax)}</span>
-                </div>
                 {localServiceCharge > 0 && (
                   <div className="flex justify-between text-purple-700 text-xs">
                     <span>Service Charge</span><span>{formatCurrency(localServiceCharge)}</span>
@@ -913,6 +908,7 @@ export default function PaymentModal({
                 <div className="flex justify-between text-foreground font-bold">
                   <span>TOTAL</span><span>{formatCurrency(localTotal)}</span>
                 </div>
+                <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)}</div>
                 {tipAmount > 0 && (
                   <div className="flex justify-between text-red-700 text-xs font-semibold">
                     <span>Tip</span><span>{formatCurrency(tipAmount)}</span>

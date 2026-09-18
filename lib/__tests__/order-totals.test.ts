@@ -1,38 +1,42 @@
 import { computeBill } from "@/lib/order-totals";
 
-// Order of operations (confirmed with the owner): subtotal -> VAT -> discount
-// -> service charge -> total. Tip is never part of this (per-payment, separate).
+// Order of operations: subtotal (already VAT-inclusive) -> discount ->
+// service charge -> total. Tip is never part of this (per-payment,
+// separate). `tax` is the VAT component embedded in the final total,
+// reported for receipts/VAT-return purposes — it never adds to what the
+// customer pays, since the menu price they saw already included it.
 describe("computeBill", () => {
-  it("adds 20% VAT with no discount or service charge", () => {
+  it("reports the embedded VAT component with no discount or service charge", () => {
     const bill = computeBill({ subtotal: 100, discountType: null, discountPct: null, discountAmount: 0, serviceChargePct: 0 });
-    expect(bill).toMatchObject({ subtotal: 100, tax: 20, subtotalWithTax: 120, discount: 0, discounted: 120, serviceChargeAmount: 0, total: 120 });
+    // total stays 100 (nothing added); VAT component of an inclusive £100 = 100 - 100/1.2 = 16.67
+    expect(bill).toMatchObject({ subtotal: 100, tax: 16.67, subtotalWithTax: 100, discount: 0, discounted: 100, serviceChargeAmount: 0, total: 100 });
   });
 
-  it("applies a percent discount to the VAT-inclusive amount, not the pre-VAT subtotal", () => {
+  it("applies a percent discount directly to the inclusive subtotal", () => {
     const bill = computeBill({ subtotal: 100, discountType: "percent", discountPct: 10, discountAmount: 0, serviceChargePct: 0 });
-    // subtotalWithTax = 120; 10% of 120 = 12
-    expect(bill).toMatchObject({ tax: 20, subtotalWithTax: 120, discount: 12, discounted: 108, total: 108 });
+    // 10% of 100 = 10; discounted total = 90; VAT component of 90 = 15
+    expect(bill).toMatchObject({ discount: 10, discounted: 90, total: 90, tax: 15 });
   });
 
-  it("applies a flat-amount discount off the VAT-inclusive amount", () => {
+  it("applies a flat-amount discount off the inclusive subtotal", () => {
     const bill = computeBill({ subtotal: 100, discountType: "amount", discountPct: null, discountAmount: 20, serviceChargePct: 0 });
-    expect(bill).toMatchObject({ subtotalWithTax: 120, discount: 20, discounted: 100, total: 100 });
+    expect(bill).toMatchObject({ subtotalWithTax: 100, discount: 20, discounted: 80, total: 80 });
   });
 
-  it("clamps the discount so it never exceeds the VAT-inclusive amount (never a negative total)", () => {
+  it("clamps the discount so it never exceeds the subtotal (never a negative total)", () => {
     const bill = computeBill({ subtotal: 10, discountType: "amount", discountPct: null, discountAmount: 200, serviceChargePct: 0 });
-    expect(bill).toMatchObject({ subtotalWithTax: 12, discount: 12, discounted: 0, serviceChargeAmount: 0, total: 0 });
+    expect(bill).toMatchObject({ subtotalWithTax: 10, discount: 10, discounted: 0, serviceChargeAmount: 0, total: 0, tax: 0 });
   });
 
   it("applies service charge on the post-discount amount, last", () => {
     const bill = computeBill({ subtotal: 100, discountType: "amount", discountPct: null, discountAmount: 20, serviceChargePct: 10 });
-    // discounted = 100; service charge = 10% of 100 = 10
-    expect(bill).toMatchObject({ discounted: 100, serviceChargeAmount: 10, total: 110 });
+    // discounted = 80; service charge = 10% of 80 = 8
+    expect(bill).toMatchObject({ discounted: 80, serviceChargeAmount: 8, total: 88 });
   });
 
   it("treats a null discount type as a legacy flat amount, same as \"amount\"", () => {
     const bill = computeBill({ subtotal: 100, discountType: null, discountPct: null, discountAmount: 10, serviceChargePct: 0 });
-    expect(bill).toMatchObject({ discount: 10, discounted: 110, total: 110 });
+    expect(bill).toMatchObject({ discount: 10, discounted: 90, total: 90 });
   });
 });
 
@@ -85,11 +89,11 @@ beforeEach(() => {
 });
 
 describe("recalcTotals", () => {
-  it("sums active items and writes back the computed bill", async () => {
+  it("sums active items (already VAT-inclusive) and writes back the computed bill", async () => {
     itemRows = [{ item_price: 10, quantity: 2 }, { item_price: 5, quantity: 1 }];
     await recalcTotals("order-1");
     expect(updateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ subtotal: 25, tax: 5, service_charge_amount: 0, total: 30 })
+      expect.objectContaining({ subtotal: 25, tax: 4.17, service_charge_amount: 0, total: 25 })
     );
   });
 
@@ -99,20 +103,20 @@ describe("recalcTotals", () => {
     await recalcTotals("order-1");
     const written = updateSpy.mock.calls[0][0];
     expect(written).not.toHaveProperty("discount");
-    expect(written.total).toBe(100); // 100 + 20 tax - 20 discount
+    expect(written.total).toBe(80); // 100 inclusive - 20 discount
   });
 
   it("DOES refresh the stored discount for a percent discount (it's a derived display cache)", async () => {
     orderRow = { discount: 0, discount_type: "percent", discount_pct: 10, service_charge_pct: 0 };
     itemRows = [{ item_price: 100, quantity: 1 }];
     await recalcTotals("order-1");
-    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ discount: 12, total: 108 }));
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ discount: 10, total: 90 }));
   });
 
   it("applies service charge after the discount", async () => {
     orderRow = { discount: 20, discount_type: "amount", discount_pct: null, service_charge_pct: 10 };
     itemRows = [{ item_price: 100, quantity: 1 }];
     await recalcTotals("order-1");
-    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ service_charge_amount: 10, total: 110 }));
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ service_charge_amount: 8, total: 88 }));
   });
 });

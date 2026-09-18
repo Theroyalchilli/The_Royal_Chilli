@@ -28,31 +28,36 @@ export interface BillBreakdown {
   total: number;
 }
 
-// The single place bill math happens — subtotal -> VAT -> discount -> service
+// The single place bill math happens — subtotal -> discount -> service
 // charge -> total. Tip is deliberately not here: it's per-payment, never part
 // of the bill total (see PaymentModal.tsx / payments.tip_amount).
 //
-// Order of operations (confirmed with the owner): VAT is added to the
-// subtotal FIRST, then the discount is taken off that VAT-inclusive figure,
-// then service charge is calculated on what's left.
+// Menu/item prices are VAT-INCLUSIVE — the number a customer sees (till or
+// online) is exactly what they pay, standard for a UK consumer-facing menu.
+// `subtotal` therefore already includes VAT; there is no additive VAT step.
+// `tax` is reported for receipts/VAT-return purposes only — the 20% VAT
+// component *embedded in* the final total (total - total/1.2), extracted
+// after discount and service charge, never added on top of what's shown.
 export function computeBill(input: BillInput): BillBreakdown {
   const subtotal = round2(input.subtotal);
-  const tax = round2(subtotal * 0.2);
-  const subtotalWithTax = round2(subtotal + tax);
 
   let discount = 0;
   if (input.discountType === "percent" && input.discountPct != null) {
-    discount = round2(subtotalWithTax * (input.discountPct / 100));
+    discount = round2(subtotal * (input.discountPct / 100));
   } else {
     discount = round2(input.discountAmount || 0);
   }
-  discount = Math.max(0, Math.min(discount, subtotalWithTax));
+  discount = Math.max(0, Math.min(discount, subtotal));
 
-  const discounted = round2(subtotalWithTax - discount);
+  const discounted = round2(subtotal - discount);
   const serviceChargeAmount = round2(discounted * (input.serviceChargePct / 100));
   const total = round2(discounted + serviceChargeAmount);
+  const tax = round2(total - total / 1.2);
 
-  return { subtotal, tax, subtotalWithTax, discount, discounted, serviceChargeAmount, total };
+  // subtotalWithTax kept for shape-compatibility with existing callers —
+  // there's no separate "with tax" figure any more since subtotal already
+  // includes it, so this is just subtotal itself.
+  return { subtotal, tax, subtotalWithTax: subtotal, discount, discounted, serviceChargeAmount, total };
 }
 
 export async function recalcTotals(orderId: string) {

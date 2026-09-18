@@ -158,7 +158,7 @@ export default function OnlineOrdersPanel() {
           const isOpen = expanded === order.id;
           const items = itemsCache[order.id] || [];
           const isDelivery = !!order.customer_address;
-          const tax = order.tax ?? Math.round((order.subtotal ?? order.total) * 0.2 * 100) / 100;
+          const tax = order.tax ?? Math.round((order.total - order.total / 1.2) * 100) / 100;
           const paidOnline = order.amount_paid >= order.total;
 
           return (
@@ -291,7 +291,7 @@ export default function OnlineOrdersPanel() {
           items={payItems}
           subtotal={payOrder.subtotal ?? payOrder.total}
           discount={0}
-          tax={payOrder.tax ?? Math.round((payOrder.subtotal ?? payOrder.total) * 0.2 * 100) / 100}
+          tax={payOrder.tax ?? Math.round((payOrder.total - payOrder.total / 1.2) * 100) / 100}
           total={payOrder.total}
           onPaymentComplete={handlePaymentComplete}
         />

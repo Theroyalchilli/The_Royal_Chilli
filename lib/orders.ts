@@ -52,10 +52,16 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
   try {
     const { data: order } = await supabase
       .from("orders")
-      .select("order_number, customer_name, customer_email, order_type, subtotal, discount, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number)")
+      .select("order_number, customer_name, customer_email, order_type, subtotal, discount, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email)")
       .eq("id", orderId)
       .single();
-    if (!order?.customer_email) return;
+    if (!order) return;
+    // orders.customer_email is only ever set by the website's own checkout
+    // — dine-in/QR/POS capture an email onto the linked customers row
+    // instead, so that's the reliable source here.
+    const linkedCustomer = order.customers as unknown as { email: string | null } | null;
+    const recipientEmail = order.customer_email || linkedCustomer?.email;
+    if (!recipientEmail) return;
 
     const { data: items } = await supabase
       .from("order_items")
@@ -70,7 +76,7 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
 
     const table = order.restaurant_tables as unknown as { table_number: string } | null;
 
-    await sendPaymentReceiptEmail(order.customer_email, {
+    await sendPaymentReceiptEmail(recipientEmail, {
       orderNumber: order.order_number,
       customerName: order.customer_name || "Guest",
       tableNumber: table?.table_number ?? null,

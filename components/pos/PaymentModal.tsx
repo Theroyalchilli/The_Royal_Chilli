@@ -99,18 +99,6 @@ export default function PaymentModal({
     fetch("/api/pos/terminal/config").then((r) => r.json()).then((d) => setReaderEnabled(!!d.enabled)).catch(() => setReaderEnabled(false));
   }, []);
 
-  useEffect(() => {
-    if (!open || !customerId) { setLoyaltyPreview(null); return; }
-    fetch(`/api/loyalty/estimate?customer_id=${customerId}&amount=${localTotal}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d) return;
-        setLoyaltyPreview({ customerName: d.customer_name, currentBalance: d.current_balance, willEarn: d.will_earn, tierName: d.tier_name });
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, customerId, localTotal]);
-
   // Reset everything whenever the modal opens for a (possibly new) order.
   useEffect(() => {
     if (open) {
@@ -141,6 +129,26 @@ export default function PaymentModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderId]);
+
+  // Uses the live `total` prop, not the locally-managed `localTotal` copy —
+  // localTotal only gets synced to `total` inside the reset effect above,
+  // one render behind on a fresh open, which raced this fetch and showed a
+  // stale (often zero) estimate. `total` itself is never stale. Re-fetches
+  // if staff adjust the discount/service charge mid-modal too, since those
+  // also update `localTotal`, which stays a reasonable proxy for "current
+  // total" after that first render.
+  useEffect(() => {
+    if (!open || !customerId) { setLoyaltyPreview(null); return; }
+    const amount = localTotal || total;
+    fetch(`/api/loyalty/estimate?customer_id=${customerId}&amount=${amount}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setLoyaltyPreview({ customerName: d.customer_name, currentBalance: d.current_balance, willEarn: d.will_earn, tierName: d.tier_name });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, customerId, localTotal, total]);
 
   const applyDiscount = async () => {
     if (!orderId || !discountInput) return;

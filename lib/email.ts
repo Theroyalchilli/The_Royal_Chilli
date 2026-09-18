@@ -298,6 +298,103 @@ export async function sendReservationConfirmationEmail(
   );
 }
 
+// Sent once an order is fully paid, whichever channel it came from (POS
+// dine-in, POS takeaway/delivery, or a QR self-order paid at the till) —
+// this is the gap that left dine-in/QR customers with no confirmation at
+// all: sendOrderConfirmationEmail only ever fires for the website's own
+// checkout, and nothing was sent at payment time for any channel.
+export async function sendPaymentReceiptEmail(
+  to: string | null | undefined,
+  data: {
+    orderNumber: string;
+    customerName: string;
+    tableNumber: string | null; // null for takeaway/delivery
+    orderType: "dine_in" | "takeaway" | "delivery";
+    subtotal: number;
+    discount: number;
+    tax: number;
+    serviceCharge: number;
+    total: number;
+    paymentMethod: string; // e.g. "Cash", "Card", "Cash + Card"
+    paidAt: string; // ISO
+    items: { name: string; quantity: number; unitPrice: number; notes?: string | null }[];
+  }
+) {
+  if (!to) return;
+
+  const itemsRows = data.items
+    .map(
+      (i) => `
+      <tr>
+        <td width="32" style="padding:10px 0; font-family:${SANS}; font-size:14px; color:${C.muted}; vertical-align:top;">${i.quantity}×</td>
+        <td style="padding:10px 8px; font-family:${SANS}; font-size:14px; color:${C.ink}; font-weight:500; vertical-align:top;">
+          ${i.name}${i.notes ? `<div style="font-size:12px; color:${C.muted}; margin-top:2px; font-weight:400;">${i.notes}</div>` : ""}
+        </td>
+        <td align="right" style="padding:10px 0; font-family:${SANS}; font-size:14px; color:${C.ink}; white-space:nowrap; vertical-align:top;">${money(i.unitPrice * i.quantity)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const paidWhen = new Date(data.paidAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const placeLabel = data.orderType === "dine_in" ? (data.tableNumber ? `Table ${data.tableNumber}` : "Dine-in") : data.orderType === "delivery" ? "Delivery" : "Collection";
+
+  const body = `
+    <tr><td align="center" style="padding:32px 32px 8px;">
+      <span style="display:inline-block; background:${C.paidBg}; color:${C.paid}; font-size:12px; font-weight:700; letter-spacing:1px; padding:5px 14px; border-radius:999px;">✓ PAID</span>
+      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:14px 0 10px;">Thank you, <em style="color:${C.chilli}; font-style:italic;">${data.customerName}</em>.</div>
+      <div style="font-family:${SANS}; color:${C.muted}; font-size:14px;">Here's your receipt for this visit.</div>
+    </td></tr>
+    <tr><td align="center" style="padding:18px 24px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:999px;">
+        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${C.chilli};">#${data.orderNumber}</span> · ${placeLabel}</td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td style="padding:22px 24px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:12px;">
+        <tr><td style="padding:18px 22px 4px;">${cardLabel("Your Order")}</td></tr>
+        <tr><td style="padding:10px 22px 6px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${itemsRows}</table>
+        </td></tr>
+        <tr><td style="padding:14px 22px 20px; border-top:1px solid ${C.rule};">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-family:${SANS};">
+            <tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Subtotal</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.subtotal)}</td></tr>
+            ${data.discount > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Discount</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.discount)}</td></tr>` : ""}
+            ${data.serviceCharge > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Service charge</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.serviceCharge)}</td></tr>` : ""}
+            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.chilli};">${money(data.total)}</td></tr>
+            <tr><td colspan="2" style="padding:2px 0 0; font-size:11px; color:${C.muted};">incl. VAT ${money(data.tax)}</td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td style="padding:16px 24px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:12px;">
+        <tr><td style="padding:18px 22px 12px;">${cardLabel("Payment")}</td></tr>
+        <tr><td style="padding:0 22px 20px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="50%" style="padding:6px 8px 6px 0; font-family:${SANS}; vertical-align:top;">
+                <div style="font-size:11px; color:${C.muted};">Method</div>
+                <div style="font-size:14px; font-weight:700; color:${C.ink};">${data.paymentMethod}</div>
+              </td>
+              <td width="50%" style="padding:6px 0 6px 8px; font-family:${SANS}; vertical-align:top;">
+                <div style="font-size:11px; color:${C.muted};">Paid</div>
+                <div style="font-size:14px; font-weight:700; color:${C.ink};">${paidWhen}</div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td align="center" style="padding:16px 32px 4px; font-family:${SANS}; font-size:12.5px; color:${C.muted}; line-height:1.6;">
+      Questions about this receipt? Just call us — quote <strong style="color:${C.ink};">Order #${data.orderNumber}</strong> and we'll sort it right away.
+    </td></tr>`;
+
+  await sendBrevoEmail(to, `Receipt — ${data.orderNumber} · ${money(data.total)} paid`, shell(body));
+}
+
 // Win-back offer — only ever sent to a customer with marketing_consent set
 // (checked by the caller, app/api/loyalty/winback/send). The offer is an
 // already-issued reward code, not an automatic discount — the customer has

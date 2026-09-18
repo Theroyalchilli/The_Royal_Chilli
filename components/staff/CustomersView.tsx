@@ -247,6 +247,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [redemptions, setRedemptions] = useState<Redemption[]>([]);
+  const [redemptionsDate, setRedemptionsDate] = useState("");
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [modal, setModal] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -269,10 +270,10 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
     setTiers(data.tiers || []);
   }, []);
   const loadRedemptions = useCallback(async () => {
-    const res = await fetch("/api/loyalty/redemptions/log");
+    const res = await fetch(`/api/loyalty/redemptions/log${redemptionsDate ? `?to=${redemptionsDate}` : ""}`);
     const data = await res.json();
     setRedemptions(data.redemptions || []);
-  }, []);
+  }, [redemptionsDate]);
   const loadBirthdays = useCallback(async () => {
     const res = await fetch("/api/customers/birthdays");
     const data = await res.json();
@@ -457,7 +458,15 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
 
         {tab === "redemptions" && (
           <div className="mt-5">
-            <div className="rounded-xl border border-border overflow-x-auto">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-muted-foreground text-xs">Up to date:</label>
+              <input type="date" value={redemptionsDate} onChange={(e) => setRedemptionsDate(e.target.value)}
+                className="bg-surface-hover border border-border rounded-lg px-3 py-1.5 text-foreground text-sm" />
+              {redemptionsDate && (
+                <button onClick={() => setRedemptionsDate("")} className="text-xs text-muted-foreground hover:text-red-600 font-semibold">Clear</button>
+              )}
+            </div>
+            <div className="mt-3 rounded-xl border border-border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Code</th><th className="text-left px-3 py-2">Reward</th><th className="text-left px-3 py-2">Customer</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Points</th><th className="text-left px-3 py-2">Issued</th></tr></thead>
                 <tbody className="divide-y divide-border">

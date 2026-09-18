@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
+import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 
 interface OrderWithItems extends Order {
   items: OrderItem[];
@@ -204,6 +205,8 @@ export default function KitchenBoard() {
         ← Back
       </Link>
       </div>
+
+      <TableRequestsBanner />
 
       {/* Orders Grid */}
       <div className="flex-1 overflow-y-auto p-2.5 sm:p-4">

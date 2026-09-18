@@ -50,6 +50,10 @@ function todayStr() {
   return toDateInputValue(new Date());
 }
 
+function endOfDay(dateStr: string): Date {
+  return new Date(`${dateStr}T23:59:59.999`);
+}
+
 // One row, mutually exclusive. "Online" isn't its own order_type in the
 // database, it's a takeaway/delivery order with no staff_id because a
 // customer placed it on the website rather than a till. "Pending" cuts
@@ -85,10 +89,18 @@ export default function HistoryPage() {
   const [refundSaving, setRefundSaving] = useState(false);
   const [refundError, setRefundError] = useState("");
 
+  // Pending is the one category that isn't scoped to a single day — it's
+  // every unresolved order, full stop. The date field stays live for it
+  // (see the `filtered` cutoff below) but the fetch itself pulls everything
+  // outstanding regardless of date, since a bill from last week is exactly
+  // as "pending" as one from an hour ago.
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/orders?date=${date}&detailed=true`, { cache: "no-store" });
+      const url = category === "pending"
+        ? `/api/orders?status=open&detailed=true`
+        : `/api/orders?date=${date}&detailed=true`;
+      const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
       setOrders(data.orders || []);
     } catch {
@@ -96,7 +108,7 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, category]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -185,6 +197,10 @@ export default function HistoryPage() {
   const q = search.trim().toLowerCase();
   const filtered = orders
     .filter(o => matchesCategory(o, category))
+    // Pending's fetch already pulled every unresolved order regardless of
+    // date — the date field, for this one category, narrows that down to
+    // "still outstanding as of this date" instead of "placed on this date".
+    .filter(o => category !== "pending" || new Date(o.created_at) <= endOfDay(date))
     .filter(o =>
       !q ||
       o.order_number.toLowerCase().includes(q) ||
@@ -244,6 +260,11 @@ export default function HistoryPage() {
             className="h-10 flex-1 min-w-[200px] border border-border bg-background rounded-lg px-3 text-sm outline-none focus:border-red-500"
           />
         </div>
+        {category === "pending" && (
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            Showing every unpaid bill up to {date === todayStr() ? "today" : new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — change the date above to see what was still outstanding as of an earlier day.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           {categories.map(c => (
             <button
@@ -425,7 +446,7 @@ export default function HistoryPage() {
           items={payItems}
           subtotal={payOrder.subtotal ?? payOrder.total}
           discount={0}
-          tax={payOrder.tax ?? Math.round((payOrder.subtotal ?? payOrder.total) * 0.2 * 100) / 100}
+          tax={payOrder.tax ?? Math.round((payOrder.total - payOrder.total / 1.2) * 100) / 100}
           total={payOrder.total}
           onPaymentComplete={fetchOrders}
         />

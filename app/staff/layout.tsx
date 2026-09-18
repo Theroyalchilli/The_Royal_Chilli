@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
-import { canAccess, isStaffManagement } from "@/lib/permissions";
+import { canAccess, isStaffManagement, canViewCrm } from "@/lib/permissions";
 import StaffShell, { type NavGroup } from "@/components/staff/StaffShell";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -29,6 +29,7 @@ export default async function StaffHubLayout({
       items: [
         { href: "/pos", label: "Go to Till", icon: "🧾" },
         ...(see("tables") ? [{ href: "/staff/tables", label: "Tables", icon: "🪑" }] : []),
+        ...(canViewCrm(session.role) ? [{ href: "/staff/customers", label: "Customers & Loyalty", icon: "🎁" }] : []),
         ...(see("menu") ? [{ href: "/staff/menu", label: "Menu", icon: "🍽️" }] : []),
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
       ],

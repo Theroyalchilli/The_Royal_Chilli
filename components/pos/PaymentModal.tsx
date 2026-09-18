@@ -968,12 +968,20 @@ export default function PaymentModal({
               </div>
             </div>
 
-            <button
-              onClick={handleClose}
-              className="pos-btn no-select w-full h-12 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl"
-            >
-              New Order
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => orderId && window.open(`/pos/receipt/${orderId}`, "_blank")}
+                className="pos-btn no-select h-12 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-xl flex items-center justify-center gap-2"
+              >
+                🖨️ Print Receipt
+              </button>
+              <button
+                onClick={handleClose}
+                className="pos-btn no-select h-12 bg-red-500 hover:bg-red-400 text-white font-bold rounded-xl"
+              >
+                New Order
+              </button>
+            </div>
           </div>
         )}
       </DialogContent>

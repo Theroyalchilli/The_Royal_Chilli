@@ -28,6 +28,11 @@ interface Props {
 
 type PayStep = "method" | "cash_amount" | "card_confirm" | "partial" | "receipt" | "pay_later_confirm" | "pay_later_done";
 
+// £999,999.99 — comfortably beyond any real cash payment, safely below
+// Number.MAX_SAFE_INTEGER even after a further *10, so the keypad can never
+// overflow into float-precision or wraparound territory.
+const MAX_CASH_CENTS = 99999999;
+
 export default function PaymentModal({
   open,
   onClose,
@@ -44,7 +49,11 @@ export default function PaymentModal({
 }: Props) {
   const [step, setStep] = useState<PayStep>("method");
   const [method, setMethod] = useState<"cash" | "card" | null>(null);
-  const [cashInput, setCashInput] = useState<string>("");
+  // Cash Received is entered like a cash register: each keypress appends a
+  // digit on the right (value = value * 10 + digit), so the value is always
+  // an exact integer number of pence — never a parsed float — until it's
+  // divided by 100 for display.
+  const [cashCents, setCashCents] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [payLaterNote, setPayLaterNote] = useState("");
@@ -109,7 +118,7 @@ export default function PaymentModal({
     if (open) {
       setStep("method");
       setMethod(null);
-      setCashInput("");
+      setCashCents(0);
       setError("");
       setDiscountInput("");
       setDiscountType("fixed");
@@ -287,24 +296,27 @@ export default function PaymentModal({
     ? Math.min(Math.max(0, Math.round((parseFloat(amountOverride) || 0) * 100) / 100), remainingBalance)
     : splitAmount;
   const tipAmount = parseFloat(tipInput) || 0;
-  const cashAmount = parseFloat(cashInput) || 0;
+  const cashAmount = cashCents / 100;
   const change = Math.max(0, cashAmount - amountDue - tipAmount);
 
   const handleClose = () => {
     onClose();
   };
 
-  const handleCashDigit = (d: string) => {
-    if (d === "." && cashInput.includes(".")) return;
-    if (cashInput === "0" && d !== ".") {
-      setCashInput(d);
-      return;
-    }
-    setCashInput((prev) => prev + d);
+  const handleCashDigit = (digit: number) => {
+    setCashCents((prev) => Math.min(MAX_CASH_CENTS, prev * 10 + digit));
+  };
+
+  const handleCashDoubleZero = () => {
+    setCashCents((prev) => Math.min(MAX_CASH_CENTS, prev * 100));
   };
 
   const handleCashBackspace = () => {
-    setCashInput((prev) => prev.slice(0, -1));
+    setCashCents((prev) => Math.floor(prev / 10));
+  };
+
+  const handleCashClear = () => {
+    setCashCents(0);
   };
 
   const handleProcessPayment = async (reference?: string) => {
@@ -337,7 +349,7 @@ export default function PaymentModal({
       setLastPaymentAmount(amount);
       setRemainingBalance(data.remaining_balance ?? 0);
       setTipInput("");
-      setCashInput("");
+      setCashCents(0);
 
       if (data.fully_paid) {
         setStep("receipt");
@@ -720,10 +732,20 @@ export default function PaymentModal({
             </div>
 
             {/* Cash amount display */}
-            <div className="bg-surface-hover border border-elevated rounded-xl p-4 text-center">
-              <div className="text-muted-foreground text-sm mb-1">Cash Received</div>
+            <div className="bg-surface-hover border border-elevated rounded-xl p-4 text-center relative">
+              <div className="flex items-center justify-center gap-2">
+                <div className="text-muted-foreground text-sm">Cash Received</div>
+                <button
+                  onClick={handleCashBackspace}
+                  disabled={cashCents === 0}
+                  aria-label="Backspace"
+                  className="pos-btn no-select absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-elevated disabled:opacity-30 font-bold text-lg"
+                >
+                  ⌫
+                </button>
+              </div>
               <div className="text-foreground text-3xl font-mono font-bold">
-                £{cashInput || "0.00"}
+                {formatCurrency(cashAmount)}
               </div>
             </div>
 
@@ -732,7 +754,7 @@ export default function PaymentModal({
               {quickAmounts.map((amt) => (
                 <button
                   key={amt}
-                  onClick={() => setCashInput(amt.toFixed(2))}
+                  onClick={() => setCashCents(Math.min(MAX_CASH_CENTS, Math.round(amt * 100)))}
                   className="pos-btn no-select py-2 bg-elevated hover:bg-elevated-hover border border-elevated rounded-lg text-foreground text-sm font-semibold"
                 >
                   £{amt}
@@ -740,24 +762,35 @@ export default function PaymentModal({
               ))}
             </div>
 
-            {/* Numpad */}
+            {/* Numpad — implied-decimal, cash-register style: each digit
+                appends on the right (£12.30 -> press 5 -> £123.05). */}
             <div className="grid grid-cols-3 gap-2">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0"].map(
-                (d) => (
-                  <button
-                    key={d}
-                    onClick={() => handleCashDigit(d)}
-                    className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-elevated rounded-lg text-foreground font-bold text-lg"
-                  >
-                    {d}
-                  </button>
-                )
-              )}
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => handleCashDigit(d)}
+                  className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-elevated rounded-lg text-foreground font-bold text-lg"
+                >
+                  {d}
+                </button>
+              ))}
               <button
-                onClick={handleCashBackspace}
-                className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-elevated rounded-lg text-muted-foreground font-bold text-lg"
+                onClick={handleCashClear}
+                className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-elevated rounded-lg text-red-600 font-bold text-lg"
               >
-                ⌫
+                C
+              </button>
+              <button
+                onClick={() => handleCashDigit(0)}
+                className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-elevated rounded-lg text-foreground font-bold text-lg"
+              >
+                0
+              </button>
+              <button
+                onClick={handleCashDoubleZero}
+                className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-elevated rounded-lg text-foreground font-bold text-lg"
+              >
+                00
               </button>
             </div>
 
@@ -767,7 +800,7 @@ export default function PaymentModal({
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => { setStep("method"); setCashInput(""); }}
+                onClick={() => { setStep("method"); setCashCents(0); }}
                 className="pos-btn no-select h-12 bg-elevated hover:bg-elevated-hover border border-elevated rounded-xl text-foreground font-semibold"
               >
                 Back

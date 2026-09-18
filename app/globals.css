@@ -61,10 +61,23 @@ html {
 /* Site-wide horizontal-overflow safety net — the page itself must only ever
    scroll vertically. Anything genuinely wide (a table, a long code/receipt
    block) is expected to wrap itself in .scroll-x below instead of pushing
-   the page sideways. */
-html, body {
+   the page sideways.
+
+   IMPORTANT: overflow-x must only be set on <html>, never also on <body>.
+   Setting a non-visible overflow on body flips its computed overflow-y to
+   "auto" too (the CSS visible/non-visible pairing rule) even though body's
+   height always auto-fits its content and so never actually scrolls — that
+   turns body into a dead scroll container that `position: sticky` elements
+   resolve against instead of the real viewport scroller, breaking every
+   sticky element on the page (this broke the Staff Hub sidebar). Scoping
+   the rule to <html> alone keeps the browser's normal root-propagation
+   behavior, where the viewport itself remains the scroll container. */
+html {
   max-width: 100%;
   overflow-x: hidden;
+}
+body {
+  max-width: 100%;
 }
 
 img, video, svg, canvas {

@@ -589,7 +589,7 @@ export default function KitchenBoard() {
                 </div>
                 {/* Hidden measuring pass — identical grid/cards, zero visual
                     footprint (collapsed wrapper still lays out children). */}
-                <div style={{ visibility: "hidden", height: 0, overflow: "hidden" }} aria-hidden="true">
+                <div style={{ visibility: "hidden", height: 0, overflow: "hidden", position: "relative" }} aria-hidden="true">
                   <div ref={activeMeasureRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                     {activeGroups.map((group) =>
                       group.length === 1 ? (

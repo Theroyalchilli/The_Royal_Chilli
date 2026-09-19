@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: orders, error: ordersError } = await supabase
+    const { data: rawOrders, error: ordersError } = await supabase
       .from("orders")
       .select(`
         *,
@@ -20,6 +20,22 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: true });
 
     if (ordersError) throw ordersError;
+
+    // A scheduled order (e.g. placed tonight for tomorrow's opening) sits in
+    // "sent_to_kitchen" from the moment it's placed, same as an ASAP order —
+    // without this, it shows up on the board hours or days early and is
+    // still sitting there, indistinguishable from a live ticket, whenever
+    // staff next open the screen. Reveal it once it's within normal prep
+    // time of its slot: matches the ETA windows already quoted to customers
+    // in the order-confirmation email (lib/email.ts) — ~20-30 min for
+    // takeaway, ~45-60 min for delivery (extra time for the drive).
+    const KITCHEN_LEAD_MINUTES: Record<string, number> = { takeaway: 30, delivery: 45 };
+    const now = Date.now();
+    const orders = (rawOrders ?? []).filter((o) => {
+      if (!o.scheduled_for) return true;
+      const leadMinutes = KITCHEN_LEAD_MINUTES[o.order_type] ?? 30;
+      return new Date(o.scheduled_for).getTime() - now <= leadMinutes * 60_000;
+    });
 
     // Orders cancelled in the last 2 minutes: kitchen needs a brief, explicit
     // "stop prep" alert instead of the ticket silently vanishing next poll.

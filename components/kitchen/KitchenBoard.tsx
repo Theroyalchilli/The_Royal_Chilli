@@ -248,6 +248,11 @@ export default function KitchenBoard() {
                         {order.customer_phone && ` • ${order.customer_phone}`}
                       </div>
                     )}
+                    {order.scheduled_for && (
+                      <div className="text-purple-700 text-xs font-bold mt-1">
+                        ⏰ Scheduled {new Date(order.scheduled_for).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <div

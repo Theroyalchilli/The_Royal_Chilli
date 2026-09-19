@@ -187,6 +187,7 @@ export interface Order {
   tax: number;
   total: number;
   notes: string | null;
+  scheduled_for: string | null;
   created_at: string;
   updated_at: string;
   // Joined fields

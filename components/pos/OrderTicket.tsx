@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { formatCurrency } from "@/lib/utils";
 import type { CartItem } from "@/lib/types";
 
@@ -75,7 +76,7 @@ export default function OrderTicket({ items, onUpdateQty, onRemove, onVoid }: Pr
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
-        <span className="text-5xl">🛒</span>
+        <Image src="/cart-empty.png" alt="" width={220} height={183} className="w-[110px] h-auto opacity-90" priority />
         <p className="text-sm font-medium">Order is empty</p>
         <p className="text-xs">Tap items from the menu to add them</p>
       </div>

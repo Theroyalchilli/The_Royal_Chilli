@@ -76,18 +76,26 @@ const ROTATE_MS = 10_000;
 // visible grid only ever renders the current page. Multiple pages rotate on
 // a timer so nothing needs touching the screen.
 function usePaginatedGrid<T>(groups: T[]) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(0);
   const [pages, setPages] = useState<T[][]>([groups]);
   const [page, setPage] = useState(0);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => setContainerHeight(entries[0].contentRect.height));
-    ro.observe(el);
-    return () => ro.disconnect();
+  // A callback ref, not useRef + a mount-only effect — the grid doesn't
+  // exist in the DOM yet while `loading` is true (a completely different
+  // branch renders), so an effect with `[]` deps reading containerRef.current
+  // at that point finds null and never gets another chance to attach: the
+  // observer silently never exists for the page's whole lifetime. A callback
+  // ref fires whenever React actually attaches the node, however late.
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const containerRef = useCallback((el: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    if (el) {
+      const ro = new ResizeObserver((entries) => setContainerHeight(entries[0].contentRect.height));
+      ro.observe(el);
+      resizeObserverRef.current = ro;
+    }
   }, []);
 
   useLayoutEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
@@ -63,6 +63,72 @@ function groupByTable(list: OrderWithItems[]): OrderWithItems[][] {
     groups.push([o]);
   }
   return groups;
+}
+
+const ROTATE_MS = 10_000;
+
+// Fits as many whole rows of the Active grid as actually measure within the
+// available height, then pages the rest — instead of a hardcoded "N per
+// screen" that would silently start requiring scroll again the day a card
+// gets taller (a 3rd round, more items, long notes). A hidden copy of the
+// same grid (zero visual footprint — visibility:hidden + height:0, but
+// children still lay out and measure normally) is what gets measured; the
+// visible grid only ever renders the current page. Multiple pages rotate on
+// a timer so nothing needs touching the screen.
+function usePaginatedGrid<T>(groups: T[]) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [pages, setPages] = useState<T[][]>([groups]);
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => setContainerHeight(entries[0].contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const measureEl = measureRef.current;
+    if (!measureEl || containerHeight === 0 || groups.length === 0) {
+      setPages([groups]);
+      setPage(0);
+      return;
+    }
+    const cardEls = Array.from(measureEl.children) as HTMLElement[];
+    const newPages: T[][] = [];
+    let current: T[] = [];
+    let i = 0;
+    while (i < cardEls.length) {
+      const rowTop = cardEls[i].offsetTop;
+      let j = i;
+      let rowBottom = 0;
+      while (j < cardEls.length && cardEls[j].offsetTop === rowTop) {
+        rowBottom = Math.max(rowBottom, cardEls[j].offsetTop + cardEls[j].offsetHeight);
+        j++;
+      }
+      if (rowBottom > containerHeight && current.length > 0) {
+        newPages.push(current);
+        current = [];
+      }
+      current.push(...groups.slice(i, j));
+      i = j;
+    }
+    if (current.length > 0) newPages.push(current);
+    setPages(newPages.length > 0 ? newPages : [groups]);
+    setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, containerHeight]);
+
+  useEffect(() => {
+    if (pages.length <= 1) return;
+    const id = setInterval(() => setPage((p) => (p + 1) % pages.length), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [pages.length]);
+
+  return { containerRef, measureRef, page, pageCount: pages.length, visible: pages[page] ?? [] };
 }
 
 // Every "Send to Kitchen" click creates a brand-new order row (even for a 2nd
@@ -291,6 +357,25 @@ function TableGroupCard({
   );
 }
 
+// Ready orders are done — kitchen's part is finished, they're just waiting on
+// the cashier — so they get a compact chip instead of a full card, leaving
+// the Active grid (still-cooking tables) the room it needs to avoid paging.
+function ReadyChip({ group }: { group: OrderWithItems[] }) {
+  const rep = group[0];
+  const label = rep.table_number
+    ? `${rep.table_number}${group.length > 1 ? ` · ${group.length} ready` : ""}`
+    : rep.order_number;
+  return (
+    <div className="flex items-center gap-1.5 bg-green-100 border border-green-300 rounded-full px-3 py-1.5 flex-shrink-0">
+      <span className="text-green-600 text-sm">✓</span>
+      <span className="text-foreground text-sm font-bold">{label}</span>
+      {!rep.table_number && (
+        <span className="text-muted-foreground text-xs capitalize">{rep.order_type.replace("_", " ")}</span>
+      )}
+    </div>
+  );
+}
+
 export default function KitchenBoard() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
@@ -355,6 +440,9 @@ export default function KitchenBoard() {
   // done but not yet paid for (see the Orders section below).
   const activeOrders = orders.filter((o) => o.status !== "ready");
   const readyOrders = orders.filter((o) => o.status === "ready");
+  const activeGroups = groupByTable(activeOrders);
+  const readyGroups = groupByTable(readyOrders);
+  const { containerRef: activeGridRef, measureRef: activeMeasureRef, page: activePage, pageCount: activePageCount, visible: visibleActiveGroups } = usePaginatedGrid(activeGroups);
 
   if (loading) {
     return (
@@ -440,10 +528,11 @@ export default function KitchenBoard() {
 
       <TableRequestsBanner />
 
-      {/* Orders — split into Active (unstarted/cancelled) and Ready (done,
-          awaiting payment at the till) so a busy board doesn't bury new
-          tickets among ones the kitchen has already finished. */}
-      <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-6">
+      {/* Orders — Ready is a compact strip (kitchen's work there is already
+          done, just waiting on the cashier), so Active gets the room it
+          needs to fit without scrolling. Active pages/auto-rotates instead
+          of scrolling once there's more than fits on screen. */}
+      <div className="flex-1 overflow-hidden p-2.5 sm:p-4 flex flex-col gap-3 sm:gap-4">
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
             <span className="text-6xl">✅</span>
@@ -452,36 +541,59 @@ export default function KitchenBoard() {
           </div>
         ) : (
           <>
-            {activeOrders.length > 0 && (
-              <section>
-                <h2 className="text-foreground font-bold text-sm mb-2.5 flex items-center gap-1.5">
-                  🔥 Active <span className="text-muted-foreground font-normal">({activeOrders.length})</span>
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                  {groupByTable(activeOrders).map((group) =>
-                    group.length === 1 ? (
-                      <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
-                    ) : (
-                      <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
-                    )
-                  )}
-                </div>
-              </section>
-            )}
-
-            {readyOrders.length > 0 && (
-              <section>
-                <h2 className="text-foreground font-bold text-sm mb-2.5 flex items-center gap-1.5">
+            {readyGroups.length > 0 && (
+              <div className="flex-shrink-0">
+                <h2 className="text-foreground font-bold text-sm mb-2 flex items-center gap-1.5">
                   ✅ Ready for Pickup <span className="text-muted-foreground font-normal">({readyOrders.length})</span>
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                  {groupByTable(readyOrders).map((group) =>
-                    group.length === 1 ? (
-                      <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
-                    ) : (
-                      <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
-                    )
+                <div className="flex flex-wrap gap-2">
+                  {readyGroups.map((group) => (
+                    <ReadyChip key={group[0].id} group={group} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeGroups.length > 0 && (
+              <section className="flex-1 min-h-0 flex flex-col">
+                <h2 className="text-foreground font-bold text-sm mb-2.5 flex-shrink-0 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    🔥 Active <span className="text-muted-foreground font-normal">({activeOrders.length})</span>
+                  </span>
+                  {activePageCount > 1 && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
+                      Page {activePage + 1} of {activePageCount}
+                      <span className="flex gap-1">
+                        {Array.from({ length: activePageCount }).map((_, i) => (
+                          <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === activePage ? "bg-foreground" : "bg-elevated"}`} />
+                        ))}
+                      </span>
+                    </span>
                   )}
+                </h2>
+                <div ref={activeGridRef} className="flex-1 min-h-0 overflow-hidden">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                    {visibleActiveGroups.map((group) =>
+                      group.length === 1 ? (
+                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                      ) : (
+                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                      )
+                    )}
+                  </div>
+                </div>
+                {/* Hidden measuring pass — identical grid/cards, zero visual
+                    footprint (collapsed wrapper still lays out children). */}
+                <div style={{ visibility: "hidden", height: 0, overflow: "hidden" }} aria-hidden="true">
+                  <div ref={activeMeasureRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                    {activeGroups.map((group) =>
+                      group.length === 1 ? (
+                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                      ) : (
+                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                      )
+                    )}
+                  </div>
                 </div>
               </section>
             )}

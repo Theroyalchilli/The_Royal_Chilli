@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from "react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
@@ -438,10 +438,15 @@ export default function KitchenBoard() {
 
   // Split so the board can show unstarted work separately from work that's
   // done but not yet paid for (see the Orders section below).
-  const activeOrders = orders.filter((o) => o.status !== "ready");
-  const readyOrders = orders.filter((o) => o.status === "ready");
-  const activeGroups = groupByTable(activeOrders);
-  const readyGroups = groupByTable(readyOrders);
+  // Memoized on `orders` (not recomputed on every tick/page-rotation render)
+  // — groupByTable/filter build new arrays each call, and an unstable
+  // reference here fed straight into usePaginatedGrid's effect deps, which
+  // retriggered its setState every render: an infinite update loop (React
+  // error #185) that took the whole page down in production.
+  const activeOrders = useMemo(() => orders.filter((o) => o.status !== "ready"), [orders]);
+  const readyOrders = useMemo(() => orders.filter((o) => o.status === "ready"), [orders]);
+  const activeGroups = useMemo(() => groupByTable(activeOrders), [activeOrders]);
+  const readyGroups = useMemo(() => groupByTable(readyOrders), [readyOrders]);
   const { containerRef: activeGridRef, measureRef: activeMeasureRef, page: activePage, pageCount: activePageCount, visible: visibleActiveGroups } = usePaginatedGrid(activeGroups);
 
   if (loading) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { stripe } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
           // "confirmed" wasn't true until this webhook fired.
           const { data: orderItems } = await supabase
             .from("order_items").select("item_name, quantity, item_price, notes").eq("order_id", order_id);
-          sendOrderConfirmationEmail(order.customer_email, {
+          waitUntil(sendOrderConfirmationEmail(order.customer_email, {
             orderNumber: order.order_number,
             customerName: order.customer_name,
             orderType: order.order_type,
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
             paymentMethod: "Card, paid online",
             paymentStatus: "paid",
             items: (orderItems || []).map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: i.item_price, notes: i.notes })),
-          });
+          }));
         }
       } else if (type === "reservation" && reservation_id) {
         await supabase

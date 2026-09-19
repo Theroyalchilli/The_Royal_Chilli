@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { awardPurchasePoints } from "@/lib/customers";
@@ -88,7 +89,7 @@ export async function POST(
         });
         await supabase.from("orders").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", extra.id);
         depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e));
-        sendOrderPaymentReceipt(extra.id).catch(() => {});
+        waitUntil(sendOrderPaymentReceipt(extra.id));
       }
     }
 
@@ -105,7 +106,7 @@ export async function POST(
     // block above) specifically so the receipt can report the points this
     // order actually just earned, not a stale pre-award balance.
     if (isFullyPaid) {
-      sendOrderPaymentReceipt(Number(id)).catch(() => {});
+      waitUntil(sendOrderPaymentReceipt(Number(id)));
     }
 
     const remainingAfter = refreshed ? Math.max(0, Math.round((Number(refreshed.total) - Number(refreshed.amount_paid)) * 100) / 100) : 0;

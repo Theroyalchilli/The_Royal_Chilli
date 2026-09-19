@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
@@ -153,7 +154,7 @@ export async function POST(req: NextRequest) {
     // could still fail or be abandoned. Sending "order confirmed" now would
     // be a lie in that case; the webhook sends it once payment is real.
     if (!pay_online) {
-      sendOrderConfirmationEmail(customer_email, {
+      waitUntil(sendOrderConfirmationEmail(customer_email, {
         orderNumber,
         customerName: customer_name,
         orderType: order_type,
@@ -167,17 +168,19 @@ export async function POST(req: NextRequest) {
         paymentMethod: order_type === "delivery" ? "Cash or card on delivery" : "Cash or card on collection",
         paymentStatus: "due",
         items: orderItems.map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: i.item_price, notes: i.notes })),
-      });
+      }));
     }
 
     // Queues a ticket for the reception printer (Star mC-Print3, CloudPRNT)
     // so staff see the order without watching any screen — see
     // app/api/cloudprnt and lib/cloudprnt.ts.
-    formatTicketText(order.id)
-      .then(async (content) => {
-        if (content) await supabase.from("print_jobs").insert({ order_id: order.id, content });
-      })
-      .catch((err) => console.error("Failed to queue reception print job:", err));
+    waitUntil(
+      formatTicketText(order.id)
+        .then(async (content) => {
+          if (content) await supabase.from("print_jobs").insert({ order_id: order.id, content });
+        })
+        .catch((err) => console.error("Failed to queue reception print job:", err))
+    );
 
     return NextResponse.json(
       { success: true, id: order.id, order_number: orderNumber, total, scheduled_for: scheduled_for || null },

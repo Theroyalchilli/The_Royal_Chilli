@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { sendReservationConfirmationEmail } from "@/lib/email";
@@ -68,14 +69,14 @@ export async function POST(req: NextRequest) {
       .single();
     if (error) throw error;
 
-    sendReservationConfirmationEmail(customer_email, {
+    waitUntil(sendReservationConfirmationEmail(customer_email, {
       customerName: customer_name,
       partySize: party_size ? Math.max(1, Number(party_size)) : 2,
       reservationDate: reservation_date,
       reservationTime: reservation_time,
       waitlisted: isFull,
       depositAmount,
-    });
+    }));
 
     return NextResponse.json(
       { success: true, id: data.id, waitlisted: isFull, deposit_amount: depositAmount },

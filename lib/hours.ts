@@ -14,21 +14,47 @@ const HOURS: Record<number, { open: number; close: number }> = {
   6: { open: 9 * 60, close: 25 * 60 }, // Saturday
 };
 
+// The restaurant's hours are defined in UK wall-clock terms, so every check
+// against them must resolve "what day/time is it" in Europe/London — never
+// via a Date's own getDay()/getHours()/getMinutes(), which reflect whatever
+// timezone the CODE happens to be running in. That's fine in a UK customer's
+// browser (their local time already is UK time), but the server (Vercel's
+// Node runtime defaults to UTC) would otherwise misread every check by an
+// hour during BST, rejecting genuinely valid ASAP/scheduled orders — exactly
+// the bug this fixed (a 9:15am BST order read as 8:15 server-side, before
+// the 9am open). Resolving via Intl here makes the answer identical no
+// matter where the check runs.
+const LONDON_WEEKDAY_TO_GETDAY: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+function londonMinutesAndDay(date: Date): { minutesOfDay: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    weekday: "short",
+  }).formatToParts(date);
+  const hourRaw = Number(parts.find((p) => p.type === "hour")!.value);
+  const minute = Number(parts.find((p) => p.type === "minute")!.value);
+  const weekday = parts.find((p) => p.type === "weekday")!.value;
+  // Some engines report midnight as "24" with hour12:false.
+  const hour = hourRaw === 24 ? 0 : hourRaw;
+  return { minutesOfDay: hour * 60 + minute, day: LONDON_WEEKDAY_TO_GETDAY[weekday] ?? 0 };
+}
+
 export function getHoursForDate(date: Date): { open: number; close: number } {
-  return HOURS[date.getDay()];
+  return HOURS[londonMinutesAndDay(date).day];
 }
 
 export function isRestaurantOpen(date: Date = new Date()): boolean {
-  const minutesToday = date.getHours() * 60 + date.getMinutes();
-  const today = getHoursForDate(date);
+  const { minutesOfDay: minutesToday, day } = londonMinutesAndDay(date);
+  const today = HOURS[day];
   if (minutesToday >= today.open && minutesToday < today.close) return true;
 
   // Today's own window can't cover the small hours (minutesToday is always
   // < 1440), so check whether *yesterday's* shift ran past midnight and is
   // still covering right now.
-  const yesterday = new Date(date);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const prev = getHoursForDate(yesterday);
+  const prev = HOURS[(day + 6) % 7];
   if (prev.close > 1440 && minutesToday < prev.close - 1440) return true;
 
   return false;

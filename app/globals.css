@@ -164,6 +164,16 @@ img, video, svg, canvas {
   animation: pulse-yellow 2s infinite;
 }
 
+/* Bump feedback flash — fires once on tap, not a loop like kitchen-new */
+@keyframes bump-flash {
+  0% { background-color: rgba(34, 197, 94, 0.35); }
+  100% { background-color: transparent; }
+}
+
+.bump-flash {
+  animation: bump-flash 0.4s ease-out;
+}
+
 /* Splash screen loading-line fill */
 @keyframes splash-load {
   from { transform: scaleX(0); }

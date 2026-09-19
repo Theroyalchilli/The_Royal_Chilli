@@ -166,15 +166,91 @@ function savePrintedIds(ids: Set<number>) {
 // One order's header + items + notes + actions — no outer card border, so it
 // can be reused standalone (KitchenOrderCard) or stacked as one round inside
 // a TableGroupCard.
+// One item row — tappable to bump it individually while the order is still
+// active. Locked once the order itself is "ready" (whole-order bump/recall
+// takes over at that point) so a stray tap can't desync item state from the
+// order state that Recall relies on being able to fully undo.
+function ItemRow({
+  item,
+  orderId,
+  canBump,
+  onBumpItem,
+}: {
+  item: OrderItem;
+  orderId: number;
+  canBump: boolean;
+  onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
+}) {
+  const [flash, setFlash] = useState(false);
+  const cancelled = item.status === "cancelled";
+  const bumped = item.status === "ready";
+  const qtyReduced = !cancelled && item.original_quantity != null && item.quantity < item.original_quantity;
+
+  const handleClick = () => {
+    if (!canBump || cancelled) return;
+    setFlash(true);
+    setTimeout(() => setFlash(false), 400);
+    onBumpItem(orderId, item.id, bumped ? "pending" : "ready");
+  };
+
+  return (
+    <div
+      onClick={handleClick}
+      className={`flex items-start gap-2 rounded px-1 -mx-1 py-0.5 ${cancelled ? "opacity-50" : ""} ${flash ? "bump-flash" : ""} ${canBump && !cancelled ? "cursor-pointer active:scale-[0.98] transition-transform" : ""}`}
+    >
+      <span className={`flex-shrink-0 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+        cancelled
+          ? "bg-red-900 text-red-600 line-through"
+          : bumped
+          ? "bg-green-600 text-white"
+          : item.status === "preparing"
+          ? "bg-red-600 text-white"
+          : "bg-elevated text-foreground"
+      }`}>
+        {cancelled ? item.quantity : bumped ? "✓" : item.quantity}
+      </span>
+
+      <div className="flex-1">
+        <div className={`text-sm font-medium leading-tight ${cancelled ? "line-through text-red-600" : bumped ? "line-through text-green-600" : "text-foreground"}`}>
+          {item.item_name}
+        </div>
+
+        {item.modifiers && item.modifiers.length > 0 && (
+          <div className="text-red-600 text-xs">{item.modifiers.join(", ")}</div>
+        )}
+
+        {cancelled && (
+          <span className="text-[10px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
+            ✕ VOIDED BY CASHIER
+          </span>
+        )}
+
+        {qtyReduced && (
+          <span className="text-[10px] font-black text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded">
+            ↓ QTY: {item.original_quantity} → {item.quantity}
+          </span>
+        )}
+
+        {item.notes && (
+          <div className="text-yellow-600 text-xs italic mt-0.5">⚠ {item.notes}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OrderTicketBody({
   order,
   tick,
   onMarkReady,
+  onBumpItem,
 }: {
   order: OrderWithItems;
   tick: number;
   onMarkReady: (orderId: number) => void;
+  onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
+  const canBumpItems = order.status === "sent_to_kitchen" && !order.just_cancelled;
   return (
     <>
       <div className="flex items-start justify-between mb-3">
@@ -229,52 +305,13 @@ function OrderTicketBody({
       )}
 
       <div className="border-t border-border pt-3 space-y-1.5">
-        {order.items.map((item) => {
-          const cancelled = item.status === "cancelled";
-          const qtyReduced = !cancelled && item.original_quantity != null && item.quantity < item.original_quantity;
-          return (
-            <div key={item.id} className={`flex items-start gap-2 ${cancelled ? "opacity-50" : ""}`}>
-              <span className={`flex-shrink-0 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
-                cancelled
-                  ? "bg-red-900 text-red-600 line-through"
-                  : item.status === "ready"
-                  ? "bg-green-600 text-white"
-                  : item.status === "preparing"
-                  ? "bg-red-600 text-white"
-                  : "bg-elevated text-foreground"
-              }`}>
-                {item.quantity}
-              </span>
-
-              <div className="flex-1">
-                <div className={`text-sm font-medium leading-tight ${cancelled ? "line-through text-red-600" : "text-foreground"}`}>
-                  {item.item_name}
-                </div>
-
-                {item.modifiers && item.modifiers.length > 0 && (
-                  <div className="text-red-600 text-xs">{item.modifiers.join(", ")}</div>
-                )}
-
-                {cancelled && (
-                  <span className="text-[10px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
-                    ✕ VOIDED BY CASHIER
-                  </span>
-                )}
-
-                {qtyReduced && (
-                  <span className="text-[10px] font-black text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded">
-                    ↓ QTY: {item.original_quantity} → {item.quantity}
-                  </span>
-                )}
-
-                {item.notes && (
-                  <div className="text-yellow-600 text-xs italic mt-0.5">⚠ {item.notes}</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {order.items.map((item) => (
+          <ItemRow key={item.id} item={item} orderId={order.id} canBump={canBumpItems} onBumpItem={onBumpItem} />
+        ))}
       </div>
+      {canBumpItems && order.items.some((i) => i.status !== "cancelled") && (
+        <div className="mt-1.5 text-[10px] text-muted-foreground">Tap an item to bump it</div>
+      )}
 
       {order.notes && (
         <div className="mt-2 bg-yellow-100 border border-yellow-300 rounded-lg px-2 py-1.5 text-yellow-700 text-xs">
@@ -299,7 +336,7 @@ function OrderTicketBody({
               onClick={() => onMarkReady(order.id)}
               className="pos-btn no-select w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-sm transition-colors"
             >
-              ✓ Mark Ready
+              ⚡ Bump All
             </button>
           )}
           {order.status === "ready" && (
@@ -320,14 +357,16 @@ function KitchenOrderCard({
   order,
   tick,
   onMarkReady,
+  onBumpItem,
 }: {
   order: OrderWithItems;
   tick: number;
   onMarkReady: (orderId: number) => void;
+  onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
   return (
     <div className={`rounded-xl border-2 p-4 transition-all ${getOrderCardClass(order)}`}>
-      <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} />
+      <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} onBumpItem={onBumpItem} />
     </div>
   );
 }
@@ -341,10 +380,12 @@ function TableGroupCard({
   orders,
   tick,
   onMarkReady,
+  onBumpItem,
 }: {
   orders: OrderWithItems[];
   tick: number;
   onMarkReady: (orderId: number) => void;
+  onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
   const oldest = orders[0];
   return (
@@ -357,7 +398,7 @@ function TableGroupCard({
         {orders.map((order, i) => (
           <div key={order.id} className={i > 0 ? "pt-3" : ""}>
             <div className="text-[10px] font-black tracking-wide text-muted-foreground uppercase mb-1.5">Round {i + 1}</div>
-            <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} />
+            <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} onBumpItem={onBumpItem} />
           </div>
         ))}
       </div>
@@ -368,7 +409,7 @@ function TableGroupCard({
 // Ready orders are done — kitchen's part is finished, they're just waiting on
 // the cashier — so they get a compact chip instead of a full card, leaving
 // the Active grid (still-cooking tables) the room it needs to avoid paging.
-function ReadyChip({ group }: { group: OrderWithItems[] }) {
+function ReadyChip({ group, onRecall }: { group: OrderWithItems[]; onRecall: (orderIds: number[]) => void }) {
   const rep = group[0];
   const label = rep.table_number
     ? `${rep.table_number}${group.length > 1 ? ` · ${group.length} ready` : ""}`
@@ -380,6 +421,13 @@ function ReadyChip({ group }: { group: OrderWithItems[] }) {
       {!rep.table_number && (
         <span className="text-muted-foreground text-xs capitalize">{rep.order_type.replace("_", " ")}</span>
       )}
+      <button
+        onClick={() => onRecall(group.map((o) => o.id))}
+        title="Bumped by mistake? Send back to Active."
+        className="pos-btn no-select ml-1 text-green-700 hover:text-green-900 text-xs font-bold border border-green-300 rounded-full px-2 py-0.5 bg-white/50 hover:bg-white transition-colors"
+      >
+        ↺ Recall
+      </button>
     </div>
   );
 }
@@ -441,6 +489,30 @@ export default function KitchenBoard() {
       fetchOrders();
     } catch (err) {
       console.error("Failed to update order status", err);
+    }
+  };
+
+  const handleBumpItem = async (orderId: number, itemId: number, status: "ready" | "pending") => {
+    try {
+      await fetch(`/api/orders/${orderId}/items`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, status }),
+      });
+      fetchOrders();
+    } catch (err) {
+      console.error("Failed to bump item", err);
+    }
+  };
+
+  // A ready group may be several rounds (TableGroupCard) bumped together —
+  // recall reopens all of them so the table's whole ticket comes back as one
+  // unit, not just the round that happened to be first in the group.
+  const handleRecall = async (orderIds: number[]) => {
+    try {
+      await Promise.all(orderIds.map((id) => handleStatusUpdate(id, "sent_to_kitchen")));
+    } catch (err) {
+      console.error("Failed to recall order", err);
     }
   };
 
@@ -561,7 +633,7 @@ export default function KitchenBoard() {
                 </h2>
                 <div className="flex flex-wrap gap-2">
                   {readyGroups.map((group) => (
-                    <ReadyChip key={group[0].id} group={group} />
+                    <ReadyChip key={group[0].id} group={group} onRecall={handleRecall} />
                   ))}
                 </div>
               </div>
@@ -588,9 +660,9 @@ export default function KitchenBoard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                     {visibleActiveGroups.map((group) =>
                       group.length === 1 ? (
-                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
                       ) : (
-                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
                       )
                     )}
                   </div>
@@ -601,9 +673,9 @@ export default function KitchenBoard() {
                   <div ref={activeMeasureRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                     {activeGroups.map((group) =>
                       group.length === 1 ? (
-                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
                       ) : (
-                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} />
+                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
                       )
                     )}
                   </div>

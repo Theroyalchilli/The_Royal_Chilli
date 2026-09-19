@@ -163,6 +163,18 @@ export async function PUT(req: NextRequest) {
 
     if (error) throw error;
 
+    // Cascade to items so per-item bump state (used by the Active board)
+    // stays consistent with a whole-order action:
+    //  - "Bump All" (status -> ready) bumps every item still pending
+    //  - "Recall" (status -> sent_to_kitchen) undoes the whole bump event,
+    //    since there's no reliable way to tell which items were genuinely
+    //    finished vs. swept up by "Bump All".
+    if (status === "ready") {
+      await supabase.from("order_items").update({ status: "ready" }).eq("order_id", orderId).eq("status", "pending");
+    } else if (status === "sent_to_kitchen") {
+      await supabase.from("order_items").update({ status: "pending" }).eq("order_id", orderId).eq("status", "ready");
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Kitchen update error:", error);

@@ -160,6 +160,32 @@ export async function PUT(
         .eq("order_id", orderId);
 
       if (error) throw error;
+
+      // Item-level "bump": once the last pending item on a ticket is
+      // bumped, the whole order auto-completes — kitchen doesn't need a
+      // separate "mark order ready" tap on top of bumping every item.
+      if (status === "ready") {
+        const { count: stillPending } = await supabase
+          .from("order_items")
+          .select("id", { count: "exact", head: true })
+          .eq("order_id", orderId)
+          .eq("status", "pending");
+        if (stillPending === 0) {
+          await supabase
+            .from("orders")
+            .update({ status: "ready", updated_at: new Date().toISOString() })
+            .eq("id", orderId)
+            .eq("status", "sent_to_kitchen");
+        }
+      } else if (status === "pending") {
+        // Un-bumping an item on an order that had already auto-completed
+        // reopens the order — it's no longer actually fully ready.
+        await supabase
+          .from("orders")
+          .update({ status: "sent_to_kitchen", updated_at: new Date().toISOString() })
+          .eq("id", orderId)
+          .eq("status", "ready");
+      }
     }
 
     return NextResponse.json({ success: true });

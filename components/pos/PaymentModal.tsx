@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,10 +33,66 @@ interface Props {
 
 type PayStep = "method" | "cash_amount" | "card_confirm" | "partial" | "receipt" | "pay_later_confirm" | "pay_later_done";
 
-// £999,999.99 — comfortably beyond any real cash payment, safely below
-// Number.MAX_SAFE_INTEGER even after a further *10, so the keypad can never
-// overflow into float-precision or wraparound territory.
-const MAX_CASH_CENTS = 99999999;
+// £999,999.99 — comfortably beyond any real payment amount, safely below
+// Number.MAX_SAFE_INTEGER even after a further *10, so no money entry field
+// can overflow into float-precision or wraparound territory.
+const MAX_MONEY_CENTS = 99999999;
+
+// Implied-decimal, cents-based money entry for a compact inline field — the
+// same concept as Cash Received's numpad (value only ever divides by 100 for
+// display, never a parsed float), but typed into a normal text box instead
+// of a dedicated numpad. Every non-digit character (typed "." included) is
+// stripped, so digits always build the value from the right the way a real
+// till does; the cursor is pinned to the end so a mid-string tap can't leave
+// typing "stuck" partway through the number.
+function MoneyCentsInput({
+  cents,
+  onChange,
+  maxCents = MAX_MONEY_CENTS,
+  placeholder = "0.00",
+  disabled,
+  className,
+}: {
+  cents: number;
+  onChange: (cents: number) => void;
+  maxCents?: number;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const display = cents === 0 ? "" : (cents / 100).toFixed(2);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el && document.activeElement === el) {
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [display]);
+
+  const pinCursorToEnd = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const el = e.currentTarget;
+    el.setSelectionRange(el.value.length, el.value.length);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      inputMode="decimal"
+      placeholder={placeholder}
+      value={display}
+      disabled={disabled}
+      onFocus={pinCursorToEnd}
+      onClick={pinCursorToEnd}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/\D/g, "");
+        onChange(digits === "" ? 0 : Math.min(maxCents, parseInt(digits, 10)));
+      }}
+      className={className}
+    />
+  );
+}
 
 export default function PaymentModal({
   open,
@@ -65,8 +121,11 @@ export default function PaymentModal({
   const [payLaterNote, setPayLaterNote] = useState("");
   const { toast } = useToast();
 
-  // Discount state — overrides props once applied
-  const [discountInput, setDiscountInput] = useState("");
+  // Discount state — overrides props once applied. Fixed (£) amount is
+  // implied-decimal/cents-based like Cash Received; percent stays a plain
+  // number input since it isn't a currency value.
+  const [discountAmountCents, setDiscountAmountCents] = useState(0);
+  const [discountPctInput, setDiscountPctInput] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "pct">("fixed");
   const [discountReasonInput, setDiscountReasonInput] = useState("");
   const [localDiscount, setLocalDiscount] = useState(discount);
@@ -105,13 +164,14 @@ export default function PaymentModal({
   const [amountPaidSoFar, setAmountPaidSoFar] = useState(amountPaid);
   const remainingBalance = Math.max(0, Math.round((localTotal - amountPaidSoFar) * 100) / 100);
   const [splitCount, setSplitCount] = useState(1);
-  const [tipInput, setTipInput] = useState("");
+  const [tipCents, setTipCents] = useState(0);
   const [lastPaymentAmount, setLastPaymentAmount] = useState(0);
   // Lets the cashier charge an arbitrary amount for this round instead of an
   // even split — e.g. "customer has £15 cash, put the rest on card". Null
   // means "use the even split"; sits between rounds so each partial payment
-  // starts back at the full remaining/split amount.
-  const [amountOverride, setAmountOverride] = useState<string | null>(null);
+  // starts back at the full remaining/split amount. Implied-decimal cents,
+  // same concept as Cash Received, once the cashier actually types a value.
+  const [amountOverrideCents, setAmountOverrideCents] = useState<number | null>(null);
 
   // Stripe Terminal card reader — falls back to the manual "Card Paid" button
   // below if no reader is configured in Settings.
@@ -132,7 +192,8 @@ export default function PaymentModal({
       setMethod(null);
       setCashCents(0);
       setError("");
-      setDiscountInput("");
+      setDiscountAmountCents(0);
+      setDiscountPctInput("");
       setDiscountType("fixed");
       setDiscountReasonInput("");
       setLocalDiscount(discount);
@@ -142,8 +203,8 @@ export default function PaymentModal({
       setLocalServiceCharge(0);
       setAmountPaidSoFar(amountPaid);
       setSplitCount(1);
-      setAmountOverride(null);
-      setTipInput("");
+      setAmountOverrideCents(null);
+      setTipCents(0);
       setTerminalStatus("idle");
       setTerminalError("");
       setTerminalPiId(null);
@@ -204,8 +265,9 @@ export default function PaymentModal({
   };
 
   const applyDiscount = async () => {
-    if (!orderId || !discountInput) return;
-    const raw = parseFloat(discountInput) || 0;
+    if (!orderId) return;
+    const raw = discountType === "fixed" ? discountAmountCents / 100 : parseFloat(discountPctInput) || 0;
+    if (!raw) return;
     setDiscountApplying(true);
     setError("");
     try {
@@ -246,7 +308,8 @@ export default function PaymentModal({
         setLocalDiscount(0);
         setLocalTax(data.order.tax ?? tax);
         setLocalTotal(data.order.total ?? total);
-        setDiscountInput("");
+        setDiscountAmountCents(0);
+        setDiscountPctInput("");
         setDiscountReasonInput("");
       }
     } catch { setError("Failed to remove discount"); }
@@ -299,10 +362,10 @@ export default function PaymentModal({
   // balance, or an equal share of it if the bill is being split N ways, unless
   // the cashier has typed a custom amount for a mixed cash/card tender.
   const splitAmount = Math.round((remainingBalance / Math.max(1, splitCount)) * 100) / 100;
-  const amountDue = amountOverride !== null
-    ? Math.min(Math.max(0, Math.round((parseFloat(amountOverride) || 0) * 100) / 100), remainingBalance)
+  const amountDue = amountOverrideCents !== null
+    ? Math.min(Math.max(0, amountOverrideCents / 100), remainingBalance)
     : splitAmount;
-  const tipAmount = parseFloat(tipInput) || 0;
+  const tipAmount = tipCents / 100;
   const cashAmount = cashCents / 100;
   const change = Math.max(0, cashAmount - amountDue - tipAmount);
 
@@ -311,11 +374,11 @@ export default function PaymentModal({
   };
 
   const handleCashDigit = (digit: number) => {
-    setCashCents((prev) => Math.min(MAX_CASH_CENTS, prev * 10 + digit));
+    setCashCents((prev) => Math.min(MAX_MONEY_CENTS, prev * 10 + digit));
   };
 
   const handleCashDoubleZero = () => {
-    setCashCents((prev) => Math.min(MAX_CASH_CENTS, prev * 100));
+    setCashCents((prev) => Math.min(MAX_MONEY_CENTS, prev * 100));
   };
 
   const handleCashBackspace = () => {
@@ -358,7 +421,7 @@ export default function PaymentModal({
       // balance (localTotal - remaining) rather than setting remainingBalance
       // directly — it's the derived value now, see its declaration above.
       setAmountPaidSoFar(Math.max(0, Math.round((localTotal - (data.remaining_balance ?? 0)) * 100) / 100));
-      setTipInput("");
+      setTipCents(0);
       setCashCents(0);
 
       if (data.fully_paid) {
@@ -526,17 +589,25 @@ export default function PaymentModal({
                       %
                     </button>
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder={discountType === "fixed" ? "0.00" : "0"}
-                    value={discountInput}
-                    onChange={e => setDiscountInput(e.target.value)}
-                    className="flex-1 bg-elevated border border-elevated rounded-lg px-3 py-1.5 text-foreground text-sm focus:outline-none focus:border-red-500"
-                  />
+                  {discountType === "fixed" ? (
+                    <MoneyCentsInput
+                      cents={discountAmountCents}
+                      onChange={setDiscountAmountCents}
+                      className="flex-1 bg-elevated border border-elevated rounded-lg px-3 py-1.5 text-foreground text-sm focus:outline-none focus:border-red-500"
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={discountPctInput}
+                      onChange={e => setDiscountPctInput(e.target.value)}
+                      className="flex-1 bg-elevated border border-elevated rounded-lg px-3 py-1.5 text-foreground text-sm focus:outline-none focus:border-red-500"
+                    />
+                  )}
                   <button
                     onClick={applyDiscount}
-                    disabled={!discountInput || discountApplying}
+                    disabled={(discountType === "fixed" ? discountAmountCents === 0 : !discountPctInput) || discountApplying}
                     className="px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-all"
                   >
                     {discountApplying ? "…" : "Apply"}
@@ -607,9 +678,9 @@ export default function PaymentModal({
               <div className="bg-surface-hover/60 rounded-xl px-3 py-2.5 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground font-semibold">Split Bill</span>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => { setSplitCount((n) => Math.max(1, n - 1)); setAmountOverride(null); }} className="h-9 w-9 rounded-full bg-elevated border border-elevated text-foreground">−</button>
+                  <button onClick={() => { setSplitCount((n) => Math.max(1, n - 1)); setAmountOverrideCents(null); }} className="h-9 w-9 rounded-full bg-elevated border border-elevated text-foreground">−</button>
                   <span className="text-foreground text-sm w-16 text-center">{splitCount === 1 ? "Full bill" : `${splitCount} ways`}</span>
-                  <button onClick={() => { setSplitCount((n) => n + 1); setAmountOverride(null); }} className="h-9 w-9 rounded-full bg-elevated border border-elevated text-foreground">+</button>
+                  <button onClick={() => { setSplitCount((n) => n + 1); setAmountOverrideCents(null); }} className="h-9 w-9 rounded-full bg-elevated border border-elevated text-foreground">+</button>
                 </div>
               </div>
 
@@ -666,10 +737,10 @@ export default function PaymentModal({
                   <span>{splitCount > 1 ? `This payment (1 of ${splitCount})` : "Amount Due"}</span>
                   <div className="flex items-center gap-1">
                     <span className="text-red-600">£</span>
-                    <input
-                      type="number" min="0" max={remainingBalance} step="0.01"
-                      value={amountOverride !== null ? amountOverride : amountDue.toFixed(2)}
-                      onChange={(e) => setAmountOverride(e.target.value)}
+                    <MoneyCentsInput
+                      cents={amountOverrideCents !== null ? amountOverrideCents : Math.round(amountDue * 100)}
+                      onChange={setAmountOverrideCents}
+                      maxCents={Math.round(remainingBalance * 100)}
                       className="w-20 bg-elevated border border-elevated rounded-lg px-2 py-1 text-red-600 text-sm font-bold text-right focus:outline-none focus:border-red-500"
                     />
                   </div>
@@ -681,15 +752,21 @@ export default function PaymentModal({
               <div className="bg-surface-hover/60 rounded-xl px-3 py-2.5 space-y-2">
                 <div className="text-xs text-muted-foreground font-semibold">Add Tip</div>
                 <div className="flex gap-2">
-                  {tipPresets.map(({ pct, amount }) => (
-                    <button key={pct} onClick={() => setTipInput(amount ? amount.toFixed(2) : "")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${tipInput === (amount ? amount.toFixed(2) : "") ? "bg-red-600 border-red-500 text-white" : "bg-elevated border-elevated text-foreground"}`}>
-                      {pct === 0 ? "None" : `${pct}%`}
-                    </button>
-                  ))}
-                  <input type="number" min="0" step="0.01" placeholder="£ custom" value={tipInput}
-                    onChange={(e) => setTipInput(e.target.value)}
-                    className="w-20 bg-elevated border border-elevated rounded-lg px-2 py-1.5 text-foreground text-xs focus:outline-none focus:border-red-500" />
+                  {tipPresets.map(({ pct, amount }) => {
+                    const presetCents = Math.round(amount * 100);
+                    return (
+                      <button key={pct} onClick={() => setTipCents(presetCents)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${tipCents === presetCents ? "bg-red-600 border-red-500 text-white" : "bg-elevated border-elevated text-foreground"}`}>
+                        {pct === 0 ? "None" : `${pct}%`}
+                      </button>
+                    );
+                  })}
+                  <MoneyCentsInput
+                    cents={tipCents}
+                    onChange={setTipCents}
+                    placeholder="£ custom"
+                    className="w-20 bg-elevated border border-elevated rounded-lg px-2 py-1.5 text-foreground text-xs focus:outline-none focus:border-red-500"
+                  />
                 </div>
               </div>
 
@@ -764,7 +841,7 @@ export default function PaymentModal({
               {quickAmounts.map((amt) => (
                 <button
                   key={amt}
-                  onClick={() => setCashCents(Math.min(MAX_CASH_CENTS, Math.round(amt * 100)))}
+                  onClick={() => setCashCents(Math.min(MAX_MONEY_CENTS, Math.round(amt * 100)))}
                   className="pos-btn no-select py-2 bg-elevated hover:bg-elevated-hover border border-elevated rounded-lg text-foreground text-sm font-semibold"
                 >
                   £{amt}

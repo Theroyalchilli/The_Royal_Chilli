@@ -65,6 +65,11 @@ export default function POSPage() {
   const [currentOrderNumber, setCurrentOrderNumber] = useState("");
   const [allOrderIds, setAllOrderIds] = useState<number[]>([]);
   const [currentCustomerId, setCurrentCustomerId] = useState<number | null>(null);
+  // Sum of amount_paid across every order merged onto the current table/cart
+  // — set only by recallOrderForTable (a fresh order always starts at 0).
+  // PaymentModal needs this to know the TRUE remaining balance; without it,
+  // reopening Pay Now on a partially-paid order shows the full bill again.
+  const [currentAmountPaid, setCurrentAmountPaid] = useState(0);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -373,6 +378,7 @@ export default function POSPage() {
     setCurrentOrderNumber("");
     setAllOrderIds([]);
     setCurrentCustomerId(null);
+    setCurrentAmountPaid(0);
     setShowCustomerForm(type !== "dine_in" && type !== "online");
     setShowTablePopup(false);
     setShowCustomerPopup(false);
@@ -385,7 +391,7 @@ export default function POSPage() {
     try {
       const res = await fetch(`/api/orders?table_id=${tableId}&status=open`);
       const data = await res.json();
-      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null }[] = data.orders || [];
+      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null; amount_paid: number }[] = data.orders || [];
       if (orders.length === 0) return false;
       const ordersOldFirst = [...orders].reverse();
       const allItems: CartItem[] = [];
@@ -414,6 +420,7 @@ export default function POSPage() {
       setDiscount(firstOrder.discount ?? 0);
       setDiscountReason(firstOrder.discount_reason ?? "");
       setCurrentCustomerId(firstOrder.customer_id ?? null);
+      setCurrentAmountPaid(ordersOldFirst.reduce((sum, o) => sum + Number(o.amount_paid ?? 0), 0));
       return true;
     } catch {
       return false;
@@ -453,6 +460,7 @@ export default function POSPage() {
         setCurrentOrderId(orderId);
         setCurrentOrderNumber(data.order.order_number);
         setCurrentCustomerId(data.order.customer_id ?? null);
+        setCurrentAmountPaid(0);
       }
       setAllOrderIds(prev => prev.includes(orderId) ? prev : [...prev, orderId]);
       const returnedItems: { id: number; menu_item_id: number }[] = data.items || [];
@@ -507,6 +515,7 @@ export default function POSPage() {
         setCurrentOrderId(data.order.id);
         setCurrentOrderNumber(data.order.order_number);
         setCurrentCustomerId(data.order.customer_id ?? null);
+        setCurrentAmountPaid(0);
         setAllOrderIds([data.order.id]);
       } else if (customerPhone.trim()) {
         // Order already exists (e.g. dine-in sent to kitchen earlier) — a
@@ -528,7 +537,12 @@ export default function POSPage() {
     }
   };
 
-  const handlePaymentComplete = () => {
+  const handlePaymentComplete = (remainingBalance?: number) => {
+    // Keep the running "already paid" figure correct if the modal is
+    // reopened later in this same session without switching tables —
+    // recallOrderForTable refreshes it authoritatively from the DB anyway,
+    // this just covers the gap before that next recall happens.
+    if (remainingBalance !== undefined) setCurrentAmountPaid(Math.max(0, total - remainingBalance));
     refreshTables();
   };
 
@@ -589,6 +603,7 @@ export default function POSPage() {
     setCurrentOrderNumber("");
     setAllOrderIds([]);
     setCurrentCustomerId(null);
+    setCurrentAmountPaid(0);
     setStatus("");
     setShowCustomerPopup(false);
     setCustomerDetailsCollected(false);
@@ -745,6 +760,7 @@ export default function POSPage() {
       setCurrentOrderNumber("");
       setAllOrderIds([]);
       setCurrentCustomerId(null);
+      setCurrentAmountPaid(0);
       setStatus("");
       // A fresh table is a fresh (potential) customer — the loyalty prompt
       // at payment must ask again, not carry over "skipped" from whichever
@@ -814,6 +830,12 @@ export default function POSPage() {
           </div>
         </div>
       )}
+      {currentAmountPaid > 0 && (
+        <div className="flex items-center justify-between text-xs px-1">
+          <span className="text-emerald-700 font-semibold">✓ Already paid {formatCurrency(currentAmountPaid)}</span>
+          <span className="text-foreground font-bold">{formatCurrency(Math.max(0, total - currentAmountPaid))} remaining</span>
+        </div>
+      )}
       {cartItems.some(i => !i.sent) && (
         <button onClick={requestSendToKitchen} disabled={loading}
           className="pos-btn no-select w-full h-12 bg-red-600 hover:bg-red-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white font-bold rounded-xl transition-all text-sm flex items-center justify-center gap-2">
@@ -824,7 +846,7 @@ export default function POSPage() {
         <button onClick={requestPayment} disabled={loading || cartItems.length === 0}
           className="pos-btn no-select h-12 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white rounded-xl transition-all flex flex-col items-center justify-center leading-tight">
           <span className="text-[10px] font-semibold opacity-80">Pay Now</span>
-          <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(total) : "—"}</span>
+          <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(Math.max(0, total - currentAmountPaid)) : "—"}</span>
         </button>
         <button onClick={handleClear} disabled={loading}
           className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-border text-foreground hover:text-foreground font-semibold rounded-xl transition-all text-sm flex items-center justify-center gap-1.5">
@@ -1464,6 +1486,7 @@ export default function POSPage() {
         discount={discount}
         tax={tax}
         total={total}
+        amountPaid={currentAmountPaid}
         onPaymentComplete={handlePaymentComplete}
       />
 

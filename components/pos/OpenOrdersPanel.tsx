@@ -25,6 +25,7 @@ interface OpenOrder {
   total: number;
   subtotal: number;
   tax?: number;
+  amount_paid?: number;
   notes?: string;
   created_at: string;
 }
@@ -261,6 +262,7 @@ export default function OpenOrdersPanel({ orderType }: Props) {
           discount={0}
           tax={payOrder.tax ?? Math.round((payOrder.total - payOrder.total / 1.2) * 100) / 100}
           total={payOrder.total}
+          amountPaid={payOrder.amount_paid ?? 0}
           onPaymentComplete={handlePaymentComplete}
         />
       )}

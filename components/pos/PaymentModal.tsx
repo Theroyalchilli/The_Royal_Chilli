@@ -23,7 +23,12 @@ interface Props {
   discount: number;
   tax: number;
   total: number;
-  onPaymentComplete: () => void;
+  // Amount already paid toward this order from an earlier session (e.g. a
+  // partial cash payment made, then the modal was closed and reopened later)
+  // — without this, remainingBalance below has no way to know a payment
+  // already happened and re-offers the full bill as if nothing was paid.
+  amountPaid?: number;
+  onPaymentComplete: (remainingBalance?: number) => void;
 }
 
 type PayStep = "method" | "cash_amount" | "card_confirm" | "partial" | "receipt" | "pay_later_confirm" | "pay_later_done";
@@ -45,6 +50,7 @@ export default function PaymentModal({
   discount,
   tax,
   total,
+  amountPaid = 0,
   onPaymentComplete,
 }: Props) {
   const [step, setStep] = useState<PayStep>("method");
@@ -90,8 +96,14 @@ export default function PaymentModal({
   const [localServiceCharge, setLocalServiceCharge] = useState(0);
   const [serviceChargeApplying, setServiceChargeApplying] = useState(false);
 
-  // Split bill + tip + running balance across multiple payments on the same order
-  const [remainingBalance, setRemainingBalance] = useState(total);
+  // Split bill + tip + running balance across multiple payments on the same order.
+  // remainingBalance is deliberately DERIVED (localTotal - amountPaidSoFar)
+  // rather than its own state — every bill-editing handler below (discount,
+  // service charge, reward, cash credit) only ever needs to update localTotal;
+  // remainingBalance then follows automatically instead of each handler having
+  // to remember to also recompute it against whatever was already paid.
+  const [amountPaidSoFar, setAmountPaidSoFar] = useState(amountPaid);
+  const remainingBalance = Math.max(0, Math.round((localTotal - amountPaidSoFar) * 100) / 100);
   const [splitCount, setSplitCount] = useState(1);
   const [tipInput, setTipInput] = useState("");
   const [lastPaymentAmount, setLastPaymentAmount] = useState(0);
@@ -128,7 +140,7 @@ export default function PaymentModal({
       setLocalTotal(total);
       setServiceChargeInput("");
       setLocalServiceCharge(0);
-      setRemainingBalance(total);
+      setAmountPaidSoFar(amountPaid);
       setSplitCount(1);
       setAmountOverride(null);
       setTipInput("");
@@ -185,7 +197,6 @@ export default function PaymentModal({
         setLocalDiscount(data.bill.discount ?? localDiscount);
         setLocalTax(data.bill.tax ?? localTax);
         setLocalTotal(data.bill.total ?? localTotal);
-        setRemainingBalance(data.bill.total ?? localTotal);
       }
       toast({ variant: "success", title: "Loyalty credit applied", description: `£${data.amount.toFixed(2)} off` });
     } catch { setError("Couldn't apply loyalty credit"); }
@@ -213,7 +224,6 @@ export default function PaymentModal({
         setLocalDiscount(data.order.discount ?? 0);
         setLocalTax(data.order.tax ?? localTax);
         setLocalTotal(data.order.total ?? localTotal);
-        setRemainingBalance(data.order.total ?? localTotal);
         toast({ variant: "success", title: "Discount applied" });
       }
     } catch { setError("Failed to apply discount"); }
@@ -236,7 +246,6 @@ export default function PaymentModal({
         setLocalDiscount(0);
         setLocalTax(data.order.tax ?? tax);
         setLocalTotal(data.order.total ?? total);
-        setRemainingBalance(data.order.total ?? total);
         setDiscountInput("");
         setDiscountReasonInput("");
       }
@@ -262,7 +271,6 @@ export default function PaymentModal({
         setLocalDiscount(data.bill.discount ?? localDiscount);
         setLocalTax(data.bill.tax ?? localTax);
         setLocalTotal(data.bill.total ?? localTotal);
-        setRemainingBalance(data.bill.total ?? localTotal);
       }
       toast({ variant: "success", title: "Reward applied", description: data.reward_name });
     } catch { setRewardError("Couldn't redeem this code"); }
@@ -282,7 +290,6 @@ export default function PaymentModal({
       if (data.order) {
         setLocalServiceCharge(data.order.service_charge_amount ?? 0);
         setLocalTotal(data.order.total ?? localTotal);
-        setRemainingBalance(data.order.total ?? localTotal);
       }
     } catch { /* silent */ }
     finally { setServiceChargeApplying(false); }
@@ -347,16 +354,19 @@ export default function PaymentModal({
       }
 
       setLastPaymentAmount(amount);
-      setRemainingBalance(data.remaining_balance ?? 0);
+      // Derive amountPaidSoFar from the server's authoritative remaining
+      // balance (localTotal - remaining) rather than setting remainingBalance
+      // directly — it's the derived value now, see its declaration above.
+      setAmountPaidSoFar(Math.max(0, Math.round((localTotal - (data.remaining_balance ?? 0)) * 100) / 100));
       setTipInput("");
       setCashCents(0);
 
       if (data.fully_paid) {
         setStep("receipt");
-        onPaymentComplete();
+        onPaymentComplete(data.remaining_balance);
       } else {
         setStep("partial");
-        onPaymentComplete();
+        onPaymentComplete(data.remaining_balance);
       }
     } catch {
       setError("Payment failed. Please try again.");

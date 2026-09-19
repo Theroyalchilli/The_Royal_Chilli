@@ -450,6 +450,7 @@ export default function HistoryPage() {
           discount={0}
           tax={payOrder.tax ?? Math.round((payOrder.total - payOrder.total / 1.2) * 100) / 100}
           total={payOrder.total}
+          amountPaid={payOrder.amount_paid ?? 0}
           onPaymentComplete={fetchOrders}
         />
       )}

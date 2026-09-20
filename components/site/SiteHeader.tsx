@@ -34,6 +34,13 @@ function Hamburger({ open, light }: { open: boolean; light: boolean }) {
 export default function SiteHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/account/me")
+      .then((r) => setLoggedIn(r.ok))
+      .catch(() => setLoggedIn(false));
+  }, [pathname]);
 
   // Close the menu on navigation, and lock page scroll while it's open.
   useEffect(() => { setMenuOpen(false); }, [pathname]);
@@ -96,6 +103,13 @@ export default function SiteHeader() {
               {link.label}
             </Link>
           ))}
+          <Link
+            href={loggedIn ? "/account" : "/account/login"}
+            onClick={() => setMenuOpen(false)}
+            className="font-[family-name:var(--font-playfair)] text-2xl text-foreground transition hover:text-primary"
+          >
+            {loggedIn ? "My Account" : "Sign In"}
+          </Link>
         </nav>
 
         <a

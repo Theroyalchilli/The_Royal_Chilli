@@ -349,7 +349,7 @@ export interface ModifierGroup {
 export interface Customer {
   id: number;
   name: string;
-  phone: string;
+  phone: string | null; // null for an account created by email signup with no phone on file yet
   email: string | null;
   date_of_birth: string | null;
   address: string | null;
@@ -357,7 +357,16 @@ export interface Customer {
   loyalty_points: number;
   referral_code: string | null;
   referred_by_customer_id: number | null;
+  marketing_consent: boolean;
   created_at: string;
+  // password_hash intentionally omitted — never select it into a shape that
+  // could reach client code (see lib/customers.ts:CUSTOMER_SAFE_FIELDS).
+}
+
+export interface CustomerSession {
+  id: number;
+  name: string;
+  email: string;
 }
 
 export interface LoyaltyTransaction {

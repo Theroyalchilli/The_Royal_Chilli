@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm, canManageCrm } from "@/lib/permissions";
 import { getCustomerStats } from "@/lib/crm";
+import { CUSTOMER_SAFE_FIELDS } from "@/lib/customers";
 
 export async function GET(
   req: NextRequest,
@@ -14,7 +15,7 @@ export async function GET(
   }
   const { id } = await params;
 
-  const { data: customer, error } = await supabase.from("customers").select("*").eq("id", id).single();
+  const { data: customer, error } = await supabase.from("customers").select(CUSTOMER_SAFE_FIELDS).eq("id", id).single();
   if (error || !customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
   const stats = await getCustomerStats(Number(id));
@@ -56,7 +57,7 @@ export async function PATCH(
     for (const f of editable) if (f in body) updates[f] = body[f];
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
-    const { data, error } = await supabase.from("customers").update(updates).eq("id", id).select().single();
+    const { data, error } = await supabase.from("customers").update(updates).eq("id", id).select(CUSTOMER_SAFE_FIELDS).single();
     if (error) throw error;
     return NextResponse.json({ success: true, customer: data });
   } catch (error) {

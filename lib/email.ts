@@ -298,6 +298,32 @@ export async function sendReservationConfirmationEmail(
   );
 }
 
+// Customer account — password reset. resetUrl already has the token in it
+// (see app/api/account/reset-password); this email never handles the token
+// itself, just links to the page that does.
+export async function sendPasswordResetEmail(to: string, customerName: string, resetUrl: string) {
+  const body = `
+    <tr><td align="center" style="padding:32px 32px 8px;">
+      <div style="font-family:${SANS}; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:${C.gold}; font-weight:700; margin-bottom:14px;">Reset Your Password</div>
+      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:0 0 10px;">Hi ${customerName},</div>
+      <div style="font-family:${SANS}; color:${C.muted}; font-size:14px; max-width:420px; margin:0 auto; line-height:1.55;">
+        We got a request to reset the password on your account. This link works for 1 hour.
+      </div>
+    </td></tr>
+
+    <tr><td align="center" style="padding:22px 24px 6px;">
+      <a href="${resetUrl}" style="display:inline-block; background:${C.chilli}; color:#fff; font-family:${SANS}; font-size:14px; font-weight:700; text-decoration:none; padding:13px 28px; border-radius:8px;">
+        Choose a new password
+      </a>
+    </td></tr>
+
+    <tr><td align="center" style="padding:16px 32px 4px; font-family:${SANS}; font-size:12.5px; color:${C.muted}; line-height:1.6;">
+      Didn't request this? You can safely ignore this email — your password won't change.
+    </td></tr>`;
+
+  await sendBrevoEmail(to, "Reset your password — The Royal Chilli", shell(body));
+}
+
 // Sent once an order is fully paid, whichever channel it came from (POS
 // dine-in, POS takeaway/delivery, or a QR self-order paid at the till) —
 // this is the gap that left dine-in/QR customers with no confirmation at

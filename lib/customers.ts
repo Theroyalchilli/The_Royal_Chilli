@@ -1,6 +1,82 @@
+import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
 import { getPointsExpiryTimestamp } from "@/lib/loyalty";
+import type { Customer } from "@/lib/types";
+
+// Every column except password_hash — use this instead of select("*") on
+// customers anywhere the result reaches an HTTP response, staff or public.
+// (Mirrors app/api/employees/route.ts's PROFILE_FIELDS for the same reason.)
+export const CUSTOMER_SAFE_FIELDS =
+  "id, name, phone, email, date_of_birth, address, notes, loyalty_points, referral_code, referred_by_customer_id, referral_completed_at, marketing_consent, created_at";
+
+// Self-service signup: name + email + password only (no phone yet — that's
+// added later from the profile). If an existing guest row already has this
+// email (from a past phone-based checkout that also gave an email), this
+// *claims* that row instead of creating a duplicate — the customer keeps
+// their real order/loyalty history rather than starting over at zero.
+export async function signupCustomer(
+  name: string,
+  email: string,
+  password: string
+): Promise<{ ok: true; customer: Customer } | { ok: false; error: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  const { data: existing } = await supabase
+    .from("customers")
+    .select("id, name, password_hash")
+    .ilike("email", cleanEmail)
+    .maybeSingle();
+
+  if (existing?.password_hash) {
+    return { ok: false, error: "An account with this email already exists — try logging in instead." };
+  }
+
+  const password_hash = await bcrypt.hash(password, 10);
+
+  if (existing) {
+    // Claim the existing guest row — keep its name if it already had a real
+    // one (not the "Guest" placeholder findOrCreateCustomerByPhone uses).
+    const { data, error } = await supabase
+      .from("customers")
+      .update({ password_hash, name: existing.name && existing.name !== "Guest" ? existing.name : name.trim() })
+      .eq("id", existing.id)
+      .select(CUSTOMER_SAFE_FIELDS)
+      .single();
+    if (error) return { ok: false, error: "Failed to create account" };
+    return { ok: true, customer: data as Customer };
+  }
+
+  const { data, error } = await supabase
+    .from("customers")
+    .insert({ name: name.trim(), email: cleanEmail, password_hash })
+    .select(CUSTOMER_SAFE_FIELDS)
+    .single();
+  if (error) return { ok: false, error: "Failed to create account" };
+  return { ok: true, customer: data as Customer };
+}
+
+export async function verifyCustomerLogin(
+  email: string,
+  password: string
+): Promise<{ ok: true; customer: Customer } | { ok: false; error: string }> {
+  const { data } = await supabase
+    .from("customers")
+    .select(`${CUSTOMER_SAFE_FIELDS}, password_hash`)
+    .ilike("email", email.trim().toLowerCase())
+    .maybeSingle();
+
+  // Same generic error whether the email doesn't exist or the password is
+  // wrong — never reveal which one it was.
+  if (!data || !data.password_hash) {
+    return { ok: false, error: "Invalid email or password" };
+  }
+  const valid = await bcrypt.compare(password, data.password_hash as string);
+  if (!valid) {
+    return { ok: false, error: "Invalid email or password" };
+  }
+  const { password_hash: _omit, ...customer } = data as Customer & { password_hash: string };
+  return { ok: true, customer: customer as Customer };
+}
 
 // Finds a customer by phone, or creates one. Used by public checkout/reservation
 // and POS order creation so CRM data accumulates from flows that already exist,

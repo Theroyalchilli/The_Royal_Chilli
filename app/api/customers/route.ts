@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
 import { getActiveTiers, tierForSpend, computeSegment } from "@/lib/crm";
+import { CUSTOMER_SAFE_FIELDS } from "@/lib/customers";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search");
 
-  let query = supabase.from("customers").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("customers").select(CUSTOMER_SAFE_FIELDS).order("created_at", { ascending: false });
   if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 
   const { data: customers, error } = await query;
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
         name, phone, email: email || null, date_of_birth: date_of_birth || null, address: address || null,
         referral_code: referralCode, referred_by_customer_id: referredByCustomerId,
       })
-      .select()
+      .select(CUSTOMER_SAFE_FIELDS)
       .single();
     if (error) throw error;
 

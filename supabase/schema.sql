@@ -88,7 +88,7 @@ CREATE TABLE staff (
 CREATE TABLE customers (
   id                      SERIAL PRIMARY KEY,
   name                    TEXT NOT NULL,
-  phone                   TEXT UNIQUE NOT NULL,
+  phone                   TEXT UNIQUE, -- nullable: an email-signup account may not have one yet
   email                   TEXT,
   date_of_birth           DATE,
   address                 TEXT,
@@ -96,8 +96,12 @@ CREATE TABLE customers (
   loyalty_points          INT NOT NULL DEFAULT 0,
   referral_code           TEXT UNIQUE,
   referred_by_customer_id INT REFERENCES customers(id),
+  referral_completed_at   TIMESTAMPTZ,
+  marketing_consent       BOOLEAN NOT NULL DEFAULT FALSE,
+  password_hash           TEXT, -- self-service customer account; NULL for phone-only guest rows
   created_at              TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE UNIQUE INDEX customers_email_account_unique ON customers (lower(email)) WHERE password_hash IS NOT NULL;
 
 CREATE TABLE menu_categories (
   id            SERIAL PRIMARY KEY,

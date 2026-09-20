@@ -22,9 +22,11 @@ const statusLabel: Record<string, string> = {
 export default function DineInOrder({
   tableNumber,
   categories,
+  initialSelfOrderEnabled,
 }: {
   tableNumber: string;
   categories: MenuCategory[];
+  initialSelfOrderEnabled: boolean;
 }) {
   const [pending, setPending] = useState<PendingLine[]>([]);
   const [pickerFor, setPickerFor] = useState<MenuItem | null>(null);
@@ -33,6 +35,10 @@ export default function DineInOrder({
   const [sending, setSending] = useState(false);
   const [requestMsg, setRequestMsg] = useState("");
   const [error, setError] = useState("");
+  // Reflects the staff-controlled toggle (app/api/tables PUT self_order_enabled)
+  // — polled alongside the order so ordering opens up live once staff flips
+  // it, with no page reload needed.
+  const [selfOrderEnabled, setSelfOrderEnabled] = useState(initialSelfOrderEnabled);
 
   // Optional loyalty capture — a customer can add this any time, not just
   // before ordering. Remembered in this browser so it isn't re-typed if the
@@ -89,6 +95,7 @@ export default function DineInOrder({
       if (res.ok) {
         setOrder(data.order);
         setItems(data.items || []);
+        setSelfOrderEnabled(!!data.table?.self_order_enabled);
       }
     } catch {
       // silent — next poll will retry
@@ -274,7 +281,15 @@ export default function DineInOrder({
           </div>
         )}
 
-        <div className="mt-10 space-y-14">
+        {!selfOrderEnabled && (
+          <div className="mx-auto mt-10 max-w-sm border border-border p-5 text-center">
+            <p className="text-2xl">⏳</p>
+            <p className="mt-2 text-sm font-medium">Ordering isn&apos;t open for this table yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">Ask a member of staff to start your table, or use Call Waiter above — this page will unlock automatically once it&apos;s ready.</p>
+          </div>
+        )}
+
+        <div className={`mt-10 space-y-14 ${!selfOrderEnabled ? "pointer-events-none opacity-40" : ""}`}>
           {categories.map((category) => (
             <section key={category.id}>
               <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-primary">{category.name}</h2>

@@ -106,7 +106,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id, status, capacity, location, table_number } = await req.json();
+    const { id, status, capacity, location, table_number, self_order_enabled } = await req.json();
 
     // Floor staff flip `status` all shift; changing a table's number/capacity/
     // area is a manager-only setup action.
@@ -118,6 +118,7 @@ export async function PUT(req: NextRequest) {
     const updateFields: Record<string, unknown> = {};
     if (status !== undefined) updateFields.status = status;
     if (location !== undefined) updateFields.location = location;
+    if (self_order_enabled !== undefined) updateFields.self_order_enabled = !!self_order_enabled;
 
     if (capacity !== undefined) {
       const seats = Math.round(Number(capacity));

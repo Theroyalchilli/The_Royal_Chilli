@@ -11,6 +11,15 @@ export async function POST(
     if (!table) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
+    // Public + keyed only on a guessable table number — without this gate,
+    // anyone off-premises could push orders straight to the kitchen for any
+    // table. Staff must explicitly open a table for self-service first.
+    if (!table.self_order_enabled) {
+      return NextResponse.json(
+        { error: "Self-ordering isn't open for this table yet — please ask a member of staff." },
+        { status: 403 }
+      );
+    }
 
     const { items, customer_phone, customer_name, customer_email, marketing_consent } = await req.json();
     if (!Array.isArray(items) || items.length === 0) {

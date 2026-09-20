@@ -9,7 +9,7 @@ const OPEN_STATUSES = ["open", "sent_to_kitchen", "ready"];
 export async function getTableByNumber(tableNumber: string) {
   const { data } = await supabase
     .from("restaurant_tables")
-    .select("id, table_number, capacity, status")
+    .select("id, table_number, capacity, status, self_order_enabled")
     .eq("table_number", tableNumber)
     .maybeSingle();
   return data;

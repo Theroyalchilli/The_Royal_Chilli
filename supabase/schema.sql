@@ -124,11 +124,12 @@ CREATE TABLE menu_items (
 );
 
 CREATE TABLE restaurant_tables (
-  id           SERIAL PRIMARY KEY,
-  table_number TEXT NOT NULL,
-  capacity     INT DEFAULT 4,
-  status       TEXT CHECK (status IN ('available','occupied','reserved')) DEFAULT 'available',
-  location     TEXT CHECK (location IN ('main','outdoor','private')) DEFAULT 'main'
+  id                  SERIAL PRIMARY KEY,
+  table_number        TEXT NOT NULL,
+  capacity            INT DEFAULT 4,
+  status              TEXT CHECK (status IN ('available','occupied','reserved')) DEFAULT 'available',
+  location            TEXT CHECK (location IN ('main','outdoor','private')) DEFAULT 'main',
+  self_order_enabled  BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE work_periods (

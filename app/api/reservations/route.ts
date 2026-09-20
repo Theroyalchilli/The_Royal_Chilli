@@ -176,7 +176,7 @@ export async function PUT(req: NextRequest) {
       } else if (status === "cancelled" || status === "no_show") {
         await supabase
           .from("restaurant_tables")
-          .update({ status: "available" })
+          .update({ status: "available", self_order_enabled: false })
           .eq("id", reservation.table_id);
       }
     }

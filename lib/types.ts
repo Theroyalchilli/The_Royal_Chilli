@@ -157,6 +157,7 @@ export interface RestaurantTable {
   status: "available" | "occupied" | "reserved";
   location: "main" | "outdoor" | "private";
   occupied_since?: string | null; // created_at of the table's oldest active order, if any
+  self_order_enabled: boolean; // staff-controlled: gates public QR ordering for this table
 }
 
 export interface WorkPeriod {

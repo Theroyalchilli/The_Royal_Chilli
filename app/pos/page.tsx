@@ -301,6 +301,19 @@ export default function POSPage() {
     setTables(data.tables || []);
   }, []);
 
+  const toggleSelfOrder = async (tableId: number, enabled: boolean) => {
+    setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, self_order_enabled: enabled } : t)));
+    try {
+      await fetch("/api/tables", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tableId, self_order_enabled: enabled }),
+      });
+    } catch {
+      refreshTables();
+    }
+  };
+
   // Two lines only merge if they're the same dish with the exact same
   // modifier selections — e.g. "Chicken Tikka" and "Malai Tikka" versions of
   // the same platter must stay as separate lines, same rule as the website cart.
@@ -812,6 +825,22 @@ export default function POSPage() {
           className="flex-shrink-0 text-[11px] font-semibold text-muted-foreground hover:text-red-600 bg-surface-hover/80 hover:bg-red-50 border border-border hover:border-red-500/40 px-2.5 py-1.5 rounded-lg transition-all no-select"
         >
           ← Tables
+        </button>
+      </div>
+      {/* QR self-order gate — closed by default, and auto-closed again when
+          the table is freed (see cancelOrderAndFreeTable / payment routes),
+          so a QR code only ever works while staff has this table open. */}
+      <div className="flex items-center justify-between gap-2 px-3 pb-2.5">
+        <span className="text-[11px] text-muted-foreground">📱 QR self-order for this table</span>
+        <button
+          onClick={() => toggleSelfOrder(tbl.id, !tbl.self_order_enabled)}
+          className={`no-select flex-shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border transition-colors ${
+            tbl.self_order_enabled
+              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-700"
+              : "bg-surface-hover border-border text-muted-foreground"
+          }`}
+        >
+          {tbl.self_order_enabled ? "● Open" : "○ Closed"}
         </button>
       </div>
     </div>

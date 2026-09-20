@@ -30,5 +30,5 @@ export default async function TablePage({
   }
 
   const categories = await getActiveMenu();
-  return <DineInOrder tableNumber={table.table_number} categories={categories} />;
+  return <DineInOrder tableNumber={table.table_number} categories={categories} initialSelfOrderEnabled={table.self_order_enabled} />;
 }

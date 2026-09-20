@@ -51,7 +51,7 @@ export async function POST(
     // Free the table immediately — a blocked card can't hold it hostage;
     // the debt travels with the order, not the table.
     if (order.table_id) {
-      await supabase.from("restaurant_tables").update({ status: "available" }).eq("id", order.table_id);
+      await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
     }
 
     return NextResponse.json({ success: true });

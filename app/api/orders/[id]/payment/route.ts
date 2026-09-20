@@ -95,7 +95,7 @@ export async function POST(
 
     // Free the table only once the primary order is actually fully settled.
     if (isFullyPaid && order.table_id) {
-      await supabase.from("restaurant_tables").update({ status: "available" }).eq("id", order.table_id);
+      await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
     }
 
     if (isFullyPaid && order.customer_id) {

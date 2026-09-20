@@ -96,7 +96,7 @@ export async function PUT(
       if (status === "paid" && order.table_id) {
         await supabase
           .from("restaurant_tables")
-          .update({ status: "available" })
+          .update({ status: "available", self_order_enabled: false })
           .eq("id", order.table_id);
       }
     }

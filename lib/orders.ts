@@ -9,7 +9,7 @@ import { sendPaymentReceiptEmail } from "@/lib/email";
 export async function cancelOrderAndFreeTable(orderId: number, tableId: number | null): Promise<void> {
   await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", orderId);
   if (tableId) {
-    await supabase.from("restaurant_tables").update({ status: "available" }).eq("id", tableId);
+    await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", tableId);
   }
 }
 

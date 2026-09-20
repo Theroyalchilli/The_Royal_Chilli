@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 
 function ResetPasswordForm() {
@@ -47,47 +48,55 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="mx-auto max-w-sm px-4 py-24">
-      <div className="text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-primary">Reset Password</p>
-        <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl">Choose a new password</h1>
-      </div>
-
-      {done ? (
-        <p className="mt-8 text-center text-sm">Password updated — taking you to login…</p>
-      ) : (
-        <div className="mt-8 space-y-3">
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="New password"
-            type="password"
-            className="w-full border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary"
-          />
-          <input
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Confirm new password"
-            type="password"
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-            className="w-full border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary"
-          />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <button
-            onClick={submit}
-            disabled={saving}
-            className="w-full bg-primary py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save New Password"}
-          </button>
+    <div className="min-h-screen bg-gradient-to-b from-primary/95 via-primary to-foreground px-6 py-10 text-primary-foreground">
+      <div className="mx-auto max-w-sm">
+        <div className="text-center">
+          <Image src="/logo.png" alt="The Royal Chilli" width={72} height={72} className="mx-auto rounded-2xl object-cover shadow-lg" />
+          <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-3xl">Choose a new password</h1>
         </div>
-      )}
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        <Link href="/account/login" className="text-primary underline underline-offset-4">
-          Back to login
-        </Link>
-      </p>
+        <div className="mt-7 rounded-2xl border border-amber-300/20 bg-white/5 p-5 backdrop-blur">
+          {done ? (
+            <p className="text-center text-sm text-primary-foreground/90">Password updated — taking you to login…</p>
+          ) : (
+            <>
+              <div className="mb-3">
+                <label className="mb-1 block text-xs text-primary-foreground/70">New password</label>
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  placeholder="••••••••"
+                  className="w-full rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-300"
+                />
+              </div>
+              <div className="mb-1">
+                <label className="mb-1 block text-xs text-primary-foreground/70">Confirm new password</label>
+                <input
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  type="password"
+                  placeholder="••••••••"
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  className="w-full rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-300"
+                />
+              </div>
+              {error && <p className="mt-2 text-xs text-red-200">{error}</p>}
+              <button
+                onClick={submit}
+                disabled={saving}
+                className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-bold text-primary hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Save new password"}
+              </button>
+            </>
+          )}
+
+          <p className="mt-3 text-center text-xs text-primary-foreground/70">
+            <Link href="/account/login" className="underline">Back to login</Link>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

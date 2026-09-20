@@ -91,24 +91,26 @@ export default function BookingsView() {
 
       <div className="mb-2 mt-5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Book a table</div>
       <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Date</label>
-            <input
-              type="date"
-              value={date}
-              min={toDateInputValue(new Date())}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Time</label>
-            <select value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary">
-              {timeOptions.length === 0 && <option value="">No slots today</option>}
-              {timeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+        {/* Stacked, not side-by-side — a native date input has its own
+            browser-controlled minimum width that doesn't reliably shrink to
+            half a narrow mobile screen, which was causing it to overlap the
+            time select next to it. */}
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Date</label>
+          <input
+            type="date"
+            value={date}
+            min={toDateInputValue(new Date())}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-muted-foreground">Time</label>
+          <select value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary">
+            {timeOptions.length === 0 && <option value="">No slots today</option>}
+            {timeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs text-muted-foreground">Guests</label>

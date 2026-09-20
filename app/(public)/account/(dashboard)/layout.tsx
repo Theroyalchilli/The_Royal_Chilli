@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { getCustomerSession } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
 import AccountBottomNav from "@/components/site/AccountBottomNav";
@@ -17,9 +18,12 @@ export default async function AccountLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-screen pb-20">
       <div className="sticky top-0 z-20 flex items-center justify-between gap-2 bg-primary px-5 py-3.5 text-primary-foreground shadow-sm">
-        <div className="min-w-0">
-          <div className="truncate font-[family-name:var(--font-playfair)] text-lg leading-tight">The Royal Chilli</div>
-          <div className="truncate text-[11px] text-primary-foreground/70">Kingsley Road · Hounslow</div>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Image src="/logo.png" alt="" width={36} height={36} className="flex-shrink-0 rounded-lg object-cover" />
+          <div className="min-w-0">
+            <div className="truncate font-[family-name:var(--font-playfair)] text-lg leading-tight">The Royal Chilli</div>
+            <div className="truncate text-[11px] text-primary-foreground/70">Kingsley Road · Hounslow</div>
+          </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-400/15 px-3 py-1.5">
           <span className="text-sm font-bold text-amber-100">{customer?.loyalty_points ?? 0}</span>

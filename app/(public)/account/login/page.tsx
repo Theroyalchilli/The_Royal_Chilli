@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -47,8 +48,9 @@ function AuthForm() {
     <div className="min-h-screen bg-gradient-to-b from-primary/95 via-primary to-foreground px-6 py-10 text-primary-foreground">
       <div className="mx-auto max-w-sm">
         <div className="text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 px-3.5 py-1.5 text-xs text-amber-200">
-            🌶️ The Royal Chilli · Hounslow
+          <Image src="/logo.png" alt="The Royal Chilli" width={72} height={72} className="mx-auto rounded-2xl object-cover shadow-lg" />
+          <span className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-300/40 px-3.5 py-1.5 text-xs text-amber-200">
+            The Royal Chilli · Hounslow
           </span>
           <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-3xl">My Account</h1>
           <p className="mt-1 text-sm text-primary-foreground/70">Order, earn points and book a table — all in one place.</p>

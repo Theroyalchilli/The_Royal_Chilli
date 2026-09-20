@@ -14,9 +14,9 @@ export default function LogoutButton() {
   return (
     <button
       onClick={logout}
-      className="border border-border px-6 py-2.5 text-xs uppercase tracking-[0.15em] text-muted-foreground hover:border-primary hover:text-primary"
+      className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-surface py-3 text-sm font-bold text-primary shadow-sm hover:bg-primary/5"
     >
-      Log Out
+      <span aria-hidden>🚪</span> Log Out
     </button>
   );
 }

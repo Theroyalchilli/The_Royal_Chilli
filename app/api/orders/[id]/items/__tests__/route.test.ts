@@ -76,7 +76,7 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
     const res = await voidItem("77", 1);
     expect(res.status).toBe(200);
     expect(ordersUpdatePayloads).toContainEqual(expect.objectContaining({ status: "cancelled" }));
-    expect(tablesUpdatePayloads).toContainEqual({ status: "available" });
+    expect(tablesUpdatePayloads).toContainEqual({ status: "available", self_order_enabled: false });
   });
 
   it("does NOT cancel the order or free the table when other active items remain", async () => {

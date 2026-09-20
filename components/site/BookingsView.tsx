@@ -91,27 +91,26 @@ export default function BookingsView() {
 
       <div className="mb-2 mt-5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Book a table</div>
       <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        {/* flex-wrap, not a strict 2-column grid — a native date input has
-            its own browser-controlled minimum rendering width that a rigid
-            50/50 split could squeeze below, which is what caused it to
-            clip/overlap the time select next to it. Giving each field a
-            guaranteed min-width and letting them wrap only if they truly
-            don't fit keeps them on one row on real phones while never
-            actually overlapping on anything narrower. */}
-        <div className="flex flex-wrap gap-5">
-          <div className="min-w-[140px] flex-1">
+        {/* grid-cols-2, not flex — Tailwind's grid-cols-2 sets each track to
+            minmax(0, 1fr), so the two columns are always exactly equal width
+            and can shrink to 0 without ever overflowing into each other.
+            min-w-0 on the cells and inputs reinforces that: it's what stops
+            the native date input's own rendering-width preference from
+            forcing the row wider than its container (the old overlap bug). */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="min-w-0">
             <label className="mb-1 block text-xs text-muted-foreground">Date</label>
             <input
               type="date"
               value={date}
               min={toDateInputValue(new Date())}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary"
+              className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary"
             />
           </div>
-          <div className="min-w-[120px] flex-1">
+          <div className="min-w-0">
             <label className="mb-1 block text-xs text-muted-foreground">Time</label>
-            <select value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary">
+            <select value={time} onChange={(e) => setTime(e.target.value)} className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary">
               {timeOptions.length === 0 && <option value="">No slots today</option>}
               {timeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>

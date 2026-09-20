@@ -1,12 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const CONSENT_KEY = "rc_cookie_consent";
 
 // Starts hidden (matches server render) and only appears after mount, once,
-// until the visitor actually makes a choice — localStorage (not session),
-// since consent should persist across visits, not just the current tab.
+// until the visitor dismisses it — localStorage (not session), since that
+// should persist across visits, not just the current tab.
+//
+// A single acknowledgement, not an accept/decline choice: this site only
+// ever sets strictly-necessary cookies (login sessions) — there's no
+// analytics or advertising cookie for "decline" to actually turn off, so
+// offering that choice would be misleading rather than meaningful.
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
@@ -18,9 +24,9 @@ export default function CookieConsent() {
     }
   }, []);
 
-  function choose(value: "accepted" | "declined") {
+  function dismiss() {
     try {
-      localStorage.setItem(CONSENT_KEY, value);
+      localStorage.setItem(CONSENT_KEY, "acknowledged");
     } catch {
       // ignore — worst case the banner shows again next visit
     }
@@ -33,23 +39,19 @@ export default function CookieConsent() {
     <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-border bg-surface px-4 py-4 shadow-[0_-2px_10px_rgba(0,0,0,0.08)]">
       <div className="mx-auto flex max-w-3xl flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
         <p className="flex-1 text-sm text-muted-foreground">
-          We use cookies to keep the site working and to understand how it's used. You can accept all cookies or
-          decline non-essential ones.
+          We only use cookies that are strictly necessary to keep the site working, such as keeping you logged in.
+          See our{" "}
+          <Link href="/privacy-policy" className="underline hover:text-foreground">
+            Privacy Policy
+          </Link>{" "}
+          for details.
         </p>
-        <div className="flex flex-shrink-0 gap-2">
-          <button
-            onClick={() => choose("declined")}
-            className="rounded-lg border border-border px-4 py-2 text-xs uppercase tracking-[0.1em] text-foreground hover:bg-background"
-          >
-            Decline
-          </button>
-          <button
-            onClick={() => choose("accepted")}
-            className="rounded-lg bg-primary px-4 py-2 text-xs uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90"
-          >
-            Accept
-          </button>
-        </div>
+        <button
+          onClick={dismiss}
+          className="flex-shrink-0 rounded-lg bg-primary px-4 py-2 text-xs uppercase tracking-[0.1em] text-primary-foreground hover:opacity-90"
+        >
+          Got it
+        </button>
       </div>
     </div>
   );

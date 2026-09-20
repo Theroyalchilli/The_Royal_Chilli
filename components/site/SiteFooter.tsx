@@ -142,9 +142,19 @@ export default function SiteFooter() {
       </div>
       <div className="border-t border-[#3a0f0c]/15 px-4 py-4 text-center text-xs text-[#3a0f0c]/60">
         <p>{footer.copyright}</p>
-        <Link href="/login" className="mt-1 inline-block hover:text-[#3a0f0c]">
-          Staff Login
-        </Link>
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <Link href="/privacy-policy" className="hover:text-[#3a0f0c]">
+            Privacy Policy
+          </Link>
+          <span>·</span>
+          <Link href="/terms" className="hover:text-[#3a0f0c]">
+            Terms &amp; Conditions
+          </Link>
+          <span>·</span>
+          <Link href="/login" className="hover:text-[#3a0f0c]">
+            Staff Login
+          </Link>
+        </div>
       </div>
     </footer>
   );

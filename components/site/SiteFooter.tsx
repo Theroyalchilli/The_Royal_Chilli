@@ -86,6 +86,9 @@ export default function SiteFooter() {
           <Link href="/careers" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Careers
           </Link>
+          <Link href="/faq" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            FAQ
+          </Link>
         </div>
       </div>
       <div className="border-t border-[#3a0f0c]/15 px-4 py-4 text-center text-xs text-[#3a0f0c]/60">

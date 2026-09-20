@@ -14,6 +14,7 @@ const navLinks = [
   { href: "/reservations", label: "Book a Table" },
   { href: "/about", label: "About" },
   { href: "/catering", label: "Catering & Events" },
+  { href: "/faq", label: "FAQ" },
 ];
 
 // Bare two-line mark that morphs into an X in place (no icon swap, no

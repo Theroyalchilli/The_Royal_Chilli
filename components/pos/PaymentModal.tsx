@@ -166,6 +166,11 @@ export default function PaymentModal({
   const [splitCount, setSplitCount] = useState(1);
   const [tipCents, setTipCents] = useState(0);
   const [lastPaymentAmount, setLastPaymentAmount] = useState(0);
+  // Cash given/change for the receipt screen — captured at confirm time since
+  // cashCents resets to 0 right after (see handleProcessPayment), which would
+  // otherwise make the receipt always show "Cash given £0.00".
+  const [lastCashGiven, setLastCashGiven] = useState(0);
+  const [lastChange, setLastChange] = useState(0);
   // Lets the cashier charge an arbitrary amount for this round instead of an
   // even split — e.g. "customer has £15 cash, put the rest on card". Null
   // means "use the even split"; sits between rounds so each partial payment
@@ -421,6 +426,10 @@ export default function PaymentModal({
       // balance (localTotal - remaining) rather than setting remainingBalance
       // directly — it's the derived value now, see its declaration above.
       setAmountPaidSoFar(Math.max(0, Math.round((localTotal - (data.remaining_balance ?? 0)) * 100) / 100));
+      if (method === "cash") {
+        setLastCashGiven(cashAmount);
+        setLastChange(change);
+      }
       setTipCents(0);
       setCashCents(0);
 
@@ -1125,10 +1134,10 @@ export default function PaymentModal({
                 {method === "cash" && (
                   <>
                     <div className="flex justify-between text-foreground text-xs">
-                      <span>Cash given</span><span>{formatCurrency(cashAmount)}</span>
+                      <span>Cash given</span><span>{formatCurrency(lastCashGiven)}</span>
                     </div>
                     <div className="flex justify-between text-green-600 text-xs font-semibold">
-                      <span>Change</span><span>{formatCurrency(change)}</span>
+                      <span>Change</span><span>{formatCurrency(lastChange)}</span>
                     </div>
                   </>
                 )}

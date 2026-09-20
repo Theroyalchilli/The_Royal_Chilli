@@ -1,51 +1,7 @@
+import Link from "next/link";
 import { getCustomerSession } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
-import { formatCurrency } from "@/lib/utils";
-
-type Order = {
-  id: number;
-  order_number: string;
-  order_type: string;
-  status: string;
-  total: number;
-  scheduled_for: string | null;
-  created_at: string;
-};
-
-const statusLabel: Record<string, string> = {
-  open: "Preparing your order",
-  sent_to_kitchen: "In the kitchen",
-  ready: "Ready",
-  paid: "Completed",
-};
-
-const typeLabel: Record<string, string> = {
-  dine_in: "🍽️ Dine-in",
-  takeaway: "🥡 Takeaway",
-  delivery: "🛵 Delivery",
-  online: "🌐 Online",
-};
-
-function OrderRow({ order }: { order: Order }) {
-  return (
-    <div className="flex items-center justify-between border-b border-border py-3 text-sm">
-      <div>
-        <div className="font-medium">
-          {order.order_number} <span className="text-muted-foreground">· {typeLabel[order.order_type] || order.order_type}</span>
-        </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">
-          {new Date(order.scheduled_for || order.created_at).toLocaleString("en-GB", {
-            weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
-          })}
-          {order.scheduled_for && " (scheduled)"}
-          {" · "}
-          {statusLabel[order.status] || order.status}
-        </div>
-      </div>
-      <div className="font-semibold text-primary">{formatCurrency(order.total)}</div>
-    </div>
-  );
-}
+import AccountOrderCard, { type AccountOrder } from "@/components/site/AccountOrderCard";
 
 export default async function AccountOrdersPage() {
   const session = await getCustomerSession();
@@ -68,27 +24,37 @@ export default async function AccountOrdersPage() {
 
   return (
     <div>
-      {(upcoming || []).length > 0 && (
-        <div className="mb-8">
-          <h2 className="font-[family-name:var(--font-playfair)] text-xl text-primary">Upcoming</h2>
-          <div className="mt-2">
-            {(upcoming || []).map((o) => (
-              <OrderRow key={o.id} order={o} />
-            ))}
-          </div>
-        </div>
-      )}
+      <h1 className="font-[family-name:var(--font-playfair)] text-2xl">Orders</h1>
+      <Link
+        href="/order"
+        className="mt-3.5 block w-full rounded-xl bg-primary py-3 text-center text-sm font-bold text-primary-foreground hover:opacity-90"
+      >
+        Start a new order
+      </Link>
 
-      <h2 className="font-[family-name:var(--font-playfair)] text-xl text-primary">History</h2>
-      {(history || []).length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">No past orders yet.</p>
-      ) : (
-        <div className="mt-2">
-          {(history || []).map((o) => (
-            <OrderRow key={o.id} order={o} />
-          ))}
-        </div>
-      )}
+      <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Upcoming &amp; pre-orders</div>
+      <div className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
+        {(upcoming || []).length > 0 ? (
+          (upcoming as AccountOrder[]).map((o) => <AccountOrderCard key={o.id} order={o} />)
+        ) : (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            <span className="mb-1.5 block text-2xl">🕒</span>
+            No upcoming or pre-orders.
+          </div>
+        )}
+      </div>
+
+      <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Order history</div>
+      <div className="rounded-2xl border border-border bg-surface px-4 shadow-sm">
+        {(history || []).length > 0 ? (
+          (history as AccountOrder[]).map((o) => <AccountOrderCard key={o.id} order={o} />)
+        ) : (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            <span className="mb-1.5 block text-2xl">🧾</span>
+            No past orders yet.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

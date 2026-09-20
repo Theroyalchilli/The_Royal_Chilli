@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { siteContent } from "@/lib/site-content";
 
 // Editorial single-column footer, styled after tamarindrestaurant.com's flat
@@ -10,7 +13,13 @@ function Divider() {
 }
 
 export default function SiteFooter() {
+  const pathname = usePathname();
   const { contact, footer } = siteContent;
+  // The account section is its own self-contained app shell (bottom tab
+  // bar), same reasoning as hiding SiteHeader's hamburger there — this
+  // footer's own links/newsletter block would just sit awkwardly behind
+  // the fixed bottom nav.
+  if (pathname?.startsWith("/account")) return null;
   return (
     <footer className="bg-[#f6ddd2] text-[#3a0f0c]">
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">

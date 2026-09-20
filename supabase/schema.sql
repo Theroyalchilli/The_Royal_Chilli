@@ -661,13 +661,38 @@ CREATE TABLE stock_take_lines (
 -- LOYALTY
 -- =====================
 
+CREATE TABLE loyalty_tiers (
+  id                  SERIAL PRIMARY KEY,
+  name                TEXT NOT NULL UNIQUE,
+  min_lifetime_spend  NUMERIC(10,2) NOT NULL DEFAULT 0,
+  points_multiplier   NUMERIC(4,2) NOT NULL DEFAULT 1.0,
+  sort_order          INT NOT NULL DEFAULT 0,
+  active              INT NOT NULL DEFAULT 1,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+INSERT INTO loyalty_tiers (name, min_lifetime_spend, points_multiplier, sort_order) VALUES
+  ('Bronze', 0,   1.0,  0),
+  ('Silver', 200, 1.25, 1),
+  ('Gold',   500, 1.5,  2);
+
+-- A tier change is itself an event worth a record, separate from the points
+-- ledger since it carries no points_delta of its own.
+CREATE TABLE loyalty_tier_changes (
+  id                       SERIAL PRIMARY KEY,
+  customer_id              INT REFERENCES customers(id) NOT NULL,
+  from_tier_id             INT REFERENCES loyalty_tiers(id),
+  to_tier_id               INT REFERENCES loyalty_tiers(id) NOT NULL,
+  lifetime_spend_at_change NUMERIC(10,2) NOT NULL,
+  created_at               TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Points ledger — same audit-trail pattern as stock_movements. A trigger keeps
 -- customers.loyalty_points in sync so there's no read-then-write race.
 CREATE TABLE loyalty_transactions (
   id             SERIAL PRIMARY KEY,
   customer_id    INT REFERENCES customers(id) NOT NULL,
   points_delta   INT NOT NULL,
-  reason         TEXT NOT NULL CHECK (reason IN ('earned_purchase', 'redeemed_reward', 'birthday_bonus', 'referral_bonus', 'manual_adjustment')),
+  reason         TEXT NOT NULL CHECK (reason IN ('earned_purchase', 'tier_bonus', 'redeemed_reward', 'birthday_bonus', 'referral_bonus', 'manual_adjustment', 'points_expired', 'refund_reversal', 'welcome_bonus', 'redemption_cancelled')),
   reference_type TEXT,
   reference_id   INT,
   staff_id       INT REFERENCES staff(id),
@@ -685,13 +710,50 @@ CREATE TRIGGER trg_apply_loyalty_transaction AFTER INSERT ON loyalty_transaction
 FOR EACH ROW EXECUTE FUNCTION apply_loyalty_transaction();
 
 CREATE TABLE loyalty_rewards (
-  id           SERIAL PRIMARY KEY,
-  name         TEXT NOT NULL,
-  description  TEXT,
-  points_cost  INT NOT NULL,
-  active       INT DEFAULT 1,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  id                 SERIAL PRIMARY KEY,
+  name               TEXT NOT NULL,
+  description        TEXT,
+  points_cost        INT NOT NULL,
+  active             INT DEFAULT 1,
+  discount_amount    NUMERIC(10,2),
+  min_spend          NUMERIC(10,2) NOT NULL DEFAULT 0,
+  eligible_tier_id   INT REFERENCES loyalty_tiers(id),
+  valid_days         INT NOT NULL DEFAULT 7,
+  per_customer_limit INT,
+  start_date         DATE,
+  end_date           DATE,
+  created_at         TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Issued (points debited, code generated) then later redeemed (code entered
+-- at POS, applied to a specific order) — two steps, so "redeem" can be
+-- validated/audited independently of "issue".
+CREATE TABLE loyalty_redemptions (
+  id                   SERIAL PRIMARY KEY,
+  code                 TEXT NOT NULL UNIQUE,
+  customer_id          INT REFERENCES customers(id) NOT NULL,
+  reward_id            INT REFERENCES loyalty_rewards(id) NOT NULL,
+  points_spent         INT NOT NULL,
+  status               TEXT NOT NULL CHECK (status IN ('issued', 'redeemed', 'expired', 'cancelled')) DEFAULT 'issued',
+  issued_at            TIMESTAMPTZ DEFAULT NOW(),
+  issued_by_staff_id   INT REFERENCES staff(id),
+  expires_at           TIMESTAMPTZ NOT NULL,
+  redeemed_at          TIMESTAMPTZ,
+  redeemed_by_staff_id INT REFERENCES staff(id),
+  redeemed_order_id    INT REFERENCES orders(id)
+);
+CREATE INDEX idx_loyalty_redemptions_customer ON loyalty_redemptions(customer_id);
+
+CREATE TABLE customer_addresses (
+  id          SERIAL PRIMARY KEY,
+  customer_id INT REFERENCES customers(id) NOT NULL,
+  label       TEXT NOT NULL DEFAULT 'Home',
+  line        TEXT NOT NULL,
+  postcode    TEXT,
+  is_default  BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_customer_addresses_customer ON customer_addresses(customer_id);
 
 -- =====================
 -- FINANCE

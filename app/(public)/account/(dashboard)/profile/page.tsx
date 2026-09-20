@@ -1,6 +1,6 @@
 import { getCustomerSession } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
-import ProfileForm from "@/components/site/ProfileForm";
+import AccountView from "@/components/site/AccountView";
 
 export default async function AccountProfilePage() {
   const session = await getCustomerSession();
@@ -8,18 +8,27 @@ export default async function AccountProfilePage() {
 
   const { data: customer } = await supabase
     .from("customers")
-    .select("name, phone, email")
+    .select("name, phone, email, marketing_consent")
     .eq("id", session.id)
     .maybeSingle();
+
+  const { data: addresses } = await supabase
+    .from("customer_addresses")
+    .select("id, label, line, postcode, is_default")
+    .eq("customer_id", session.id)
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true });
 
   const [firstName, ...rest] = (customer?.name || "").split(" ");
 
   return (
-    <ProfileForm
+    <AccountView
       initialFirstName={firstName || ""}
       initialLastName={rest.join(" ")}
       initialPhone={customer?.phone || ""}
       email={customer?.email || session.email}
+      initialSubscribed={customer?.marketing_consent ?? true}
+      initialAddresses={addresses || []}
     />
   );
 }

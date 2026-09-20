@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest) {
     const session = await getCustomerSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, phone } = await req.json();
+    const { name, phone, marketing_consent } = await req.json();
     const updates: Record<string, unknown> = {};
 
     if (name !== undefined) {
@@ -22,6 +22,9 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "Please enter a valid UK mobile number (starts with 07, 11 digits)" }, { status: 400 });
       }
       updates.phone = cleanPhone;
+    }
+    if (marketing_consent !== undefined) {
+      updates.marketing_consent = !!marketing_consent;
     }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });

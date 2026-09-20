@@ -67,6 +67,11 @@ export default function SiteHeader() {
     return () => { for (const el of targets) el.style.filter = ""; };
   }, [menuOpen]);
 
+  // The account section is its own self-contained app shell (its own
+  // topbar + fixed bottom tab bar) — this hamburger would otherwise overlap
+  // that topbar's points chip in the same top-right corner.
+  if (pathname?.startsWith("/account")) return null;
+
   return (
     <>
       {/* Sole nav trigger now — the old top bar (Home/Menus/Order Online/

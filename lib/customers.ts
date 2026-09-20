@@ -32,6 +32,7 @@ export async function signupCustomer(
   }
 
   const password_hash = await bcrypt.hash(password, 10);
+  const WELCOME_BONUS_POINTS = 50;
 
   if (existing) {
     // Claim the existing guest row — keep its name if it already had a real
@@ -43,7 +44,8 @@ export async function signupCustomer(
       .select(CUSTOMER_SAFE_FIELDS)
       .single();
     if (error) return { ok: false, error: "Failed to create account" };
-    return { ok: true, customer: data as Customer };
+    await supabase.from("loyalty_transactions").insert({ customer_id: existing.id, points_delta: WELCOME_BONUS_POINTS, reason: "welcome_bonus" });
+    return { ok: true, customer: { ...data, loyalty_points: (data as Customer).loyalty_points + WELCOME_BONUS_POINTS } as Customer };
   }
 
   const { data, error } = await supabase
@@ -52,7 +54,8 @@ export async function signupCustomer(
     .select(CUSTOMER_SAFE_FIELDS)
     .single();
   if (error) return { ok: false, error: "Failed to create account" };
-  return { ok: true, customer: data as Customer };
+  await supabase.from("loyalty_transactions").insert({ customer_id: data.id, points_delta: WELCOME_BONUS_POINTS, reason: "welcome_bonus" });
+  return { ok: true, customer: { ...data, loyalty_points: (data as Customer).loyalty_points + WELCOME_BONUS_POINTS } as Customer };
 }
 
 export async function verifyCustomerLogin(

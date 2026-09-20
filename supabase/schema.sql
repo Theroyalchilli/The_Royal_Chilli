@@ -755,6 +755,14 @@ CREATE TABLE customer_addresses (
 );
 CREATE INDEX idx_customer_addresses_customer ON customer_addresses(customer_id);
 
+-- Public-site newsletter capture — separate from customers since most
+-- subscribers are anonymous visitors, not account holders.
+CREATE TABLE newsletter_subscribers (
+  id         BIGSERIAL PRIMARY KEY,
+  email      TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- =====================
 -- FINANCE
 -- =====================

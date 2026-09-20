@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { siteContent } from "@/lib/site-content";
 
 // Editorial single-column footer, styled after tamarindrestaurant.com's flat
@@ -10,6 +11,51 @@ import { siteContent } from "@/lib/site-content";
 // their literal salmon, so the pattern is borrowed, not the palette.
 function Divider() {
   return <div className="mx-auto my-6 h-px w-10 bg-[#3a0f0c]/25" />;
+}
+
+function NewsletterForm() {
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    if (!email.trim() || saving) return;
+    setSaving(true);
+    try {
+      await fetch("/api/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setDone(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (done) {
+    return <p className="mt-3 text-sm text-[#3a0f0c]/80">Thanks — you&apos;re on the list.</p>;
+  }
+
+  return (
+    <div className="mx-auto mt-3 flex max-w-xs gap-2">
+      <input
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
+        type="email"
+        placeholder="you@email.com"
+        className="w-full min-w-0 rounded-lg border border-[#3a0f0c]/25 bg-white/50 px-3 py-2 text-sm text-[#3a0f0c] outline-none placeholder:text-[#3a0f0c]/40 focus:border-[#3a0f0c]/50"
+      />
+      <button
+        onClick={submit}
+        disabled={saving}
+        className="flex-shrink-0 rounded-lg bg-[#3a0f0c] px-4 py-2 text-xs uppercase tracking-[0.1em] text-[#f6ddd2] hover:opacity-90 disabled:opacity-50"
+      >
+        Join
+      </button>
+    </div>
+  );
 }
 
 export default function SiteFooter() {
@@ -27,6 +73,9 @@ export default function SiteFooter() {
           The Royal Chilli
         </h3>
         <p className="mx-auto mt-4 max-w-md text-sm text-[#3a0f0c]/80">{footer.tagline}</p>
+
+        <p className="mt-8 text-xs uppercase tracking-[0.15em] text-[#3a0f0c]/70">Offers &amp; updates by email</p>
+        <NewsletterForm />
 
         <Divider />
 

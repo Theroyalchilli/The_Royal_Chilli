@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import supabase from "@/lib/supabase";
+import { siteContent } from "@/lib/site-content";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -62,6 +63,19 @@ export default async function OrderConfirmationPage({
       ) : (
         <p className="mt-2 text-muted-foreground">Thanks — your payment was received.</p>
       )}
+
+      <div className="mt-8 border border-border bg-card p-6">
+        <p className="text-sm">Enjoying The Royal Chilli?</p>
+        <a
+          href={siteContent.contact.googleMapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-block border border-primary px-6 py-2.5 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
+        >
+          Leave Us a Review
+        </a>
+      </div>
+
       <Link
         href="/"
         className="mt-8 inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"

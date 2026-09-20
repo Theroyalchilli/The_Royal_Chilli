@@ -114,7 +114,7 @@ export default function HomePage() {
         <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
           {popularDishes.images.map((src) => (
             <div key={src} className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950">
-              <Image src={src} alt="" fill className="object-contain transition hover:scale-105" />
+              <Image src={src} alt="" fill sizes="(min-width: 640px) 33vw, 50vw" className="object-contain transition hover:scale-105" />
             </div>
           ))}
         </Reveal>
@@ -135,7 +135,13 @@ export default function HomePage() {
             </Link>
           </Reveal>
           <Reveal delay={150} className="relative aspect-square overflow-hidden rounded-2xl">
-            <Image src="/gallery/Tandoori_Sizzler.webp" alt="Tandoori Sizzler" fill className="object-cover" />
+            <Image
+              src="/gallery/Tandoori_Sizzler.webp"
+              alt="Tandoori Sizzler"
+              fill
+              sizes="(min-width: 768px) 50vw, 100vw"
+              className="object-cover"
+            />
           </Reveal>
         </div>
       </section>
@@ -171,7 +177,7 @@ export default function HomePage() {
         <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {galleryImages.map((src) => (
             <div key={src} className="relative aspect-square overflow-hidden rounded-xl">
-              <Image src={src} alt="" fill className="object-cover transition hover:scale-105" />
+              <Image src={src} alt="" fill sizes="(min-width: 640px) 25vw, 50vw" className="object-cover transition hover:scale-105" />
             </div>
           ))}
         </Reveal>

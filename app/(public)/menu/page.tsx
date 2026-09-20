@@ -95,7 +95,13 @@ export default function MenuPage() {
           {MENUS.map((menu, i) => (
             <Reveal key={menu.name} className="grid items-center gap-8 md:grid-cols-2">
               <div className={`relative aspect-[4/3] overflow-hidden rounded-2xl ${i % 2 === 1 ? "md:order-2" : ""}`}>
-                <Image src={menu.image} alt={menu.name} fill className="object-cover" />
+                <Image
+                  src={menu.image}
+                  alt={menu.name}
+                  fill
+                  sizes="(min-width: 768px) 50vw, 100vw"
+                  className="object-cover"
+                />
               </div>
               <div>
                 <h2 className="font-[family-name:var(--font-playfair)] text-2xl">{menu.name}</h2>

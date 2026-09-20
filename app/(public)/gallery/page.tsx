@@ -51,7 +51,13 @@ export default function GalleryPage() {
       <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {photos.map(({ file, caption }, i) => (
           <Reveal key={file} delay={(i % 8) * 60} className="group relative aspect-square overflow-hidden rounded-xl">
-            <Image src={`/gallery/${file}`} alt={caption} fill className="object-cover transition group-hover:scale-105" />
+            <Image
+              src={`/gallery/${file}`}
+              alt={caption}
+              fill
+              sizes="(min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
+              className="object-cover transition group-hover:scale-105"
+            />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100">
               <p className="text-xs font-medium text-white">{caption}</p>
             </div>

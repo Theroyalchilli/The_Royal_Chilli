@@ -32,6 +32,7 @@ export default function HeroBackground({ images }: { images: string[] }) {
       src={images[active]}
       alt=""
       fill
+      sizes="100vw"
       priority={active === 0}
       fetchPriority={active === 0 ? "high" : "auto"}
       className={`object-cover ${hasRotated ? "animate-hero-fade" : ""}`}

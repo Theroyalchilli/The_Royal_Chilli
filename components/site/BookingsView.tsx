@@ -103,12 +103,12 @@ export default function BookingsView() {
               value={date}
               min={toDateInputValue(new Date())}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary"
+              className="h-11 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary"
             />
           </div>
           <div className="w-[45%] min-w-0">
             <label className="mb-1 block text-xs text-muted-foreground">Time</label>
-            <select value={time} onChange={(e) => setTime(e.target.value)} className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary">
+            <select value={time} onChange={(e) => setTime(e.target.value)} className="h-11 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary">
               {timeOptions.length === 0 && <option value="">No slots today</option>}
               {timeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>

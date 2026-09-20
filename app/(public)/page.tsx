@@ -231,6 +231,39 @@ export default function HomePage() {
           </Link>
         </Reveal>
       </section>
+
+      {/* Find Us — the map embed URL already existed in siteContent but was
+          never actually rendered anywhere on the site. */}
+      <section className="bg-card px-4 py-20">
+        <div className="mx-auto max-w-5xl">
+          <Reveal className="text-center">
+            <p className="text-xs uppercase tracking-[0.3em] text-primary">Find Us</p>
+            <h2 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl">
+              Visit <span className="italic text-primary">The Royal Chilli</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">{siteContent.contact.address}</p>
+          </Reveal>
+          <Reveal delay={100} className="mt-10 overflow-hidden rounded-2xl border border-border">
+            <iframe
+              src={siteContent.contact.mapEmbed}
+              title="The Royal Chilli location"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              className="h-[360px] w-full"
+            />
+          </Reveal>
+          <div className="mt-6 text-center">
+            <a
+              href={siteContent.contact.googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block border border-primary px-8 py-3 text-xs uppercase tracking-[0.15em] text-primary transition hover:bg-primary hover:text-primary-foreground"
+            >
+              Get Directions
+            </a>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

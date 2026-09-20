@@ -2,6 +2,7 @@ import { Jost } from "next/font/google";
 import SiteHeader from "@/components/site/SiteHeader";
 import SiteFooter from "@/components/site/SiteFooter";
 import SplashScreen from "@/components/site/SplashScreen";
+import CookieConsent from "@/components/site/CookieConsent";
 
 // Public-site-only body/nav font, styled after tamarindrestaurant.com's light,
 // wide-tracked look. Their actual typeface (Domaine Sans) is a paid font
@@ -21,6 +22,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           left to clear here. */}
       <main className="flex-1">{children}</main>
       <SiteFooter />
+      <CookieConsent />
     </div>
   );
 }

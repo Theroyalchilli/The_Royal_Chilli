@@ -18,7 +18,8 @@ export const CUSTOMER_SAFE_FIELDS =
 export async function signupCustomer(
   name: string,
   email: string,
-  password: string
+  password: string,
+  marketingConsent = false
 ): Promise<{ ok: true; customer: Customer } | { ok: false; error: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const { data: existing } = await supabase
@@ -39,7 +40,7 @@ export async function signupCustomer(
     // one (not the "Guest" placeholder findOrCreateCustomerByPhone uses).
     const { data, error } = await supabase
       .from("customers")
-      .update({ password_hash, name: existing.name && existing.name !== "Guest" ? existing.name : name.trim() })
+      .update({ password_hash, name: existing.name && existing.name !== "Guest" ? existing.name : name.trim(), marketing_consent: marketingConsent })
       .eq("id", existing.id)
       .select(CUSTOMER_SAFE_FIELDS)
       .single();
@@ -50,7 +51,7 @@ export async function signupCustomer(
 
   const { data, error } = await supabase
     .from("customers")
-    .insert({ name: name.trim(), email: cleanEmail, password_hash })
+    .insert({ name: name.trim(), email: cleanEmail, password_hash, marketing_consent: marketingConsent })
     .select(CUSTOMER_SAFE_FIELDS)
     .single();
   if (error) return { ok: false, error: "Failed to create account" };

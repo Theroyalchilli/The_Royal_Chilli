@@ -38,6 +38,7 @@ export default function POSPage() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [upcomingReservationCount, setUpcomingReservationCount] = useState(0);
 
   // Order state
   const [orderType, setOrderType] = useState<OrderType>("dine_in");
@@ -290,6 +291,7 @@ export default function POSPage() {
       setCategories(menuData.categories || []);
       setItems(menuData.items || []);
       setTables(tablesData.tables || []);
+      setUpcomingReservationCount(tablesData.upcomingReservationCount || 0);
     } catch {
       console.error("Failed to load menu data");
     }
@@ -299,6 +301,7 @@ export default function POSPage() {
     const res = await fetch("/api/tables");
     const data = await res.json();
     setTables(data.tables || []);
+    setUpcomingReservationCount(data.upcomingReservationCount || 0);
   }, []);
 
   const toggleSelfOrder = async (tableId: number, enabled: boolean) => {
@@ -1088,7 +1091,7 @@ export default function POSPage() {
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>Rsv</span>
                 </div>
               </div>
-              <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} />
+              <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} upcomingReservationCount={upcomingReservationCount} />
               {cartCount > 0 ? (
                 <div className="mt-3 flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 animate-pulse">
                   <span className="text-amber-600 text-base">⚠️</span>
@@ -1224,7 +1227,7 @@ export default function POSPage() {
                         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>Rsv</span>
                       </div>
                     </div>
-                    <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} />
+                    <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} upcomingReservationCount={upcomingReservationCount} />
                     {cartCount > 0 ? (
                       <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 animate-pulse">
                         <span className="text-amber-600 text-base">⚠️</span>

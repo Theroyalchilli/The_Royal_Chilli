@@ -7,6 +7,10 @@ interface Props {
   tables: RestaurantTable[];
   selectedTable: number | null;
   onSelect: (table: RestaurantTable) => void;
+  // Reservations aren't linked to a specific table until they're seated, so
+  // there's no individual table to flag "Reserved" ahead of time — this is a
+  // plain count of today's bookings coming up soon instead (see /api/tables).
+  upcomingReservationCount: number;
 }
 
 // Fills a grid column-by-column instead of row-by-row, each column
@@ -24,7 +28,7 @@ function columnMajor<T>(items: T[], cols: number): T[] {
   return flat;
 }
 
-export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
+export default function TableGrid({ tables, selectedTable, onSelect, upcomingReservationCount }: Props) {
   // Single floor, no location zones — tables are laid out purely by table
   // number: the first 9 as a 3x3 block (column-major, matching the
   // restaurant's physical layout), the rest as a 4-wide row beneath it.
@@ -39,7 +43,7 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
   const stats = {
     free:     tables.filter(t => t.status === "available").length,
     occupied: tables.filter(t => t.status === "occupied").length,
-    reserved: tables.filter(t => t.status === "reserved").length,
+    reserved: upcomingReservationCount,
   };
 
   return (
@@ -50,9 +54,9 @@ export default function TableGrid({ tables, selectedTable, onSelect }: Props) {
         {[
           { label: "Free",     count: stats.free,     color: "text-emerald-600", bg: "bg-emerald-500/10 border-emerald-500/30" },
           { label: "Occupied", count: stats.occupied, color: "text-red-600",     bg: "bg-red-500/10 border-red-500/30" },
-          { label: "Reserved", count: stats.reserved, color: "text-amber-600",   bg: "bg-amber-500/10 border-amber-500/30" },
+          { label: "Upcoming", count: stats.reserved, color: "text-amber-600",   bg: "bg-amber-500/10 border-amber-500/30", title: "Reservations booked for the next 90 minutes — no specific table yet, that's assigned when they're seated" },
         ].map(s => (
-          <div key={s.label} className={`rounded-xl border px-3 py-2 text-center ${s.bg}`}>
+          <div key={s.label} title={"title" in s ? s.title : undefined} className={`rounded-xl border px-3 py-2 text-center ${s.bg}`}>
             <div className={`text-xl font-black ${s.color}`}>{s.count}</div>
             <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">{s.label}</div>
           </div>

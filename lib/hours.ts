@@ -42,6 +42,31 @@ function londonMinutesAndDay(date: Date): { minutesOfDay: number; day: number } 
   return { minutesOfDay: hour * 60 + minute, day: LONDON_WEEKDAY_TO_GETDAY[weekday] ?? 0 };
 }
 
+// "What time is it right now, in London wall-clock terms" — a YYYY-MM-DD
+// date string plus minute-of-day, both resolved via Intl so this is correct
+// no matter what timezone the server process itself runs in (see the note
+// above). Used to compare against DATE/TIME columns like reservations'
+// reservation_date/reservation_time, which are entered in restaurant-local
+// time, not UTC.
+export function londonNowDateAndMinutes(date: Date = new Date()): { dateStr: string; minutesOfDay: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  const hourRaw = Number(get("hour"));
+  const hour = hourRaw === 24 ? 0 : hourRaw;
+  return {
+    dateStr: `${get("year")}-${get("month")}-${get("day")}`,
+    minutesOfDay: hour * 60 + Number(get("minute")),
+  };
+}
+
 export function getHoursForDate(date: Date): { open: number; close: number } {
   return HOURS[londonMinutesAndDay(date).day];
 }

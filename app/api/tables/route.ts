@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
+import { londonNowDateAndMinutes } from "@/lib/hours";
+
+// A reservation counts as "coming up soon" starting this many minutes ahead
+// of the booked time — mirrors the kitchen board's KITCHEN_LEAD_MINUTES
+// pattern for scheduled orders. No lower bound: an overdue reservation staff
+// hasn't seated or marked no-show yet keeps counting rather than quietly
+// dropping off, since that's exactly the case that needs resolving.
+//
+// This is a plain count, not a per-table flag — a specific table is only
+// ever linked to a booking at the moment it's seated (see the reservations
+// page: "A table gets assigned later, when they're seated"), so there's no
+// single table to point at ahead of time.
+const RESERVATION_LEAD_MINUTES = 90;
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,12 +47,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const { dateStr: todayStr, minutesOfDay: nowMinutes } = londonNowDateAndMinutes();
+    const { data: todaysReservations } = await supabase
+      .from("reservations")
+      .select("reservation_time")
+      .eq("reservation_date", todayStr)
+      .in("status", ["pending", "confirmed"]);
+
+    const upcomingReservationCount = (todaysReservations || []).filter((r) => {
+      const [h, m] = r.reservation_time.split(":").map(Number);
+      return h * 60 + m - nowMinutes <= RESERVATION_LEAD_MINUTES;
+    }).length;
+
     const tablesWithTiming = (tables || []).map((t) => ({
       ...t,
       occupied_since: occupiedSinceByTable.get(t.id) ?? null,
     }));
 
-    return NextResponse.json({ tables: tablesWithTiming });
+    return NextResponse.json({ tables: tablesWithTiming, upcomingReservationCount });
   } catch (error) {
     console.error("Tables fetch error:", error);
     return NextResponse.json(

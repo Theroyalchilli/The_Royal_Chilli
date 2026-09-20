@@ -41,8 +41,8 @@ export default async function AccountHomePage() {
       <div className="rounded-3xl bg-gradient-to-br from-primary via-primary to-foreground p-5 text-primary-foreground shadow-sm">
         <div className="text-xs text-primary-foreground/70">Welcome back</div>
         <div className="mt-0.5 font-[family-name:var(--font-playfair)] text-2xl">{firstName}</div>
-        <div className="mt-3 flex items-end gap-2.5">
-          <div className="font-[family-name:var(--font-playfair)] text-4xl leading-none text-amber-200">{points}</div>
+        <div className="mt-3 flex flex-wrap items-end gap-x-2.5 gap-y-1">
+          <div className="break-all font-[family-name:var(--font-playfair)] text-4xl leading-none text-amber-200">{points}</div>
           <div className="pb-1 text-sm text-primary-foreground/70">points earned</div>
         </div>
         <div className="mt-2.5 text-xs text-primary-foreground/70">

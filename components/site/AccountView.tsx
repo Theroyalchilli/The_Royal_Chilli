@@ -121,9 +121,9 @@ export default function AccountView({
         <div className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-gradient-to-br from-primary to-foreground font-[family-name:var(--font-playfair)] text-xl text-primary-foreground">
           {initial}
         </div>
-        <div>
-          <div className="font-[family-name:var(--font-playfair)] text-lg">{`${firstName} ${lastName}`.trim() || "Your name"}</div>
-          <div className="text-sm text-muted-foreground">{email}</div>
+        <div className="min-w-0">
+          <div className="break-words font-[family-name:var(--font-playfair)] text-lg">{`${firstName} ${lastName}`.trim() || "Your name"}</div>
+          <div className="break-all text-sm text-muted-foreground">{email}</div>
         </div>
       </div>
 

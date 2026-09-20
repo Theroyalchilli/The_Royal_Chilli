@@ -50,18 +50,18 @@ function Donut({ points, nextReward }: { points: number; nextReward: Reward | nu
 function RewardRow({ reward, points, onRedeem, busy }: { reward: Reward; points: number; onRedeem: (id: number) => void; busy: boolean }) {
   const can = points >= reward.points_cost;
   return (
-    <div className="flex items-center justify-between border-b border-border px-4 py-3.5 last:border-b-0">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-lg">💷</div>
-        <div>
-          <div className="font-semibold">{reward.name}</div>
+    <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5 last:border-b-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-muted text-lg">💷</div>
+        <div className="min-w-0">
+          <div className="break-words font-semibold">{reward.name}</div>
           <div className="text-xs text-muted-foreground">{reward.points_cost} points</div>
         </div>
       </div>
       <button
         onClick={() => onRedeem(reward.id)}
         disabled={!can || busy}
-        className={`rounded-lg px-4 py-2 text-xs font-bold ${can ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+        className={`flex-shrink-0 rounded-lg px-4 py-2 text-xs font-bold ${can ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
       >
         {can ? "Redeem" : "Locked"}
       </button>
@@ -88,7 +88,7 @@ function VoucherPanel({ redemption, onCancel, busy }: { redemption: Redemption |
   return (
     <div className="px-4 py-5 text-center">
       <div className="text-xs text-muted-foreground">Give this voucher number at the till</div>
-      <div className="mx-auto my-3 rounded-2xl bg-primary py-4 font-[family-name:var(--font-playfair)] text-3xl tracking-[6px] text-primary-foreground">
+      <div className="mx-auto my-3 rounded-2xl bg-primary px-2 py-4 font-[family-name:var(--font-playfair)] text-2xl tracking-[3px] text-primary-foreground sm:text-3xl sm:tracking-[6px]">
         {disp}
       </div>
       <div className="text-sm text-muted-foreground">

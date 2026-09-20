@@ -94,9 +94,14 @@ export function CategoryNavBar({
   // split across two elements — a real WebKit quirk when combined on one.)
   return (
     <div className="sticky top-0 z-30 border-y border-border bg-background/95 backdrop-blur lg:hidden">
+      {/* Two rows that scroll together (grid-flow-col + fixed row count) —
+          halves how far a thumb has to swipe to reach a category near the
+          end, versus one long single-row scroll. Tablet/desktop widths have
+          room to just wrap everything instead, so they switch to flex-wrap
+          with no scroll at all. */}
       <nav
         ref={navScrollerRef}
-        className="flex w-full gap-2 overflow-x-auto whitespace-nowrap px-4 py-3 text-sm [scrollbar-width:none] md:flex-wrap md:justify-center md:overflow-visible md:whitespace-normal [&::-webkit-scrollbar]:hidden"
+        className="grid w-full auto-cols-max grid-flow-col grid-rows-2 gap-2 overflow-x-auto whitespace-nowrap px-4 py-3 text-sm [scrollbar-width:none] md:flex md:flex-wrap md:justify-center md:overflow-visible md:whitespace-normal [&::-webkit-scrollbar]:hidden"
       >
       {categories.map((category) => {
         const isActive = activeCategory === category.id;

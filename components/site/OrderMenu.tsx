@@ -18,7 +18,6 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   const [pickerFor, setPickerFor] = useState<MenuItem | null>(null);
   const [orderType, setOrderType] = useState<OrderType>("takeaway");
   const [openNow, setOpenNow] = useState(true);
-  const [narrowActiveCategory, setNarrowActiveCategory] = useState<number | null>(categories[0]?.id ?? null);
   const { activeCategory, sectionRefs, navRefs, navScrollerRef, jumpTo } = useCategoryNav(categories);
 
   useEffect(() => setCart(readCart()), []);
@@ -30,11 +29,6 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   function selectOrderType(type: OrderType) {
     setOrderType(type);
     writeOrderType(type);
-  }
-
-  function selectNarrowCategory(id: number) {
-    setNarrowActiveCategory(id);
-    navScrollerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function addLine(item: MenuItem, selectedOptionIds: number[], unitPrice: number, quantity: number, notes: string) {
@@ -84,7 +78,6 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   const linesForItem = (id: number) => cart.filter((l) => l.menu_item_id === id);
   const total = cart.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
   const itemCount = cart.reduce((sum, l) => sum + l.quantity, 0);
-  const activeNarrowCategory = categories.find((c) => c.id === narrowActiveCategory) ?? categories[0];
 
   function renderWideItemRow(item: MenuItem) {
     const lines = linesForItem(item.id);
@@ -210,10 +203,10 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
 
       <CategoryNavBar
         categories={categories}
-        activeCategory={isNarrow ? narrowActiveCategory : activeCategory}
+        activeCategory={activeCategory}
         navRefs={navRefs}
         navScrollerRef={navScrollerRef}
-        jumpTo={selectNarrowCategory}
+        jumpTo={jumpTo}
       />
 
       <div className="mx-auto max-w-7xl px-4 lg:grid lg:grid-cols-[220px_1fr_320px] lg:items-start lg:gap-10">
@@ -222,33 +215,25 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
         </div>
 
         <div className="mt-6 lg:mt-0">
-          {isNarrow ? (
-            activeNarrowCategory && (
-              <section>
-                <CategoryHeading name={activeNarrowCategory.name} count={activeNarrowCategory.items.length} />
+          {/* Always the full menu, on every viewport — a tapped category
+              jump-scrolls to its section instead of hiding the rest, so
+              browsing stays continuous either way. */}
+          <div className="space-y-14">
+            {categories.map((category) => (
+              <section
+                key={category.id}
+                id={slugify(category.name)}
+                data-category-id={category.id}
+                ref={(el) => { sectionRefs.current[category.id] = el; }}
+                className="scroll-mt-[80px] md:scroll-mt-[120px]"
+              >
+                <CategoryHeading name={category.name} count={category.items.length} />
                 <div className="mt-4 divide-y divide-border">
-                  {activeNarrowCategory.items.map(renderNarrowItemRow)}
+                  {category.items.map((item) => (isNarrow ? renderNarrowItemRow(item) : renderWideItemRow(item)))}
                 </div>
               </section>
-            )
-          ) : (
-            <div className="space-y-14">
-              {categories.map((category) => (
-                <section
-                  key={category.id}
-                  id={slugify(category.name)}
-                  data-category-id={category.id}
-                  ref={(el) => { sectionRefs.current[category.id] = el; }}
-                  className="scroll-mt-[80px] md:scroll-mt-[120px]"
-                >
-                  <CategoryHeading name={category.name} count={category.items.length} />
-                  <div className="mt-4 divide-y divide-border">
-                    {category.items.map(renderWideItemRow)}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
         <div className="hidden lg:sticky lg:top-6 lg:block">

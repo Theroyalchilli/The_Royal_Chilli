@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/utils";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { makeLineId, type SelectedOption } from "@/lib/cart";
 import ModifierPickerModal from "./ModifierPickerModal";
+import { CategoryHeading, CategoryNavBar, slugify, useCategoryNav } from "./CategoryNav";
 
 type OrderItemModifier = { option_name: string; price_delta: number };
 type OrderItem = { id: number; item_name: string; item_price: number; quantity: number; status: string; modifiers?: OrderItemModifier[] };
@@ -35,6 +36,7 @@ export default function DineInOrder({
   const [sending, setSending] = useState(false);
   const [requestMsg, setRequestMsg] = useState("");
   const [error, setError] = useState("");
+  const { activeCategory, sectionRefs, navRefs, navScrollerRef, jumpTo } = useCategoryNav(categories);
   // Reflects the staff-controlled toggle (app/api/tables PUT self_order_enabled)
   // — polled alongside the order so ordering opens up live once staff flips
   // it, with no page reload needed.
@@ -256,7 +258,17 @@ export default function DineInOrder({
             </div>
           )}
         </div>
+      </div>
 
+      <CategoryNavBar
+        categories={categories}
+        activeCategory={activeCategory}
+        navRefs={navRefs}
+        navScrollerRef={navScrollerRef}
+        jumpTo={jumpTo}
+      />
+
+      <div className="mx-auto max-w-4xl px-4 pt-8 pb-10">
         {items.length > 0 && (
           <div className="mt-8 border border-border p-4">
             <div className="flex items-center justify-between">
@@ -291,8 +303,14 @@ export default function DineInOrder({
 
         <div className={`mt-10 space-y-14 ${!selfOrderEnabled ? "pointer-events-none opacity-40" : ""}`}>
           {categories.map((category) => (
-            <section key={category.id}>
-              <h2 className="font-[family-name:var(--font-playfair)] text-2xl text-primary">{category.name}</h2>
+            <section
+              key={category.id}
+              id={slugify(category.name)}
+              data-category-id={category.id}
+              ref={(el) => { sectionRefs.current[category.id] = el; }}
+              className="scroll-mt-[80px] md:scroll-mt-[120px]"
+            >
+              <CategoryHeading name={category.name} count={category.items.length} />
               <div className="mt-4 divide-y divide-border">
                 {category.items.map((item) => {
                   const lines = linesForItem(item.id);

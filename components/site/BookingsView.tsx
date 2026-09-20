@@ -91,14 +91,12 @@ export default function BookingsView() {
 
       <div className="mb-2 mt-5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Book a table</div>
       <div className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        {/* grid-cols-2, not flex — Tailwind's grid-cols-2 sets each track to
-            minmax(0, 1fr), so the two columns are always exactly equal width
-            and can shrink to 0 without ever overflowing into each other.
-            min-w-0 on the cells and inputs reinforces that: it's what stops
-            the native date input's own rendering-width preference from
-            forcing the row wider than its container (the old overlap bug). */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="min-w-0">
+        {/* Each box is fixed at 45% width (not a stretchy 1fr/flex-1), so
+            there's real unused space left over in the row — justify-between
+            pushes that slack entirely into the middle, giving a visibly
+            bigger, more obvious separation than relying on gap alone. */}
+        <div className="flex justify-between gap-4">
+          <div className="w-[45%] min-w-0">
             <label className="mb-1 block text-xs text-muted-foreground">Date</label>
             <input
               type="date"
@@ -108,7 +106,7 @@ export default function BookingsView() {
               className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary"
             />
           </div>
-          <div className="min-w-0">
+          <div className="w-[45%] min-w-0">
             <label className="mb-1 block text-xs text-muted-foreground">Time</label>
             <select value={time} onChange={(e) => setTime(e.target.value)} className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-primary">
               {timeOptions.length === 0 && <option value="">No slots today</option>}

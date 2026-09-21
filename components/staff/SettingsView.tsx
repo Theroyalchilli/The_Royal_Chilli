@@ -106,6 +106,100 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   );
 }
 
+function PromotionPanel() {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [active, setActive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/promotions/current").then((r) => r.json()).then((d) => {
+      const p = d.promotion;
+      if (p) {
+        setTitle(p.title ?? "");
+        setDescription(p.description ?? "");
+        setLinkUrl(p.link_url ?? "");
+        setActive(!!p.active);
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    setError("");
+    const res = await fetch("/api/promotions/current", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, description, link_url: linkUrl, active }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { setError(data.error || "Failed to save"); return; }
+    setSaved(true);
+  }
+
+  if (loading) return <div className="text-muted-foreground text-sm py-6">Loading promotion…</div>;
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
+      <h2 className="text-foreground font-bold text-lg">Promotion Banner</h2>
+      <p className="mt-1 text-muted-foreground text-xs">
+        A thin announcement strip shown above the header on every public page (hidden on /account). Only shows when
+        turned on below.
+      </p>
+
+      <div className="mt-4 space-y-3">
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Title</label>
+          <input
+            placeholder="e.g. 20% Off Weekday Lunches" value={title} onChange={(e) => setTitle(e.target.value)}
+            className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Description (optional)</label>
+          <input
+            placeholder="Short supporting text" value={description} onChange={(e) => setDescription(e.target.value)}
+            className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Link (optional)</label>
+          <input
+            placeholder="/order or https://…" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
+            className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+          />
+        </div>
+        <div className="flex items-center justify-between pt-1">
+          <div>
+            <p className="text-foreground text-sm font-medium">Show on site</p>
+            <p className="text-muted-foreground text-xs">Off means the banner is hidden, even if filled in.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActive((v) => !v)}
+            className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${active ? "bg-red-600" : "bg-elevated"}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${active ? "translate-x-6" : ""}`} />
+          </button>
+        </div>
+        {error && <p className="text-red-600 text-xs">{error}</p>}
+        <button
+          onClick={save} disabled={saving || !title.trim()}
+          className="w-full py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-lg"
+        >
+          {saving ? "Saving…" : saved ? "✓ Saved" : "Save Promotion"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type MenuItemOption = { id: number; name: string; price: number; category_name: string | null };
 type FeaturedDish = {
   id: number; image_url: string; blurb: string | null; position: number; menu_item_id: number;
@@ -702,6 +796,9 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
           </div>
           <div className="mt-6 max-w-md">
             <FeaturedDishesPanel />
+          </div>
+          <div className="mt-6 max-w-md">
+            <PromotionPanel />
           </div>
           </>
         ) : (

@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: ["/", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews"],
+      allow: ["/", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews", "/about", "/catering", "/faq"],
       // Internal/private areas and transactional flows should never be crawled
       // or show up in search results.
       disallow: ["/pos", "/staff", "/login", "/order/checkout", "/table", "/api"],

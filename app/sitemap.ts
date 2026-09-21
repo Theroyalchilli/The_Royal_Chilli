@@ -8,7 +8,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.v
 // and everything under /pos, /staff, /login are transactional or private —
 // deliberately excluded (and already noindexed where relevant).
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ["", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews"];
+  const staticRoutes = ["", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews", "/about", "/catering", "/faq"];
 
   return staticRoutes.map((route) => ({
     url: `${BASE_URL}${route}`,

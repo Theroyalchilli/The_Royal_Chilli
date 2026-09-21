@@ -8,6 +8,13 @@ import { buildRestaurantSchema } from "@/lib/schema";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 import supabase from "@/lib/supabase";
 
+// Every page under this layout reads staff-editable content (opening hours,
+// hero text, promotions, etc.) straight from Supabase with no revalidate
+// hint, so Next.js would otherwise statically cache it at build/deploy time —
+// a manager's edit in Staff Hub wouldn't appear live until the next deploy.
+// Forcing the whole route dynamic makes every save take effect immediately.
+export const dynamic = "force-dynamic";
+
 // Public-site-only body/nav font, styled after tamarindrestaurant.com's light,
 // wide-tracked look. Their actual typeface (Domaine Sans) is a paid font
 // licensed to them and hosted on their own domain, so this is the closest

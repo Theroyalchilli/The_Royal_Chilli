@@ -118,6 +118,10 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [openingHours, setOpeningHours] = useState<{ day: string; open: string; close: string }[]>([]);
   const [aboutExcerpt, setAboutExcerpt] = useState({ title: "", titleGold: "", text1: "", text2: "" });
   const [storyParagraphs, setStoryParagraphs] = useState<string[]>([]);
+  const [heroContent, setHeroContent] = useState({ tag: "", headline: "", headlineGold: "", description: "" });
+  const [heroImages, setHeroImages] = useState<string[]>([]);
+  const [uploadingHero, setUploadingHero] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [readerId, setReaderId] = useState("");
   const [regCode, setRegCode] = useState("");
   const [readerName, setReaderName] = useState("Reception");
@@ -148,6 +152,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (Array.isArray(s.opening_hours)) setOpeningHours(s.opening_hours);
         if (s.about_excerpt) setAboutExcerpt(s.about_excerpt);
         if (Array.isArray(s.our_story_paragraphs)) setStoryParagraphs(s.our_story_paragraphs);
+        if (s.hero_content) setHeroContent(s.hero_content);
+        if (Array.isArray(s.hero_images)) setHeroImages(s.hero_images);
         if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
         setGeofenceEnabled(!!s.geofence_enabled);
         if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
@@ -169,6 +175,21 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
       () => setLocating(false),
       { enableHighAccuracy: true, timeout: 8000 }
     );
+  }
+
+  async function uploadHeroImage(file: File) {
+    setUploadingHero(true);
+    setUploadError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/site-content/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) { setUploadError(data.error || "Upload failed"); return; }
+      setHeroImages((prev) => [...prev, data.url]);
+    } finally {
+      setUploadingHero(false);
+    }
   }
 
   async function pairReader() {
@@ -202,6 +223,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         opening_hours: openingHours,
         about_excerpt: aboutExcerpt,
         our_story_paragraphs: storyParagraphs,
+        hero_content: heroContent,
+        hero_images: heroImages,
         stripe_terminal_reader_id: readerId.trim(),
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
@@ -374,6 +397,63 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               >
                 + Add paragraph
               </button>
+            </div>
+
+            <div className="pt-2 border-t border-border">
+              <label className="block text-xs text-muted-foreground mb-1">Hero Banner (homepage)</label>
+              <p className="mb-2 text-muted-foreground text-xs">
+                The full-screen photo + headline at the top of the homepage. One shared image set rotates on
+                both desktop and mobile.
+              </p>
+              <input
+                placeholder="Small tag line above the headline" value={heroContent.tag}
+                onChange={(e) => setHeroContent((h) => ({ ...h, tag: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <input
+                placeholder="Headline (white part)" value={heroContent.headline}
+                onChange={(e) => setHeroContent((h) => ({ ...h, headline: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <input
+                placeholder="Headline (gold/italic part)" value={heroContent.headlineGold}
+                onChange={(e) => setHeroContent((h) => ({ ...h, headlineGold: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <textarea
+                placeholder="Description" value={heroContent.description} rows={2}
+                onChange={(e) => setHeroContent((h) => ({ ...h, description: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+
+              <p className="mt-4 text-xs font-semibold text-foreground">Rotating photos ({heroImages.length})</p>
+              <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {heroImages.map((url, i) => (
+                  <div key={url} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary uploaded URLs, not a next/image-optimizable static path */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 opacity-0 group-hover:opacity-100">
+                      {i > 0 && (
+                        <button type="button" onClick={() => setHeroImages((prev) => { const next = [...prev]; [next[i - 1], next[i]] = [next[i], next[i - 1]]; return next; })} className="text-white text-xs">
+                          ← Move earlier
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setHeroImages((prev) => prev.filter((_, j) => j !== i))} className="text-red-300 text-xs font-semibold">
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-muted-foreground hover:border-red-400 hover:text-red-600">
+                  <span className="text-xs font-semibold">{uploadingHero ? "Uploading…" : "+ Add photo"}</span>
+                  <input
+                    type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingHero}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadHeroImage(f); e.target.value = ""; }}
+                  />
+                </label>
+              </div>
+              {uploadError && <p className="mt-1 text-red-600 text-xs">{uploadError}</p>}
+              <p className="mt-1 text-muted-foreground text-xs">JPEG, PNG or WEBP, up to 10MB. New photos are added to the end of the rotation.</p>
             </div>
 
             <div>

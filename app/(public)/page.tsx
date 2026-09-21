@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ArrowRight, Bike, BookOpen, ChevronDown, Clock, MapPin } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import { getAboutExcerpt } from "@/lib/our-story";
+import { getHeroContent, getHeroImages } from "@/lib/hero-content";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
 import ShimmerHeadline from "@/components/site/ShimmerHeadline";
@@ -20,8 +21,10 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const { hero, differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
+  const { differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
   const about = await getAboutExcerpt();
+  const hero = await getHeroContent();
+  const heroImages = await getHeroImages();
 
   return (
     <div>
@@ -32,11 +35,8 @@ export default async function HomePage() {
           since it's positioned within this section, not fixed to the
           viewport, and isn't a separate bar pushing content down. */}
       <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950">
-        <div className="absolute inset-0 md:hidden">
-          <HeroBackground images={hero.mobileBgImages} />
-        </div>
-        <div className="absolute inset-0 hidden md:block">
-          <HeroBackground images={hero.bgImages} />
+        <div className="absolute inset-0">
+          <HeroBackground images={heroImages} />
         </div>
         <div className="pointer-events-none absolute inset-0 bg-black/55" />
 

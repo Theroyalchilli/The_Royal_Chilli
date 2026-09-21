@@ -929,6 +929,18 @@ INSERT INTO app_settings (key, value) VALUES
   ('restaurant_latitude', 'null'),
   ('restaurant_longitude', 'null'),
   ('geofence_radius_meters', '150'),
+  ('hero_content', '{
+    "tag": "Authentic Flavours. Memorable Experiences.",
+    "headline": "Authentic Indian Flavours.",
+    "headlineGold": "Made to Be Remembered.",
+    "description": "Discover authentic Hyderabadi, South Indian and North Indian cuisine, from signature dum biryanis and regional curries to dosas, grills and house specialities."
+  }'),
+  ('hero_images', '[
+    "/hero/desktop-food-spread.jpg",
+    "/hero/desktop-interior.jpg",
+    "/hero/desktop-bar.jpg",
+    "/hero/desktop-table.jpg"
+  ]'),
   ('about_excerpt', '{
     "title": "Where Every Dish Tells a Story of",
     "titleGold": "Passion & Heritage",

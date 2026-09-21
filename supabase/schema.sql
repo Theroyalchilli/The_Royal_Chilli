@@ -127,6 +127,18 @@ CREATE TABLE menu_items (
   fat_g         NUMERIC(6,1)
 );
 
+-- Staff-curated "Most Popular Dishes" for the homepage — ties to real
+-- menu_items so dish name/price can't drift from what's actually on the menu.
+CREATE TABLE featured_dishes (
+  id           SERIAL PRIMARY KEY,
+  menu_item_id INT NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+  image_url    TEXT NOT NULL,
+  blurb        TEXT,
+  position     INT NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_featured_dishes_position ON featured_dishes(position);
+
 CREATE TABLE restaurant_tables (
   id                  SERIAL PRIMARY KEY,
   table_number        TEXT NOT NULL,

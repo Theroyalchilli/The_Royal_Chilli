@@ -106,6 +106,155 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   );
 }
 
+type MenuItemOption = { id: number; name: string; price: number; category_name: string | null };
+type FeaturedDish = {
+  id: number; image_url: string; blurb: string | null; position: number; menu_item_id: number;
+  menu_items: { name: string; price: number } | null;
+};
+
+function FeaturedDishesPanel() {
+  const [dishes, setDishes] = useState<FeaturedDish[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItemOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  function load() {
+    Promise.all([
+      fetch("/api/featured-dishes").then((r) => r.json()),
+      fetch("/api/menu-items").then((r) => r.json()),
+    ]).then(([d, m]) => {
+      setDishes(d.dishes || []);
+      setMenuItems((m.items || []).map((i: { id: number; name: string; price: number; category_name: string | null }) => ({ id: i.id, name: i.name, price: i.price, category_name: i.category_name })));
+      setLoading(false);
+    });
+  }
+  useEffect(() => { load(); }, []);
+
+  async function addDish(file: File) {
+    if (!selectedItemId) return;
+    setUploading(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("folder", "dishes");
+      const uploadRes = await fetch("/api/site-content/upload", { method: "POST", body: form });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) { setError(uploadData.error || "Upload failed"); return; }
+
+      const addRes = await fetch("/api/featured-dishes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ menu_item_id: selectedItemId, image_url: uploadData.url }),
+      });
+      if (!addRes.ok) { setError("Failed to add dish"); return; }
+      setSelectedItemId(null);
+      setSearch("");
+      load();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function updateBlurb(id: number, blurb: string) {
+    setDishes((prev) => prev.map((d) => d.id === id ? { ...d, blurb } : d));
+    await fetch(`/api/featured-dishes/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ blurb }),
+    });
+  }
+
+  async function removeDish(id: number) {
+    setDishes((prev) => prev.filter((d) => d.id !== id));
+    await fetch(`/api/featured-dishes/${id}`, { method: "DELETE" });
+  }
+
+  async function moveDish(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= dishes.length) return;
+    const reordered = [...dishes];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setDishes(reordered);
+    await Promise.all(reordered.map((d, i) => fetch(`/api/featured-dishes/${d.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ position: i }),
+    })));
+  }
+
+  const filteredItems = search.trim()
+    ? menuItems.filter((i) => i.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  if (loading) return <div className="text-muted-foreground text-sm py-6">Loading featured dishes…</div>;
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
+      <h2 className="text-foreground font-bold text-lg">Most Popular Dishes (homepage)</h2>
+      <p className="mt-1 text-muted-foreground text-xs">
+        Real dishes from your menu, with name and price pulled automatically. While this list is empty, the homepage
+        shows the original poster-style images instead.
+      </p>
+
+      <div className="mt-4 space-y-2">
+        {dishes.map((d, i) => (
+          <div key={d.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-hover p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary uploaded URL */}
+            <img src={d.image_url} alt="" className="h-14 w-14 flex-shrink-0 rounded-md object-cover" />
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground text-sm font-semibold truncate">{d.menu_items?.name}</p>
+              <p className="text-muted-foreground text-xs">£{Number(d.menu_items?.price ?? 0).toFixed(2)}</p>
+              <input
+                placeholder="Optional short blurb" defaultValue={d.blurb ?? ""}
+                onBlur={(e) => updateBlurb(d.id, e.target.value)}
+                className="mt-1 w-full bg-background border border-border rounded px-2 py-1 text-foreground text-xs"
+              />
+            </div>
+            <div className="flex flex-shrink-0 flex-col gap-1">
+              <button type="button" disabled={i === 0} onClick={() => moveDish(i, -1)} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs">▲</button>
+              <button type="button" disabled={i === dishes.length - 1} onClick={() => moveDish(i, 1)} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs">▼</button>
+            </div>
+            <button type="button" onClick={() => removeDish(d.id)} className="flex-shrink-0 text-muted-foreground hover:text-red-600 text-xs">Remove</button>
+          </div>
+        ))}
+        {dishes.length === 0 && <p className="text-muted-foreground text-xs">No featured dishes yet.</p>}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-border">
+        <p className="text-xs font-semibold text-foreground">Add a dish</p>
+        <div className="relative mt-1.5">
+          <input
+            placeholder="Search menu items…" value={selectedItemId ? menuItems.find((i) => i.id === selectedItemId)?.name ?? "" : search}
+            onChange={(e) => { setSearch(e.target.value); setSelectedItemId(null); }}
+            className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+          />
+          {filteredItems.length > 0 && !selectedItemId && (
+            <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
+              {filteredItems.map((i) => (
+                <button
+                  key={i.id} type="button"
+                  onClick={() => { setSelectedItemId(i.id); setSearch(i.name); }}
+                  className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-surface-hover"
+                >
+                  {i.name} <span className="text-muted-foreground text-xs">· £{Number(i.price).toFixed(2)}{i.category_name ? ` · ${i.category_name}` : ""}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <label className={`mt-2 flex w-fit items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs ${selectedItemId ? "cursor-pointer text-muted-foreground hover:border-red-400 hover:text-red-600" : "cursor-not-allowed text-muted-foreground/50"}`}>
+          {uploading ? "Uploading…" : "+ Upload photo & add"}
+          <input
+            type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!selectedItemId || uploading}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) addDish(f); e.target.value = ""; }}
+          />
+        </label>
+        {error && <p className="mt-1 text-red-600 text-xs">{error}</p>}
+        <p className="mt-1 text-muted-foreground text-xs">Pick a menu item above, then upload its photo to add it to the homepage.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsView({ canEditPermissions }: { canEditPermissions: boolean }) {
   const [tab, setTab] = useState<"general" | "permissions">("general");
   const [companyName, setCompanyName] = useState("");
@@ -269,6 +418,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
       <div className="px-4 py-6">
       <div className="mx-auto max-w-3xl">
         {tab === "general" ? (
+          <>
           <div className="mt-6 max-w-md rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5 space-y-4">
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Company Name</label>
@@ -550,6 +700,10 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               {saving ? "Saving…" : saved ? "✓ Saved" : "Save Settings"}
             </button>
           </div>
+          <div className="mt-6 max-w-md">
+            <FeaturedDishesPanel />
+          </div>
+          </>
         ) : (
           <div className="mt-6">
             <PermissionsPanel canEdit={canEditPermissions} />

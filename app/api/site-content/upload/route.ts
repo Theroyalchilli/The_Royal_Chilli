@@ -5,6 +5,7 @@ import { canManageStaff } from "@/lib/permissions";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FOLDERS = new Set(["hero", "dishes"]);
 
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -24,8 +25,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Image must be 10MB or smaller" }, { status: 400 });
   }
 
+  const folderInput = form.get("folder");
+  const folder = typeof folderInput === "string" && ALLOWED_FOLDERS.has(folderInput) ? folderInput : "hero";
   const ext = file.name.split(".").pop() || "jpg";
-  const path = `hero/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
   const { error } = await supabase.storage
     .from("site-content")

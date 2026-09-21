@@ -5,6 +5,8 @@ import { ArrowRight, Bike, BookOpen, ChevronDown, Clock, MapPin } from "lucide-r
 import { siteContent } from "@/lib/site-content";
 import { getAboutExcerpt } from "@/lib/our-story";
 import { getHeroContent, getHeroImages } from "@/lib/hero-content";
+import { getFeaturedDishes } from "@/lib/featured-dishes";
+import { formatCurrency } from "@/lib/utils";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
 import ShimmerHeadline from "@/components/site/ShimmerHeadline";
@@ -25,6 +27,7 @@ export default async function HomePage() {
   const about = await getAboutExcerpt();
   const hero = await getHeroContent();
   const heroImages = await getHeroImages();
+  const featuredDishes = await getFeaturedDishes();
 
   return (
     <div>
@@ -113,13 +116,30 @@ export default async function HomePage() {
           </h2>
           <p className="mx-auto mt-6 max-w-2xl text-muted-foreground">{popularDishes.story}</p>
         </Reveal>
-        <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {popularDishes.images.map((src) => (
-            <div key={src} className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950">
-              <Image src={src} alt="" fill sizes="(min-width: 640px) 33vw, 50vw" className="object-contain transition hover:scale-105" />
-            </div>
-          ))}
-        </Reveal>
+        {featuredDishes.length > 0 ? (
+          <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-6 sm:grid-cols-3">
+            {featuredDishes.map((d) => (
+              <div key={d.id}>
+                <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950">
+                  <Image src={d.image_url} alt={d.name} fill sizes="(min-width: 640px) 33vw, 50vw" className="object-cover transition hover:scale-105" />
+                </div>
+                <h3 className="mt-3 font-[family-name:var(--font-playfair)] text-lg">{d.name}</h3>
+                {d.blurb && <p className="mt-1 text-sm text-muted-foreground">{d.blurb}</p>}
+                <p className="mt-1 text-sm font-semibold text-primary">from {formatCurrency(d.price)}</p>
+              </div>
+            ))}
+          </Reveal>
+        ) : (
+          // Fallback to the original poster-style grid until staff add at
+          // least one real featured dish via Staff Hub.
+          <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {popularDishes.images.map((src) => (
+              <div key={src} className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950">
+                <Image src={src} alt="" fill sizes="(min-width: 640px) 33vw, 50vw" className="object-contain transition hover:scale-105" />
+              </div>
+            ))}
+          </Reveal>
+        )}
       </section>
 
       {/* About */}

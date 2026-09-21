@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
+import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 
 export const metadata: Metadata = {
   title: "FAQ — The Royal Chilli",
@@ -12,25 +13,30 @@ export const metadata: Metadata = {
 // Only questions with a confirmed, real answer are included here; group
 // bookings, corkage and dietary/vegan claims are left out until there's an
 // actual policy to state rather than a guessed one.
-const faqs = [
-  { q: "Is The Royal Chilli Halal?", a: "Yes — The Royal Chilli is fully Halal." },
-  { q: "Is there parking available?", a: "Yes, we have our own free car park on-site for customers." },
-  {
-    q: "What are your opening hours?",
-    a: `We're open ${siteContent.contact.hours[0].day.toLowerCase()}, ${siteContent.contact.hours[0].time}.`,
-  },
-  {
-    q: "Do you offer delivery and takeaway?",
-    a: "Yes — dine-in, takeaway and delivery are all available. You can order online for collection or delivery, or dine in with us.",
-  },
-  {
-    q: "Do you cater for private events or functions?",
-    a: "Yes, from family celebrations to corporate catering and private functions — get in touch and our team can put together a menu to suit the occasion.",
-  },
-  { q: "Can I book a table in advance?", a: "Yes — you can book online any time, or call us directly." },
-];
+function buildFaqs(hoursText: string) {
+  return [
+    { q: "Is The Royal Chilli Halal?", a: "Yes — The Royal Chilli is fully Halal." },
+    { q: "Is there parking available?", a: "Yes, we have our own free car park on-site for customers." },
+    { q: "What are your opening hours?", a: `We're open ${hoursText}.` },
+    {
+      q: "Do you offer delivery and takeaway?",
+      a: "Yes — dine-in, takeaway and delivery are all available. You can order online for collection or delivery, or dine in with us.",
+    },
+    {
+      q: "Do you cater for private events or functions?",
+      a: "Yes, from family celebrations to corporate catering and private functions — get in touch and our team can put together a menu to suit the occasion.",
+    },
+    { q: "Can I book a table in advance?", a: "Yes — you can book online any time, or call us directly." },
+  ];
+}
 
-export default function FaqPage() {
+export default async function FaqPage() {
+  const summary = summarizeOpeningHours(await getOpeningHours());
+  const hoursText = summary.length === 1
+    ? `${summary[0].day.toLowerCase()}, ${summary[0].time}`
+    : summary.map((h) => `${h.day} ${h.time}`).join(", ");
+  const faqs = buildFaqs(hoursText);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">
       <Reveal className="text-center">

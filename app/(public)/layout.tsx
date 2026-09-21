@@ -4,6 +4,7 @@ import SiteFooter from "@/components/site/SiteFooter";
 import SplashScreen from "@/components/site/SplashScreen";
 import CookieConsent from "@/components/site/CookieConsent";
 import { buildRestaurantSchema } from "@/lib/schema";
+import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 
 // Public-site-only body/nav font, styled after tamarindrestaurant.com's light,
 // wide-tracked look. Their actual typeface (Domaine Sans) is a paid font
@@ -13,9 +14,11 @@ import { buildRestaurantSchema } from "@/lib/schema";
 // font (Poppins, set in the root layout) for operational-screen legibility.
 const jost = Jost({ subsets: ["latin"], weight: ["300", "400", "500", "600"], variable: "--font-jost" });
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
-  const schema = buildRestaurantSchema(siteUrl);
+  const openingHours = await getOpeningHours();
+  const schema = buildRestaurantSchema(siteUrl, openingHours);
+  const hoursSummary = summarizeOpeningHours(openingHours);
 
   return (
     <div className={`${jost.variable} flex min-h-screen flex-col font-[family-name:var(--font-jost)]`}>
@@ -27,7 +30,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           button and its full-screen overlay — so there's no header height
           left to clear here. */}
       <main className="flex-1">{children}</main>
-      <SiteFooter />
+      <SiteFooter hours={hoursSummary} />
       <CookieConsent />
     </div>
   );

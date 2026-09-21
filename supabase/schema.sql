@@ -763,6 +763,16 @@ CREATE TABLE newsletter_subscribers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Single-active-promotion model for the site's promo strip banner.
+CREATE TABLE promotions (
+  id          SERIAL PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT,
+  link_url    TEXT,
+  active      BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- =====================
 -- FINANCE
 -- =====================
@@ -918,7 +928,16 @@ INSERT INTO app_settings (key, value) VALUES
   ('geofence_enabled', 'false'),
   ('restaurant_latitude', 'null'),
   ('restaurant_longitude', 'null'),
-  ('geofence_radius_meters', '150');
+  ('geofence_radius_meters', '150'),
+  ('opening_hours', '[
+    {"day": "Monday", "open": "09:00", "close": "01:00"},
+    {"day": "Tuesday", "open": "09:00", "close": "01:00"},
+    {"day": "Wednesday", "open": "09:00", "close": "01:00"},
+    {"day": "Thursday", "open": "09:00", "close": "01:00"},
+    {"day": "Friday", "open": "09:00", "close": "01:00"},
+    {"day": "Saturday", "open": "09:00", "close": "01:00"},
+    {"day": "Sunday", "open": "09:00", "close": "01:00"}
+  ]');
 
 -- =====================
 -- SEED: Role Permissions (matches the defaults previously hardcoded in lib/permissions.ts)

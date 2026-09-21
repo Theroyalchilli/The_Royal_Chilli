@@ -1,16 +1,5 @@
 import { siteContent } from "@/lib/site-content";
-
-const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
-function to24Hour(time12: string): string {
-  const match = time12.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return time12;
-  const [, h, m, meridiem] = match;
-  let hour = parseInt(h, 10);
-  if (meridiem.toUpperCase() === "PM" && hour !== 12) hour += 12;
-  if (meridiem.toUpperCase() === "AM" && hour === 12) hour = 0;
-  return `${String(hour).padStart(2, "0")}:${m}`;
-}
+import type { DayHours } from "@/lib/opening-hours";
 
 function toIntlPhone(localNumber: string): string {
   // UK-only formatter matching this one hardcoded landline — good enough
@@ -23,10 +12,20 @@ function toIntlPhone(localNumber: string): string {
 // No aggregateRating: that needs real numbers from a live Google Places
 // pull (see the reviews-are-hardcoded gap), and a fabricated rating is a
 // Google Search Console penalty risk, not a quick win.
-export function buildRestaurantSchema(siteUrl: string) {
+export function buildRestaurantSchema(siteUrl: string, hours: DayHours[]) {
   const { contact } = siteContent;
-  const [openTime, closeTime] = contact.hours[0].time.split(/[–-]/).map((s) => s.trim());
-  const days = contact.hours[0].day === "Every day" ? ALL_DAYS : [contact.hours[0].day];
+
+  // Group days that share identical open/close into one spec entry each,
+  // rather than assuming every day matches (the old hardcoded behaviour).
+  const groups = new Map<string, string[]>();
+  for (const h of hours) {
+    const key = `${h.open}|${h.close}`;
+    groups.set(key, [...(groups.get(key) ?? []), h.day]);
+  }
+  const openingHoursSpecification = Array.from(groups.entries()).map(([key, days]) => {
+    const [opens, closes] = key.split("|");
+    return { "@type": "OpeningHoursSpecification", dayOfWeek: days, opens, closes };
+  });
 
   return {
     "@context": "https://schema.org",
@@ -51,12 +50,7 @@ export function buildRestaurantSchema(siteUrl: string) {
     servesCuisine: ["Indian", "South Indian", "North Indian", "Hyderabadi"],
     acceptsReservations: true,
     menu: `${siteUrl}/menu`,
-    openingHoursSpecification: {
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: days,
-      opens: to24Hour(openTime),
-      closes: to24Hour(closeTime),
-    },
+    openingHoursSpecification,
     sameAs: [contact.social.instagram],
   };
 }

@@ -115,6 +115,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [vatRate, setVatRate] = useState("0.2");
   const [maxEmployees, setMaxEmployees] = useState("20");
   const [depositAmount, setDepositAmount] = useState("0");
+  const [openingHours, setOpeningHours] = useState<{ day: string; open: string; close: string }[]>([]);
   const [readerId, setReaderId] = useState("");
   const [regCode, setRegCode] = useState("");
   const [readerName, setReaderName] = useState("Reception");
@@ -142,6 +143,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.vat_rate !== undefined) setVatRate(String(s.vat_rate));
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
+        if (Array.isArray(s.opening_hours)) setOpeningHours(s.opening_hours);
         if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
         setGeofenceEnabled(!!s.geofence_enabled);
         if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
@@ -193,6 +195,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         company_name: companyName, currency, week_start_day: weekStartDay, overtime_enabled: overtimeEnabled,
         vat_rate: Number(vatRate), max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
+        opening_hours: openingHours,
         stripe_terminal_reader_id: readerId.trim(),
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
@@ -275,6 +278,42 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               <label className="block text-xs text-muted-foreground mb-1">Reservation Deposit (£)</label>
               <input type="number" step="0.01" min="0" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
               <p className="mt-1 text-muted-foreground text-xs">0 = no deposit required. When set, new website reservations (not waitlist entries) are redirected to pay this online before confirming.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Opening Hours (displayed on the website)</label>
+              <p className="mb-2 text-muted-foreground text-xs">
+                Shown in the footer, homepage, FAQ and Google listing data. Doesn&apos;t change what times customers can
+                actually place an order — that&apos;s controlled separately.
+              </p>
+              <div className="space-y-1.5">
+                {openingHours.map((h, i) => (
+                  <div key={h.day} className="flex items-center gap-2">
+                    <span className="w-24 flex-shrink-0 text-xs text-muted-foreground">{h.day}</span>
+                    <input
+                      type="time" value={h.open}
+                      onChange={(e) => setOpeningHours((prev) => prev.map((d, j) => j === i ? { ...d, open: e.target.value } : d))}
+                      className="flex-1 bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm"
+                    />
+                    <span className="text-muted-foreground text-xs">to</span>
+                    <input
+                      type="time" value={h.close}
+                      onChange={(e) => setOpeningHours((prev) => prev.map((d, j) => j === i ? { ...d, close: e.target.value } : d))}
+                      className="flex-1 bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm"
+                    />
+                    {i === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setOpeningHours((prev) => prev.map((d) => ({ ...d, open: prev[0].open, close: prev[0].close })))}
+                        title="Apply Monday's hours to every day"
+                        className="flex-shrink-0 text-muted-foreground hover:text-foreground text-xs underline"
+                      >
+                        Copy to all
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-muted-foreground text-xs">A close time earlier than open (e.g. 09:00 to 01:00) means past midnight.</p>
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (Stripe Terminal)</label>

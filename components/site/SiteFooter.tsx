@@ -58,7 +58,7 @@ function NewsletterForm() {
   );
 }
 
-export default function SiteFooter() {
+export default function SiteFooter({ hours }: { hours: { day: string; time: string }[] }) {
   const pathname = usePathname();
   const { contact, footer } = siteContent;
   // The account section is its own self-contained app shell (bottom tab
@@ -102,7 +102,7 @@ export default function SiteFooter() {
         <Divider />
 
         <ul className="space-y-1 text-sm text-[#3a0f0c]/80">
-          {contact.hours.map((h) => (
+          {hours.map((h) => (
             <li key={h.day}>
               {h.day} &nbsp;·&nbsp; {h.time}
             </li>

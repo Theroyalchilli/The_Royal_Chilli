@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, Bike, BookOpen, ChevronDown, Clock, MapPin } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
+import { getAboutExcerpt } from "@/lib/our-story";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
 import ShimmerHeadline from "@/components/site/ShimmerHeadline";
@@ -18,8 +19,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function HomePage() {
-  const { hero, about, differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
+export default async function HomePage() {
+  const { hero, differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
+  const about = await getAboutExcerpt();
 
   return (
     <div>

@@ -116,6 +116,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [maxEmployees, setMaxEmployees] = useState("20");
   const [depositAmount, setDepositAmount] = useState("0");
   const [openingHours, setOpeningHours] = useState<{ day: string; open: string; close: string }[]>([]);
+  const [aboutExcerpt, setAboutExcerpt] = useState({ title: "", titleGold: "", text1: "", text2: "" });
+  const [storyParagraphs, setStoryParagraphs] = useState<string[]>([]);
   const [readerId, setReaderId] = useState("");
   const [regCode, setRegCode] = useState("");
   const [readerName, setReaderName] = useState("Reception");
@@ -144,6 +146,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
         if (Array.isArray(s.opening_hours)) setOpeningHours(s.opening_hours);
+        if (s.about_excerpt) setAboutExcerpt(s.about_excerpt);
+        if (Array.isArray(s.our_story_paragraphs)) setStoryParagraphs(s.our_story_paragraphs);
         if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
         setGeofenceEnabled(!!s.geofence_enabled);
         if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
@@ -196,6 +200,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         vat_rate: Number(vatRate), max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
         opening_hours: openingHours,
+        about_excerpt: aboutExcerpt,
+        our_story_paragraphs: storyParagraphs,
         stripe_terminal_reader_id: readerId.trim(),
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
@@ -315,6 +321,61 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               </div>
               <p className="mt-1 text-muted-foreground text-xs">A close time earlier than open (e.g. 09:00 to 01:00) means past midnight.</p>
             </div>
+
+            <div className="pt-2 border-t border-border">
+              <label className="block text-xs text-muted-foreground mb-1">Our Story</label>
+              <p className="mb-2 text-muted-foreground text-xs">Homepage excerpt and the full story shown on the About page.</p>
+
+              <p className="mt-3 text-xs font-semibold text-foreground">Homepage excerpt</p>
+              <input
+                placeholder="Heading (black part)" value={aboutExcerpt.title}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, title: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <input
+                placeholder="Heading (gold/italic part)" value={aboutExcerpt.titleGold}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, titleGold: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <textarea
+                placeholder="First paragraph" value={aboutExcerpt.text1} rows={2}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, text1: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <textarea
+                placeholder="Second paragraph" value={aboutExcerpt.text2} rows={2}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, text2: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+
+              <p className="mt-4 text-xs font-semibold text-foreground">Full story (About page)</p>
+              <div className="mt-1.5 space-y-2">
+                {storyParagraphs.map((p, i) => (
+                  <div key={i} className="flex gap-2">
+                    <textarea
+                      value={p} rows={2}
+                      onChange={(e) => setStoryParagraphs((prev) => prev.map((x, j) => j === i ? e.target.value : x))}
+                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setStoryParagraphs((prev) => prev.filter((_, j) => j !== i))}
+                      className="flex-shrink-0 text-muted-foreground hover:text-red-600 text-xs"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setStoryParagraphs((prev) => [...prev, ""])}
+                className="mt-2 text-red-600 text-xs font-semibold"
+              >
+                + Add paragraph
+              </button>
+            </div>
+
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (Stripe Terminal)</label>
               <input type="text" placeholder="tmr_… (from pairing below)" value={readerId} onChange={(e) => setReaderId(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono" />

@@ -2,14 +2,16 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
+import { getOurStoryParagraphs } from "@/lib/our-story";
 
 export const metadata: Metadata = {
   title: "About Us — The Royal Chilli",
   description: "Our story, mission, vision, principles and values — the heritage and hospitality behind The Royal Chilli in Hounslow, London.",
 };
 
-export default function AboutPage() {
-  const { ourStory, mission, vision, principles, values, ourPromise } = siteContent;
+export default async function AboutPage() {
+  const { mission, vision, principles, values, ourPromise } = siteContent;
+  const storyParagraphs = await getOurStoryParagraphs();
 
   return (
     <div>
@@ -23,7 +25,7 @@ export default function AboutPage() {
       {/* Our Story */}
       <section className="mx-auto max-w-3xl px-4 pb-16">
         <Reveal className="space-y-4">
-          {ourStory.paragraphs.map((p, i) => (
+          {storyParagraphs.map((p, i) => (
             <p key={i} className="text-muted-foreground">{p}</p>
           ))}
         </Reveal>

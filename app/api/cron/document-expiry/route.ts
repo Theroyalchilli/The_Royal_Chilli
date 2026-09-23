@@ -11,6 +11,8 @@ import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
 // so this needs no new UI: the employee sees a generic heads-up next time
 // they open the attendance app, managers/HR see the specific one — both
 // already have a working notification bell there, Staff Hub doesn't.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
+
 const THRESHOLDS = [
   { days: 60, column: "reminder_60_sent" as const },
   { days: 30, column: "reminder_30_sent" as const },
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
   );
   const nameById = new Map((staffRows ?? []).map((s) => [s.id, s.name]));
 
-  const notifications: { staff_id: number; type: string; message: string }[] = [];
+  const notifications: { staff_id: number; type: string; message: string; link?: string }[] = [];
   const updates: { id: number; column: string }[] = [];
 
   for (const doc of docs) {
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest) {
           staff_id: m.id,
           type: "document_expiring",
           message: `${staffName}'s ${docLabel} ${when}. Check Staff Hub → HR → Documents.`,
+          link: `${SITE_URL}/staff/hr`,
         });
       }
       updates.push({ id: doc.id, column: t.column });

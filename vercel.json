@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/loyalty-birthdays", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/loyalty-expiry", "schedule": "15 6 * * *" }
+    { "path": "/api/cron/loyalty-expiry", "schedule": "15 6 * * *" },
+    { "path": "/api/cron/document-expiry", "schedule": "30 6 * * *" }
   ]
 }

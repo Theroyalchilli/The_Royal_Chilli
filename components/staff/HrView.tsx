@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
 import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
+import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
 import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
 
 type HrDetails = {
@@ -353,6 +354,110 @@ function ReferencesTab({ staffId }: { staffId: number }) {
           </div>
         ))}
         {refs.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No references recorded yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── Documents tab ────────────────────────────────────────────────────────────
+// Actual files (the checklist on the Onboarding tab only ever recorded that
+// a document was *shown*, never stored it). Bucket is private — every view
+// goes through a fresh short-lived signed URL, never a permanent link.
+type EmployeeDoc = { id: number; doc_type: string; file_name: string; expiry_date: string | null; created_at: string };
+
+function DocumentsTab({ staffId }: { staffId: number }) {
+  const [docs, setDocs] = useState<EmployeeDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [docType, setDocType] = useState("passport");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const { toast } = useToast();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/hr/${staffId}/documents`);
+    const data = await res.json();
+    setDocs(data.documents || []);
+    setLoading(false);
+  }, [staffId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function upload(file: File) {
+    setUploading(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("doc_type", docType);
+      if (expiryDate) form.append("expiry_date", expiryDate);
+      const res = await fetch(`/api/hr/${staffId}/documents`, { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Upload failed"); return; }
+      setExpiryDate("");
+      load();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function view(id: number) {
+    const res = await fetch(`/api/hr/${staffId}/documents/${id}/url`);
+    const data = await res.json();
+    if (!res.ok || !data.url) { toast({ variant: "destructive", title: "Couldn't open document" }); return; }
+    window.open(data.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function remove(id: number) {
+    await fetch(`/api/hr/${staffId}/documents/${id}`, { method: "DELETE" });
+    load();
+  }
+
+  function expiryTone(date: string | null) {
+    if (!date) return "";
+    const days = (new Date(date).getTime() - Date.now()) / 86_400_000;
+    if (days < 0) return "text-red-600 font-semibold";
+    if (days <= 30) return "text-amber-600 font-semibold";
+    return "text-muted-foreground";
+  }
+
+  if (loading) return <div className="text-muted-foreground text-sm py-6">Loading documents…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4 space-y-3">
+        <h3 className="text-foreground font-bold text-sm">Upload a document</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <select value={docType} onChange={(e) => setDocType(e.target.value)}
+            className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+            {Object.entries(DOC_TYPE_LABEL).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+          </select>
+          <DateField label="Expiry date (if applicable)" value={expiryDate || null} onChange={setExpiryDate} />
+        </div>
+        <label className={`flex w-fit items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs ${uploading ? "cursor-not-allowed text-muted-foreground/50" : "cursor-pointer text-muted-foreground hover:border-red-400 hover:text-red-600"}`}>
+          {uploading ? "Uploading…" : "+ Choose file & upload"}
+          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" disabled={uploading}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
+        </label>
+        {error && <p className="text-red-600 text-xs">{error}</p>}
+        <p className="text-muted-foreground text-xs">JPEG, PNG, WEBP or PDF, up to 10MB. Only staff who can manage HR records can view or download these.</p>
+      </div>
+
+      <div className="space-y-2">
+        {docs.map((d) => (
+          <div key={d.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="text-sm min-w-0">
+              <p className="text-foreground font-semibold">{DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type}</p>
+              <p className="text-muted-foreground truncate">{d.file_name}</p>
+              {d.expiry_date && <p className={expiryTone(d.expiry_date)}>Expires {new Date(d.expiry_date).toLocaleDateString("en-GB")}</p>}
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-3">
+              <button onClick={() => view(d.id)} className="text-muted-foreground hover:text-foreground text-xs font-semibold">View</button>
+              <button onClick={() => remove(d.id)} className="text-muted-foreground hover:text-red-600 text-xs font-semibold">Remove</button>
+            </div>
+          </div>
+        ))}
+        {docs.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No documents uploaded yet.</p>}
       </div>
     </div>
   );
@@ -792,6 +897,7 @@ const TABS = [
   { id: "rtw", label: "RTW Verification" },
   { id: "checklist", label: "New Starter Checklist" },
   { id: "references", label: "References" },
+  { id: "documents", label: "Documents" },
 ] as const;
 
 const SECTIONS = [
@@ -867,6 +973,7 @@ function EmployeeSection() {
               {tab === "rtw" && <RtwVerificationTab staffId={selected.id} />}
               {tab === "checklist" && <ChecklistTab staffId={selected.id} />}
               {tab === "references" && <ReferencesTab staffId={selected.id} />}
+              {tab === "documents" && <DocumentsTab staffId={selected.id} />}
             </>
           )}
         </div>

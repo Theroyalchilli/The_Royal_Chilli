@@ -25,6 +25,7 @@ DROP TABLE IF EXISTS ingredients CASCADE;
 DROP TABLE IF EXISTS suppliers CASCADE;
 DROP TABLE IF EXISTS staff_onboarding_tasks CASCADE;
 DROP TABLE IF EXISTS staff_rtw_verification CASCADE;
+DROP TABLE IF EXISTS employee_documents CASCADE;
 DROP TABLE IF EXISTS staff_references CASCADE;
 DROP TABLE IF EXISTS staff_hr_details CASCADE;
 DROP TABLE IF EXISTS staff_availability CASCADE;
@@ -503,6 +504,29 @@ CREATE TABLE staff_references (
   qualification    TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Actual uploaded files behind the Onboarding tab's Document Checklist,
+-- which only ever recorded that a document was shown to someone. Files
+-- live in the private "employee-documents" Storage bucket (created via
+-- scripts, not a migration) — this table is just the metadata.
+CREATE TABLE employee_documents (
+  id                SERIAL PRIMARY KEY,
+  staff_id          INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  doc_type          TEXT NOT NULL CHECK (doc_type IN ('passport', 'visa_brp', 'p45_starter', 'contract', 'certificate', 'reference', 'other')),
+  file_path         TEXT NOT NULL,
+  file_name         TEXT NOT NULL,
+  expiry_date       DATE,
+  uploaded_by       INTEGER REFERENCES staff(id),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Which expiry reminders (see /api/cron/document-expiry) have already
+  -- fired, so the daily cron never re-sends the same one twice.
+  reminder_60_sent  BOOLEAN NOT NULL DEFAULT false,
+  reminder_30_sent  BOOLEAN NOT NULL DEFAULT false,
+  reminder_7_sent   BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE INDEX idx_employee_documents_staff ON employee_documents(staff_id);
+CREATE INDEX idx_employee_documents_expiry ON employee_documents(expiry_date) WHERE expiry_date IS NOT NULL;
 
 -- The employer's own signed-off check — kept as a history (one row per
 -- check, including follow-up checks on time-limited permission) rather than

@@ -94,6 +94,7 @@ export default function POSPage() {
     total_revenue: number;
     net_sales: number;
     discount_total: number;
+    discount_count: number;
     refunds_total: number;
     refunds: { order_number: string; amount: number; created_at: string }[];
     cash_total: number;
@@ -111,11 +112,17 @@ export default function POSPage() {
       total: number;
       cash_total: number;
       card_total: number;
+      tips_cash_total: number;
+      tips_card_total: number;
+      tips_total: number;
       prior_settlements: { order_number: string; order_type: string | null; order_date: string | null; amount: number }[];
     };
   } | null>(null);
   const [eodClosingCash, setEodClosingCash] = useState("");
   const [eodOpeningCash, setEodOpeningCash] = useState(0);
+  const [eodPeriodId, setEodPeriodId] = useState<number | null>(null);
+  const [eodOpenedByName, setEodOpenedByName] = useState<string | null>(null);
+  const [eodCloseNote, setEodCloseNote] = useState("");
   const [eodLoading, setEodLoading] = useState(false);
   const [eodClosed, setEodClosed] = useState(false);
   const [eodError, setEodError] = useState("");
@@ -661,6 +668,7 @@ export default function POSPage() {
     setEndOfDayOpen(true);
     setEodClosed(false);
     setEodClosingCash("");
+    setEodCloseNote("");
     setEodError("");
     setEodLoading(true);
     try {
@@ -669,6 +677,8 @@ export default function POSPage() {
         const data = await res.json();
         setEodData(data.summary);
         setEodOpeningCash(data.period?.opening_cash || 0);
+        setEodPeriodId(data.period?.id ?? null);
+        setEodOpenedByName(data.period?.opened_by_name ?? null);
       } else {
         setEodError("Couldn't load today's summary. Try again.");
       }
@@ -689,6 +699,7 @@ export default function POSPage() {
         body: JSON.stringify({
           closing_cash: parseFloat(eodClosingCash) || 0,
           staff_id: session?.id,
+          close_note: eodCloseNote,
         }),
       });
       if (res.ok) {
@@ -723,18 +734,25 @@ export default function POSPage() {
     </style></head><body>
     <h1>THE ROYAL CHILLI</h1>
     <div class="sub">43 Kingsley Road, Hounslow TW3 1PA</div>
-    <div class="sub">END OF DAY REPORT</div>
-    <div class="sub">${date} · ${time}</div>
+    <div class="sub">Z REPORT ${eodPeriodId ?? "—"}</div>
+    <div class="divider"></div>
+    <div class="row"><span class="label">Opened</span><span class="value">${eodOpenedByName ?? "—"}</span></div>
+    <div class="row"><span class="label">Closed</span><span class="value">${session?.name || "Staff"}</span></div>
+    <div class="row"><span class="label"></span><span class="value">${date} · ${time}</span></div>
     <div class="divider"></div>
     <div class="row"><span class="label">Total Orders</span><span class="value">${eodData.total_orders}</span></div>
     <div class="row"><span class="label">Sales (this shift)</span><span class="value">£${eodData.total_revenue.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Discounts</span><span class="value">−£${eodData.discount_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Refunds</span><span class="value">£${eodData.refunds_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Discounts (${eodData.discount_count})</span><span class="value">−£${eodData.discount_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">Refunds (${eodData.refunds.length})</span><span class="value">£${eodData.refunds_total.toFixed(2)}</span></div>
     <div class="row"><span class="label">Net Sales</span><span class="value total">£${eodData.net_sales.toFixed(2)}</span></div>
     <div class="divider"></div>
     <div class="row"><span class="label">Collected Today</span><span class="value total">£${eodData.collected.total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">💵 Cash</span><span class="value">£${eodData.collected.cash_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">💳 Card</span><span class="value">£${eodData.collected.card_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">💵 Cash (bill)</span><span class="value">£${eodData.collected.cash_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">💳 Card (bill)</span><span class="value">£${eodData.collected.card_total.toFixed(2)}</span></div>
+    ${eodData.collected.tips_total > 0 ? `
+    <div class="row"><span class="label">🙌 Tips — cash</span><span class="value">£${eodData.collected.tips_cash_total.toFixed(2)}</span></div>
+    <div class="row"><span class="label">🙌 Tips — card</span><span class="value">£${eodData.collected.tips_card_total.toFixed(2)}</span></div>
+    ` : ""}
     ${eodData.collected.prior_settlements.length > 0 ? `
     <div class="row"><span class="label">  incl. prior-shift settlements</span><span class="value">£${eodData.collected.prior_total.toFixed(2)}</span></div>
     ${eodData.collected.prior_settlements.map(s => `<div class="row"><span class="label">  ${s.order_number}${s.order_date ? ` — ${new Date(s.order_date).toLocaleDateString("en-GB")}` : ""}</span><span class="value">£${s.amount.toFixed(2)}</span></div>`).join("")}
@@ -743,9 +761,9 @@ export default function POSPage() {
     <div class="row"><span class="label">Opening Float</span><span class="value">£${eodOpeningCash.toFixed(2)}</span></div>
     <div class="row"><span class="label">Cash Paid Out</span><span class="value">−£${eodData.cash_paid_out_total.toFixed(2)}</span></div>
     ${eodData.cash_paid_outs.map(p => `<div class="row"><span class="label">  ${p.reason}</span><span class="value">£${p.amount.toFixed(2)}</span></div>`).join("")}
-    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total).toFixed(2)}</span></div>
+    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total).toFixed(2)}</span></div>
     <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
-    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)).toFixed(2)}</span></div>
+    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total)).toFixed(2)}</span></div>
     ${eodData.pending_bills.length > 0 ? `
     <div class="divider"></div>
     <div class="row"><span class="label">📌 Pending Bills</span><span class="value total">£${eodData.pending_bills_total.toFixed(2)}</span></div>
@@ -755,6 +773,10 @@ export default function POSPage() {
     <div class="divider"></div>
     <div class="row"><span class="label">⛔ UNRESOLVED — must pay or Pay Later</span><span class="value total">£${eodData.unresolved_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}</span></div>
     ${eodData.unresolved_orders.map(o => `<div class="row"><span class="label">${o.order_number}</span><span class="value">£${(o.total - o.amount_paid).toFixed(2)}</span></div>`).join("")}
+    ` : ""}
+    ${eodCloseNote.trim() ? `
+    <div class="divider"></div>
+    <div class="row"><span class="label">Comment</span><span class="value">${eodCloseNote.trim()}</span></div>
     ` : ""}
     <div class="divider"></div>
     <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
@@ -1589,7 +1611,7 @@ export default function POSPage() {
                     </div>
                     <div className="mt-2 bg-surface-hover rounded-xl px-3 py-2 space-y-1">
                       <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Discounts given</span>
+                        <span className="text-muted-foreground">Discounts given ({eodData?.discount_count || 0})</span>
                         <span className="text-yellow-600 font-semibold">−£{(eodData?.discount_total || 0).toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-xs">
@@ -1612,10 +1634,16 @@ export default function POSPage() {
                       <div className="bg-surface-hover rounded-xl p-3">
                         <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💵 Cash</div>
                         <div className="text-green-600 text-xl font-bold">£{(eodData?.collected.cash_total || 0).toFixed(2)}</div>
+                        {(eodData?.collected.tips_cash_total || 0) > 0 && (
+                          <div className="text-muted-foreground text-[10px] mt-0.5">+ £{eodData!.collected.tips_cash_total.toFixed(2)} tips</div>
+                        )}
                       </div>
                       <div className="bg-surface-hover rounded-xl p-3">
                         <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💳 Card</div>
                         <div className="text-purple-600 text-xl font-bold">£{(eodData?.collected.card_total || 0).toFixed(2)}</div>
+                        {(eodData?.collected.tips_card_total || 0) > 0 && (
+                          <div className="text-muted-foreground text-[10px] mt-0.5">+ £{eodData!.collected.tips_card_total.toFixed(2)} tips</div>
+                        )}
                       </div>
                     </div>
                     {(eodData?.collected.prior_settlements?.length || 0) > 0 && (
@@ -1700,9 +1728,9 @@ export default function POSPage() {
                       prior-shift settlement adds real cash to the drawer today even
                       though it isn't today's sale, and a cash-out removes it. */}
                   <div className="flex items-center justify-between bg-surface-hover rounded-xl px-3 py-2.5 text-xs">
-                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Collected − Paid Out</span>
+                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Collected (incl. tips) − Paid Out</span>
                     <span className="text-foreground font-bold">
-                      £{(eodOpeningCash + (eodData?.collected.cash_total || 0) - (eodData?.cash_paid_out_total || 0)).toFixed(2)} expected
+                      £{(eodOpeningCash + (eodData?.collected.cash_total || 0) + (eodData?.collected.tips_cash_total || 0) - (eodData?.cash_paid_out_total || 0)).toFixed(2)} expected
                     </span>
                   </div>
 
@@ -1721,10 +1749,25 @@ export default function POSPage() {
                       className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
                     />
                     {eodClosingCash && eodData && (
-                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
-                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total - eodData.cash_paid_out_total)).toFixed(2)}
+                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
+                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total)).toFixed(2)}
                       </p>
                     )}
+                  </div>
+
+                  {/* Comment — free text saved on the closed work_period, shown on the
+                      printed Z-report (e.g. "Monday", "quiet night, boiler issue"). */}
+                  <div>
+                    <label className="block text-muted-foreground text-xs font-semibold mb-1.5">
+                      Comment (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={eodCloseNote}
+                      onChange={(e) => setEodCloseNote(e.target.value)}
+                      placeholder="e.g. Monday, quiet night"
+                      className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">

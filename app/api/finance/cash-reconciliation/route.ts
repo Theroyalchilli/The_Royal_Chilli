@@ -23,16 +23,31 @@ export async function GET(req: NextRequest) {
     const orderIds = (orders || []).map((o) => o.id);
 
     let cashTotal = 0;
+    let cashTips = 0;
     if (orderIds.length > 0) {
-      const { data: payments } = await supabase.from("payments").select("amount").eq("method", "cash").in("order_id", orderIds);
-      cashTotal = (payments || []).reduce((s, p) => s + Number(p.amount), 0);
+      const { data: payments } = await supabase.from("payments").select("amount, tip_amount").eq("method", "cash").in("order_id", orderIds);
+      for (const p of payments || []) {
+        cashTotal += Number(p.amount);
+        cashTips += Number(p.tip_amount || 0);
+      }
     }
 
-    const expectedCash = Math.round((Number(period.opening_cash) + cashTotal) * 100) / 100;
+    // Expected Cash has to include cash tips — they physically sit in the
+    // drawer the same as a cash bill payment. Leaving them out (the
+    // previous behaviour) made every cash tip look like an unexplained
+    // "over" variance at close.
+    const expectedCash = Math.round((Number(period.opening_cash) + cashTotal + cashTips) * 100) / 100;
     const actualCash = period.closing_cash !== null ? Number(period.closing_cash) : null;
     const variance = actualCash !== null ? Math.round((actualCash - expectedCash) * 100) / 100 : null;
 
-    results.push({ ...period, cash_sales: Math.round(cashTotal * 100) / 100, expected_cash: expectedCash, actual_cash: actualCash, variance });
+    results.push({
+      ...period,
+      cash_sales: Math.round(cashTotal * 100) / 100,
+      cash_tips: Math.round(cashTips * 100) / 100,
+      expected_cash: expectedCash,
+      actual_cash: actualCash,
+      variance,
+    });
   }
 
   return NextResponse.json({ periods: results });

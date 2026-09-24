@@ -20,6 +20,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: periodError.message }, { status: 500 });
   }
 
+  // Z-report header — "Opened by X" / "Closed by Y", not just a timestamp.
+  let openedByName: string | null = null;
+  if (period?.opened_by) {
+    const { data: opener } = await supabase.from("staff").select("name").eq("id", period.opened_by).maybeSingle();
+    openedByName = opener?.name ?? null;
+  }
+
   // Today's date range
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -96,12 +103,20 @@ export async function GET(req: NextRequest) {
   let collectedPriorTotal = 0;
   let collectedCash = 0;
   let collectedCard = 0;
+  // Tips are gratuity, never part of Sales/Net Sales — but a cash tip
+  // physically sits in the drawer the same as a cash bill payment, so it has
+  // to be its own line feeding Expected Cash, not silently folded into
+  // collectedCash (which would blur "what we sold" into "what's in the
+  // till") and not left out of it either (which is the bug that made every
+  // cash tip look like an unexplained variance at close).
+  let tipsCash = 0;
+  let tipsCard = 0;
   const priorSettlements: { order_number: string; order_type: string | null; order_date: string | null; amount: number }[] = [];
 
   if (period?.id) {
     const { data: periodPayments } = await supabase
       .from("payments")
-      .select("amount, method, order_id")
+      .select("amount, tip_amount, method, order_id")
       .gte("created_at", period.opened_at)
       .lte("created_at", new Date().toISOString());
 
@@ -118,17 +133,18 @@ export async function GET(req: NextRequest) {
 
     for (const p of pays) {
       const amt = Number(p.amount);
-      if (p.method === "cash") collectedCash += amt; else collectedCard += amt;
+      const tip = Number(p.tip_amount || 0);
+      if (p.method === "cash") { collectedCash += amt; tipsCash += tip; } else { collectedCard += amt; tipsCard += tip; }
       const o = orderById[p.order_id];
       if (o && o.work_period_id === period.id) {
-        collectedOwn += amt;
+        collectedOwn += amt + tip;
       } else {
-        collectedPriorTotal += amt;
+        collectedPriorTotal += amt + tip;
         priorSettlements.push({
           order_number: o?.order_number ?? `#${p.order_id}`,
           order_type: o?.order_type ?? null,
           order_date: o?.created_at ?? null,
-          amount: Math.round(amt * 100) / 100,
+          amount: Math.round((amt + tip) * 100) / 100,
         });
       }
     }
@@ -157,6 +173,7 @@ export async function GET(req: NextRequest) {
   // specifically, whenever the refund itself happens, mirroring how Sales
   // already only cares about the order's own period, not payment timing.
   let discountTotal = 0;
+  let discountCount = 0;
   let refundsTotal = 0;
   let refunds: { order_number: string; amount: number; created_at: string }[] = [];
 
@@ -175,7 +192,10 @@ export async function GET(req: NextRequest) {
           status: o.status,
         });
       }
-      if (o.status === "paid") discountTotal += Number(o.discount || 0);
+      if (o.status === "paid" && Number(o.discount || 0) > 0) {
+        discountTotal += Number(o.discount);
+        discountCount += 1;
+      }
     }
     discountTotal = Math.round(discountTotal * 100) / 100;
 
@@ -199,11 +219,12 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    period,
+    period: period ? { ...period, opened_by_name: openedByName } : period,
     summary: {
       total_revenue: Math.round(totalRevenue * 100) / 100,
       net_sales: Math.round((totalRevenue + refundsTotal) * 100) / 100,
       discount_total: discountTotal,
+      discount_count: discountCount,
       refunds_total: refundsTotal,
       refunds,
       total_orders: totalOrders,
@@ -221,6 +242,9 @@ export async function GET(req: NextRequest) {
         total: Math.round((collectedOwn + collectedPriorTotal) * 100) / 100,
         cash_total: Math.round(collectedCash * 100) / 100,
         card_total: Math.round(collectedCard * 100) / 100,
+        tips_cash_total: Math.round(tipsCash * 100) / 100,
+        tips_card_total: Math.round(tipsCard * 100) / 100,
+        tips_total: Math.round((tipsCash + tipsCard) * 100) / 100,
         prior_settlements: priorSettlements,
       },
     },
@@ -236,7 +260,7 @@ export async function PUT(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { closing_cash, opening_cash, staff_id } = body;
+  const { closing_cash, opening_cash, staff_id, close_note } = body;
 
   let { data: period, error: findError } = await supabase
     .from("work_periods")
@@ -306,6 +330,7 @@ export async function PUT(req: NextRequest) {
       closed_at: new Date().toISOString(),
       closing_cash: closing_cash ?? null,
       closed_by: staff_id ?? session.id,
+      close_note: close_note?.trim() || null,
     })
     .eq("id", period.id)
     .select()

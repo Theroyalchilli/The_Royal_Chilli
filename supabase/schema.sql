@@ -157,7 +157,9 @@ CREATE TABLE work_periods (
   closed_at     TIMESTAMPTZ,
   opening_cash  NUMERIC(10,2) DEFAULT 0,
   closing_cash  NUMERIC(10,2),
-  status        TEXT CHECK (status IN ('open','closed')) DEFAULT 'open'
+  status        TEXT CHECK (status IN ('open','closed')) DEFAULT 'open',
+  -- Free-text note added when closing (e.g. "Monday") — Z-report printout.
+  close_note    TEXT
 );
 
 -- Matched by UK postcode outward code (e.g. "TW3" from "TW3 1PA").

@@ -110,7 +110,7 @@ function VatTab() {
 }
 
 function CashReconTab() {
-  const [periods, setPeriods] = useState<{ id: number; opened_at: string; opening_cash: number; cash_sales: number; expected_cash: number; actual_cash: number | null; variance: number | null }[]>([]);
+  const [periods, setPeriods] = useState<{ id: number; opened_at: string; opening_cash: number; cash_sales: number; cash_tips: number; expected_cash: number; actual_cash: number | null; variance: number | null }[]>([]);
   useEffect(() => { fetch("/api/finance/cash-reconciliation").then((r) => r.json()).then((d) => setPeriods(d.periods || [])); }, []);
 
   return (
@@ -119,7 +119,10 @@ function CashReconTab() {
         <div key={p.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
           <div>
             <p className="text-foreground font-semibold">{new Date(p.opened_at).toLocaleDateString("en-GB")}</p>
-            <p className="text-muted-foreground text-sm">Opening {fmtMoney(p.opening_cash)} + Cash sales {fmtMoney(p.cash_sales)} = Expected {fmtMoney(p.expected_cash)}</p>
+            <p className="text-muted-foreground text-sm">
+              Opening {fmtMoney(p.opening_cash)} + Cash sales {fmtMoney(p.cash_sales)}
+              {p.cash_tips > 0 && ` + Tips ${fmtMoney(p.cash_tips)}`} = Expected {fmtMoney(p.expected_cash)}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-foreground">Actual: {p.actual_cash !== null ? fmtMoney(p.actual_cash) : "—"}</p>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { cn, TABLE_ATTENTION_MINUTES, minutesSince, tableElapsedLabel } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/types";
 
@@ -7,6 +8,10 @@ interface Props {
   tables: RestaurantTable[];
   selectedTable: number | null;
   onSelect: (table: RestaurantTable) => void;
+  // Manual status flip with no order attached — for a table that's been
+  // physically pushed together with another for a big party, but isn't
+  // carrying the order itself. Keeps it out of the "tap to select" action.
+  onStatusChange: (tableId: number, status: "available" | "occupied" | "reserved") => void;
   // Reservations aren't linked to a specific table until they're seated, so
   // there's no individual table to flag "Reserved" ahead of time — this is a
   // plain count of today's bookings coming up soon instead (see /api/tables).
@@ -28,7 +33,8 @@ function columnMajor<T>(items: T[], cols: number): T[] {
   return flat;
 }
 
-export default function TableGrid({ tables, selectedTable, onSelect, upcomingReservationCount }: Props) {
+export default function TableGrid({ tables, selectedTable, onSelect, onStatusChange, upcomingReservationCount }: Props) {
+  const [menuFor, setMenuFor] = useState<number | null>(null);
   // Single floor, no location zones — tables are laid out purely by table
   // number: the first 9 as a 3x3 block (column-major, matching the
   // restaurant's physical layout), the rest as a 4-wide row beneath it.
@@ -106,11 +112,14 @@ export default function TableGrid({ tables, selectedTable, onSelect, upcomingRes
                 }[needsAttention ? "attention" : status];
 
                 return (
-                  <button
+                  <div
                     key={table.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelect(table)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(table); }}
                     className={cn(
-                      "relative flex flex-col items-center justify-center rounded-xl border overflow-hidden",
+                      "relative flex flex-col items-center justify-center rounded-xl border overflow-hidden cursor-pointer",
                       "h-[72px] transition-all duration-150 no-select pos-btn",
                       isSelected
                         ? "border-blue-400 bg-blue-50 ring-2 ring-blue-400/40 ring-offset-1 ring-offset-background"
@@ -159,7 +168,45 @@ export default function TableGrid({ tables, selectedTable, onSelect, upcomingRes
                     <span className={cn("text-[9px] leading-none mt-0.5", needsAttention ? "text-orange-700 font-bold" : "text-muted-foreground")}>
                       {elapsedMins !== null ? `${table.capacity}p · ${tableElapsedLabel(elapsedMins)}` : `${table.capacity}p`}
                     </span>
-                  </button>
+
+                    {/* Manual status override — flag a table Occupied/Reserved with no
+                        order attached (a table pushed together with another for a big
+                        party, not carrying the order itself), or clear it back to
+                        Available. Stops the tap propagating to onSelect above. */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === table.id ? null : table.id); }}
+                      aria-label={`Change status for table ${table.table_number}`}
+                      className="absolute bottom-0.5 right-0.5 grid h-4 w-4 place-items-center rounded text-[10px] leading-none text-muted-foreground/60 hover:text-foreground hover:bg-black/5"
+                    >
+                      ⋮
+                    </button>
+                    {menuFor === table.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setMenuFor(null); }} />
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute bottom-full right-0 z-50 mb-1 w-32 rounded-lg border border-border bg-surface shadow-lg py-1"
+                        >
+                          {([
+                            { value: "available", label: "Mark Available" },
+                            { value: "occupied", label: "Mark Occupied" },
+                            { value: "reserved", label: "Mark Reserved" },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              disabled={status === opt.value}
+                              onClick={() => { onStatusChange(table.id, opt.value); setMenuFor(null); }}
+                              className="block w-full px-2.5 py-1.5 text-left text-[11px] text-foreground hover:bg-surface-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 );
               })}
             </div>

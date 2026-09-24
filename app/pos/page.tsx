@@ -324,6 +324,26 @@ export default function POSPage() {
     }
   };
 
+  // Manual status flip with no order attached — the merged-tables workflow:
+  // the real order sits on one "primary" table, and the others physically
+  // pushed together for the same party get flagged Occupied by hand here so
+  // they can't be double-booked, then flipped back to Available once the
+  // party leaves. No merge/group concept in the schema, deliberately — see
+  // the table-merge discussion this session for why the simple version won
+  // over a real multi-table link.
+  const handleTableStatusChange = async (tableId: number, status: "available" | "occupied" | "reserved") => {
+    setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, status } : t)));
+    try {
+      await fetch("/api/tables", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tableId, status }),
+      });
+    } catch {
+      refreshTables();
+    }
+  };
+
   // Two lines only merge if they're the same dish with the exact same
   // modifier selections — e.g. "Chicken Tikka" and "Malai Tikka" versions of
   // the same platter must stay as separate lines, same rule as the website cart.
@@ -1113,7 +1133,7 @@ export default function POSPage() {
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>Rsv</span>
                 </div>
               </div>
-              <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} upcomingReservationCount={upcomingReservationCount} />
+              <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} onStatusChange={handleTableStatusChange} upcomingReservationCount={upcomingReservationCount} />
               {cartCount > 0 ? (
                 <div className="mt-3 flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 animate-pulse">
                   <span className="text-amber-600 text-base">⚠️</span>
@@ -1249,7 +1269,7 @@ export default function POSPage() {
                         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>Rsv</span>
                       </div>
                     </div>
-                    <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} upcomingReservationCount={upcomingReservationCount} />
+                    <TableGrid tables={tables} selectedTable={selectedTable} onSelect={handleTableSelect} onStatusChange={handleTableStatusChange} upcomingReservationCount={upcomingReservationCount} />
                     {cartCount > 0 ? (
                       <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 animate-pulse">
                         <span className="text-amber-600 text-base">⚠️</span>

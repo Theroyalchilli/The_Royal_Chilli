@@ -81,6 +81,7 @@ CREATE TABLE staff (
   vehicle_type            TEXT,
   vehicle_registration    TEXT,
   driver_status           TEXT CHECK (driver_status IN ('available', 'on_delivery', 'offline')),
+  can_signoff             BOOLEAN NOT NULL DEFAULT false, -- delegated food-safety daily sign-off authority (054_food_safety.sql)
   created_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -585,6 +586,8 @@ CREATE TABLE suppliers (
   address       TEXT,
   notes         TEXT,
   active        INT DEFAULT 1,
+  approved      BOOLEAN NOT NULL DEFAULT false, -- food-safety approved-supplier register (054_food_safety.sql)
+  docs_status   TEXT, -- free text: what's on file, e.g. "Food hygiene cert to 2027"
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -624,6 +627,131 @@ CREATE TABLE purchase_order_items (
   received_quantity  NUMERIC(12,3),
   expiry_date        DATE
 );
+
+-- =====================
+-- Food Safety & Compliance (attendance app) — see 054_food_safety.sql
+-- SFBB-modelled: staff log checks by exception, a manager signs the day off,
+-- and fs_check_log/fs_temp_log/fs_delivery_check/fs_problem/fs_signoff are
+-- append-only at the DB level (trigger fs_reject_mutation, since both apps
+-- connect via the service_role key which bypasses RLS entirely).
+-- =====================
+
+CREATE TABLE fs_check_type (
+  id             SERIAL PRIMARY KEY,
+  check_window   TEXT NOT NULL CHECK (check_window IN ('opening', 'service', 'closing', 'weekly')),
+  label          TEXT NOT NULL,
+  rule_text      TEXT,
+  requires_photo BOOLEAN NOT NULL DEFAULT false,
+  active         BOOLEAN NOT NULL DEFAULT true,
+  display_order  INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE fs_temp_type (
+  id            SERIAL PRIMARY KEY,
+  label         TEXT NOT NULL,
+  unit          TEXT NOT NULL DEFAULT '°C',
+  kind          TEXT NOT NULL CHECK (kind IN ('max', 'min')),
+  limit_value   NUMERIC(5,1) NOT NULL,
+  rule_text     TEXT,
+  active        BOOLEAN NOT NULL DEFAULT true,
+  display_order INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE fs_check_log (
+  id            SERIAL PRIMARY KEY,
+  check_type_id INT NOT NULL REFERENCES fs_check_type(id),
+  staff_id      INT NOT NULL REFERENCES staff(id),
+  ok            BOOLEAN NOT NULL,
+  problem_note  TEXT,
+  photo_ref     TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE fs_temp_log (
+  id                 SERIAL PRIMARY KEY,
+  temp_type_id       INT NOT NULL REFERENCES fs_temp_type(id),
+  staff_id           INT NOT NULL REFERENCES staff(id),
+  value              NUMERIC(5,1) NOT NULL,
+  pass               BOOLEAN NOT NULL,
+  corrective_action  TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE fs_delivery_check (
+  id                 SERIAL PRIMARY KEY,
+  supplier_id        INT NOT NULL REFERENCES suppliers(id),
+  purchase_order_id  INT REFERENCES purchase_orders(id),
+  item               TEXT NOT NULL,
+  temp_value         NUMERIC(5,1),
+  accepted           BOOLEAN NOT NULL,
+  corrective_action  TEXT,
+  staff_id           INT NOT NULL REFERENCES staff(id),
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE fs_problem (
+  id          SERIAL PRIMARY KEY,
+  what        TEXT NOT NULL,
+  action      TEXT NOT NULL,
+  staff_id    INT NOT NULL REFERENCES staff(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE fs_signoff (
+  id          SERIAL PRIMARY KEY,
+  day         DATE NOT NULL,
+  staff_id    INT NOT NULL REFERENCES staff(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (day)
+);
+
+CREATE TABLE fs_course (
+  id             SERIAL PRIMARY KEY,
+  name           TEXT NOT NULL,
+  refresh_months INT NOT NULL DEFAULT 0,
+  has_level      BOOLEAN NOT NULL DEFAULT false,
+  active         BOOLEAN NOT NULL DEFAULT true -- 057_food_safety_course_active.sql — retire, never delete (fs_training_record references it)
+);
+
+CREATE TABLE fs_training_record (
+  id               SERIAL PRIMARY KEY,
+  staff_id         INT NOT NULL REFERENCES staff(id),
+  course_id        INT NOT NULL REFERENCES fs_course(id),
+  level            TEXT,
+  date_done        DATE NOT NULL,
+  trainer          TEXT,
+  certificate_ref  TEXT, -- object path in the food-safety-files bucket (056_food_safety_training_files.sql)
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Append-only enforcement — nothing, including an admin or a bug in our own
+-- app code, can UPDATE or DELETE a posted legal record. Corrections are new
+-- rows instead.
+CREATE OR REPLACE FUNCTION fs_reject_mutation() RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Food safety records are append-only — % on % is not permitted. Log a correction as a new row instead.', TG_OP, TG_TABLE_NAME;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_fs_check_log_append_only BEFORE UPDATE OR DELETE ON fs_check_log
+  FOR EACH ROW EXECUTE FUNCTION fs_reject_mutation();
+CREATE TRIGGER trg_fs_temp_log_append_only BEFORE UPDATE OR DELETE ON fs_temp_log
+  FOR EACH ROW EXECUTE FUNCTION fs_reject_mutation();
+CREATE TRIGGER trg_fs_delivery_check_append_only BEFORE UPDATE OR DELETE ON fs_delivery_check
+  FOR EACH ROW EXECUTE FUNCTION fs_reject_mutation();
+CREATE TRIGGER trg_fs_problem_append_only BEFORE UPDATE OR DELETE ON fs_problem
+  FOR EACH ROW EXECUTE FUNCTION fs_reject_mutation();
+CREATE TRIGGER trg_fs_signoff_append_only BEFORE UPDATE OR DELETE ON fs_signoff
+  FOR EACH ROW EXECUTE FUNCTION fs_reject_mutation();
+CREATE TRIGGER trg_fs_training_record_append_only BEFORE UPDATE OR DELETE ON fs_training_record
+  FOR EACH ROW EXECUTE FUNCTION fs_reject_mutation();
+
+-- Private bucket for training certificates (and later, check photo evidence)
+-- — same pattern as attendance-photos: never public, always served via a
+-- short-lived signed URL.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('food-safety-files', 'food-safety-files', false)
+ON CONFLICT (id) DO NOTHING;
 
 -- Single ledger for every stock change. quantity_delta is signed: +in, -out.
 CREATE TABLE stock_movements (

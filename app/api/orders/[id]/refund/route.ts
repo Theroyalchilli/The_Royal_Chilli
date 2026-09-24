@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { stripe } from "@/lib/stripe";
 
 // A refund is just another row in `payments`, with a negative amount — same
 // pattern as a normal payment, so the existing trigger that keeps
@@ -40,12 +41,29 @@ export async function POST(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const refundAmount = Math.round(Number(amount) * 100) / 100;
-    if (refundAmount > Number(order.amount_paid) + 0.01) {
+    const requestedAmount = Math.round(Number(amount) * 100) / 100;
+    if (requestedAmount > Number(order.amount_paid) + 0.01) {
       return NextResponse.json(
         { error: `Cannot refund more than the £${Number(order.amount_paid).toFixed(2)} paid` },
         { status: 400 }
       );
+    }
+
+    // Card and online refunds move real money — never record anything in our
+    // own ledger unless Stripe actually confirms it, so "Refund" here can
+    // never say yes while the customer's card still hasn't been credited.
+    // Cash needs no such check: staff physically hand it back from the till.
+    let refundAmount = requestedAmount;
+    let stripeRefundIds: string[] = [];
+    let shortfall = 0;
+    if (method === "card" || method === "card_online") {
+      const result = await refundViaStripe(Number(id), method, requestedAmount);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 502 });
+      }
+      refundAmount = result.refundedAmount;
+      stripeRefundIds = result.refundIds;
+      shortfall = result.shortfall;
     }
 
     const { error: insertError } = await supabase.from("payments").insert({
@@ -53,7 +71,7 @@ export async function POST(
       method,
       amount: -refundAmount,
       staff_id: session.id,
-      reference: `Refund: ${String(reason).trim()}`,
+      reference: stripeRefundIds.length > 0 ? `Refund: ${String(reason).trim()} (Stripe: ${stripeRefundIds.join(", ")})` : `Refund: ${String(reason).trim()}`,
     });
     if (insertError) throw insertError;
 
@@ -63,11 +81,86 @@ export async function POST(
 
     const { data: refreshed } = await supabase.from("orders").select("total, amount_paid").eq("id", id).single();
 
-    return NextResponse.json({ success: true, amount_paid: refreshed?.amount_paid ?? null });
+    return NextResponse.json({
+      success: true,
+      amount_paid: refreshed?.amount_paid ?? null,
+      refunded_amount: refundAmount,
+      warning:
+        shortfall > 0
+          ? `Refunded £${refundAmount.toFixed(2)} via Stripe. £${shortfall.toFixed(2)} of the requested amount couldn't be matched to a Stripe payment — refund that portion manually and record it here separately.`
+          : undefined,
+    });
   } catch (error) {
     console.error("Refund error:", error);
     return NextResponse.json({ error: "Failed to process refund" }, { status: 500 });
   }
+}
+
+// Actually moves the money back, against the real Stripe payment(s) behind
+// this order — using the PaymentIntent id already stored on `payments`
+// (directly, for a Terminal card-present payment; via the Checkout Session
+// id, for an online payment). Spreads the requested amount across however
+// many same-method payments exist on the order (almost always exactly one),
+// oldest first, stopping the moment a refund attempt fails so a bad payment
+// never blocks the ones before it. Any amount left over after that is
+// reported back as a shortfall rather than silently dropped or over-claimed.
+async function refundViaStripe(
+  orderId: number,
+  method: "card" | "card_online",
+  amount: number
+): Promise<{ ok: true; refundedAmount: number; refundIds: string[]; shortfall: number } | { ok: false; error: string }> {
+  if (!stripe) {
+    return { ok: false, error: "Stripe isn't configured — this refund can't be processed automatically. Issue it directly in the Stripe Dashboard, then record what happened here as a note." };
+  }
+
+  const { data: originals } = await supabase
+    .from("payments")
+    .select("amount, reference")
+    .eq("order_id", orderId)
+    .eq("method", method)
+    .gt("amount", 0)
+    .order("created_at", { ascending: true });
+
+  if (!originals || originals.length === 0) {
+    return { ok: false, error: `No ${method === "card" ? "card" : "online card"} payment was found on this order to refund against.` };
+  }
+
+  let remainingPence = Math.round(amount * 100);
+  let refundedPence = 0;
+  const refundIds: string[] = [];
+
+  for (const p of originals) {
+    if (remainingPence <= 0) break;
+    if (!p.reference) continue;
+
+    let paymentIntentId = p.reference;
+    if (method === "card_online") {
+      try {
+        const checkoutSession = await stripe.checkout.sessions.retrieve(p.reference);
+        if (!checkoutSession.payment_intent) continue;
+        paymentIntentId = typeof checkoutSession.payment_intent === "string" ? checkoutSession.payment_intent : checkoutSession.payment_intent.id;
+      } catch {
+        continue;
+      }
+    }
+
+    const portion = Math.min(remainingPence, Math.round(Number(p.amount) * 100));
+    try {
+      const refund = await stripe.refunds.create({ payment_intent: paymentIntentId, amount: portion });
+      refundIds.push(refund.id);
+      refundedPence += portion;
+      remainingPence -= portion;
+    } catch (err) {
+      console.error("Stripe refund failed for payment_intent", paymentIntentId, err);
+      break;
+    }
+  }
+
+  if (refundedPence === 0) {
+    return { ok: false, error: "Stripe refused the refund — the card payment may already be fully refunded, or its record has gone stale. Check the Stripe Dashboard directly." };
+  }
+
+  return { ok: true, refundedAmount: refundedPence / 100, refundIds, shortfall: remainingPence / 100 };
 }
 
 // Reverses the proportional share of points this order originally earned —

@@ -1,16 +1,52 @@
 import supabase from "@/lib/supabase";
-import { sendPaymentReceiptEmail } from "@/lib/email";
+import { sendPaymentReceiptEmail, sendOrderCancellationEmail } from "@/lib/email";
 
 // Cancelling an order and freeing its table are always done together — a
 // cancelled order shouldn't leave the table stuck "occupied", and a table
 // shouldn't be freed while an order against it is still open. Shared by an
 // explicit whole-order cancel and by voiding the last remaining item on a
 // dine-in order down to nothing.
-export async function cancelOrderAndFreeTable(orderId: number, tableId: number | null): Promise<void> {
+//
+// Refused once an order is already paid — cancelling wouldn't touch the
+// money already taken or the loyalty points already awarded for it (only
+// the dedicated Refund flow reverses both of those). Staff need to use
+// Refund instead so those stay in sync.
+export async function cancelOrderAndFreeTable(orderId: number, tableId: number | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: order } = await supabase
+    .from("orders")
+    .select("status, order_number, customer_name, customer_email, customers(email)")
+    .eq("id", orderId)
+    .single();
+
+  if (order?.status === "paid") {
+    return { ok: false, error: "This order is already paid — cancel it through Refund instead, so the payment and any loyalty points get reversed too." };
+  }
+
   await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", orderId);
   if (tableId) {
     await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", tableId);
   }
+
+  if (order) {
+    try {
+      const linkedCustomer = order.customers as unknown as { email: string | null } | null;
+      const recipientEmail = order.customer_email || linkedCustomer?.email;
+      if (recipientEmail) {
+        const { data: items } = await supabase.from("order_items").select("item_name, quantity").eq("order_id", orderId);
+        if (items && items.length > 0) {
+          await sendOrderCancellationEmail(recipientEmail, {
+            orderNumber: order.order_number,
+            customerName: order.customer_name || "Guest",
+            items: items.map((i) => ({ name: i.item_name, quantity: i.quantity })),
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to send cancellation email for order", orderId, err);
+    }
+  }
+
+  return { ok: true };
 }
 
 // Based on the highest sequence number actually issued today, not a row

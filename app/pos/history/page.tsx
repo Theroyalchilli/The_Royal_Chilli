@@ -89,6 +89,7 @@ export default function HistoryPage() {
   const [refundReason, setRefundReason] = useState("");
   const [refundSaving, setRefundSaving] = useState(false);
   const [refundError, setRefundError] = useState("");
+  const [refundNotice, setRefundNotice] = useState("");
 
   // Pending is the one category that isn't scoped to a single day — it's
   // every unresolved order, full stop. The date field stays live for it
@@ -162,6 +163,7 @@ export default function HistoryPage() {
     setRefundMethod("cash");
     setRefundReason("");
     setRefundError("");
+    setRefundNotice("");
   };
 
   const closeRefund = () => {
@@ -169,11 +171,13 @@ export default function HistoryPage() {
     setRefundAmount("");
     setRefundReason("");
     setRefundError("");
+    setRefundNotice("");
   };
 
   const submitRefund = async () => {
     if (!refundOrder) return;
     setRefundError("");
+    setRefundNotice("");
     const amt = parseFloat(refundAmount);
     if (!amt || amt <= 0) { setRefundError("Enter an amount"); return; }
     if (!refundReason.trim()) { setRefundError("A reason is required"); return; }
@@ -186,8 +190,12 @@ export default function HistoryPage() {
       });
       const data = await res.json();
       if (!res.ok) { setRefundError(data.error || "Failed to process refund"); return; }
-      closeRefund();
       fetchOrders();
+      // Stripe only partially covered the requested amount — keep the modal
+      // open on its warning so staff see it before closing, instead of the
+      // usual silent close on success.
+      if (data.warning) { setRefundNotice(data.warning); return; }
+      closeRefund();
     } catch {
       setRefundError("Failed to process refund");
     } finally {
@@ -486,21 +494,24 @@ export default function HistoryPage() {
                 className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500"
               />
               {refundError && <p className="text-red-600 text-xs text-center">{refundError}</p>}
+              {refundNotice && <p className="text-amber-600 text-xs text-center">{refundNotice}</p>}
             </div>
             <div className="mt-4 flex gap-2">
               <button
                 onClick={closeRefund}
                 className="flex-1 h-11 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-xl transition-all"
               >
-                Cancel
+                {refundNotice ? "Close" : "Cancel"}
               </button>
-              <button
-                onClick={submitRefund}
-                disabled={refundSaving}
-                className="flex-1 h-11 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
-              >
-                {refundSaving ? "Saving…" : "Confirm Refund"}
-              </button>
+              {!refundNotice && (
+                <button
+                  onClick={submitRefund}
+                  disabled={refundSaving}
+                  className="flex-1 h-11 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
+                >
+                  {refundSaving ? "Saving…" : "Confirm Refund"}
+                </button>
+              )}
             </div>
           </div>
         </div>

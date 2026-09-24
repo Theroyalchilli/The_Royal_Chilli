@@ -153,6 +153,7 @@ interface ReportData {
   hourly: Array<{ hour: string; orders: number; revenue: number }>;
   cancellation: { cancelled_count: number; cancellation_rate: number };
   discountTotal: number;
+  refundsTotal: number;
   voidValue: number;
   customers: { new: number; returning: number };
 }
@@ -286,7 +287,10 @@ function SalesReport() {
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Total Revenue</div>
               <div className="text-red-600 text-3xl font-bold">{formatCurrency(data.summary.total_revenue)}</div>
-              <div className="text-muted-foreground text-xs mt-1">{isToday ? "Today" : from === to ? from : `${from} → ${to}`}</div>
+              <div className="text-muted-foreground text-xs mt-1">
+                {isToday ? "Today" : from === to ? from : `${from} → ${to}`}
+                {data.refundsTotal > 0 && <> · net of {formatCurrency(data.refundsTotal)} refunds</>}
+              </div>
             </div>
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Total Orders</div>

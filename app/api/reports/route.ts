@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { getRefundsByOrderId } from "@/lib/analytics";
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,6 +31,14 @@ export async function GET(req: NextRequest) {
     if (ordersError) throw ordersError;
 
     const ordersData = orders ?? [];
+    const orderIds = ordersData.map((o) => o.id);
+
+    // Net of refunds — a refund never changes orders.total (see
+    // getRefundsByOrderId), so every revenue figure below would otherwise
+    // still count a refunded order at its full original value forever.
+    const refundsByOrder = await getRefundsByOrderId(orderIds);
+    const netTotal = (o: { id: number; total: number }) => Number(o.total) - (refundsByOrder.get(o.id) || 0);
+    const refundsTotal = Math.round([...refundsByOrder.values()].reduce((s, v) => s + v, 0) * 100) / 100;
 
     // Summary stats — revenue only counts orders actually paid. A Pay Later
     // order sits in this date range (it was placed that day) but hasn't
@@ -38,7 +47,7 @@ export async function GET(req: NextRequest) {
     // *counts* still include it, since it genuinely was placed that day.
     const totalOrders = ordersData.length;
     const paidOrdersData = ordersData.filter((o) => o.status === "paid");
-    const totalRevenue = paidOrdersData.reduce((s, o) => s + Number(o.total), 0);
+    const totalRevenue = paidOrdersData.reduce((s, o) => s + netTotal(o), 0);
     const avgOrderValue = paidOrdersData.length > 0 ? totalRevenue / paidOrdersData.length : 0;
     const paidOrders = paidOrdersData.length;
 
@@ -92,7 +101,7 @@ export async function GET(req: NextRequest) {
       byTypeMap[o.order_type].count += 1;
     }
     for (const o of paidOrdersData) {
-      byTypeMap[o.order_type].revenue += Number(o.total);
+      byTypeMap[o.order_type].revenue += netTotal(o);
     }
     const byType = Object.entries(byTypeMap).map(([order_type, v]) => ({
       order_type,
@@ -110,7 +119,7 @@ export async function GET(req: NextRequest) {
     }
     for (const o of paidOrdersData) {
       const hour = new Date(o.created_at).getUTCHours().toString().padStart(2, "0");
-      if (hourlyMap[hour]) hourlyMap[hour].revenue += Number(o.total);
+      if (hourlyMap[hour]) hourlyMap[hour].revenue += netTotal(o);
     }
     const hourly = Object.entries(hourlyMap)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -123,7 +132,6 @@ export async function GET(req: NextRequest) {
     // Top items: fetch order_items for these orders. Quantity counts
     // everything actually served (food was made regardless of payment
     // status); revenue only counts items on orders actually paid.
-    const orderIds = ordersData.map((o) => o.id);
     const paidOrderIdSet = new Set(paidOrdersData.map((o) => o.id));
     let topItems: { item_name: string; quantity_sold: number; revenue: number }[] = [];
     let voidValue = 0;
@@ -195,6 +203,7 @@ export async function GET(req: NextRequest) {
       hourly,
       cancellation,
       discountTotal,
+      refundsTotal,
       voidValue,
       customers,
     });

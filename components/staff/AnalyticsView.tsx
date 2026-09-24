@@ -7,7 +7,7 @@ function firstOfMonth() { const d = new Date(); return new Date(d.getFullYear(),
 function today() { return new Date().toISOString().slice(0, 10); }
 
 type SalesData = {
-  total_revenue: number; total_orders: number; avg_order_value: number;
+  total_revenue: number; refunds_total: number; total_orders: number; avg_order_value: number;
   hourly: { hour: number; orders: number; revenue: number }[];
   peak_hour: { hour: number; orders: number; revenue: number } | null;
   daily: { date: string; orders: number; revenue: number }[];
@@ -40,6 +40,9 @@ function SalesTab({ from, to }: { from: string; to: string }) {
         <StatCard label="Avg Order Value" value={fmtMoney(data.avg_order_value)} />
         <StatCard label="Peak Hour" value={data.peak_hour ? `${data.peak_hour.hour}:00` : "—"} />
       </div>
+      {data.refunds_total > 0 && (
+        <p className="text-muted-foreground text-xs mt-2">Revenue above is net of {fmtMoney(data.refunds_total)} in refunds this period.</p>
+      )}
 
       <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest mt-6 mb-2">Orders by Hour</h3>
       <div className="space-y-1">

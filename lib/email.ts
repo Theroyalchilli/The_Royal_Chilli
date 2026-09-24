@@ -432,6 +432,58 @@ export async function sendPaymentReceiptEmail(
   await sendBrevoEmail(to, `Receipt — ${data.orderNumber} · ${money(data.total)} paid`, shell(body));
 }
 
+// Sent when an unpaid order is cancelled (whole-order cancel, or voiding the
+// last item down to nothing) and a customer email is on file. Paid orders
+// can't reach this path — see cancelOrderAndFreeTable — so this never has to
+// mention money, only the items.
+export async function sendOrderCancellationEmail(
+  to: string | null | undefined,
+  data: {
+    orderNumber: string;
+    customerName: string;
+    items: { name: string; quantity: number }[];
+  }
+) {
+  if (!to) return;
+
+  const itemsRows = data.items
+    .map(
+      (i) => `
+      <tr>
+        <td width="32" style="padding:8px 0; font-family:${SANS}; font-size:14px; color:${C.muted}; vertical-align:top;">${i.quantity}×</td>
+        <td style="padding:8px 8px; font-family:${SANS}; font-size:14px; color:${C.ink}; font-weight:500; vertical-align:top;">${i.name}</td>
+      </tr>`
+    )
+    .join("");
+
+  const body = `
+    <tr><td align="center" style="padding:32px 32px 8px;">
+      <span style="display:inline-block; background:${C.dueBg}; color:${C.due}; font-size:12px; font-weight:700; letter-spacing:1px; padding:5px 14px; border-radius:999px;">CANCELLED</span>
+      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:14px 0 10px;">Hi ${data.customerName},</div>
+      <div style="font-family:${SANS}; color:${C.muted}; font-size:14px; max-width:420px; margin:0 auto; line-height:1.55;">Your order has been cancelled. No payment was taken, so there's nothing to refund.</div>
+    </td></tr>
+    <tr><td align="center" style="padding:18px 24px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:999px;">
+        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${C.chilli};">#${data.orderNumber}</span></td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td style="padding:22px 24px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:12px;">
+        <tr><td style="padding:18px 22px 4px;">${cardLabel("Cancelled Items")}</td></tr>
+        <tr><td style="padding:10px 22px 18px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${itemsRows}</table>
+        </td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td align="center" style="padding:16px 32px 4px; font-family:${SANS}; font-size:12.5px; color:${C.muted}; line-height:1.6;">
+      If this wasn't expected, just call us — quote <strong style="color:${C.ink};">Order #${data.orderNumber}</strong> and we'll sort it right away.
+    </td></tr>`;
+
+  await sendBrevoEmail(to, `Order cancelled — ${data.orderNumber}`, shell(body));
+}
+
 // Win-back offer — only ever sent to a customer with marketing_consent set
 // (checked by the caller, app/api/loyalty/winback/send). The offer is an
 // already-issued reward code, not an automatic discount — the customer has

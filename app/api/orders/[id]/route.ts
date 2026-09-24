@@ -82,7 +82,10 @@ export async function PUT(
     }
 
     if (status === "cancelled") {
-      await cancelOrderAndFreeTable(Number(id), order.table_id);
+      const result = await cancelOrderAndFreeTable(Number(id), order.table_id);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error }, { status: 409 });
+      }
     } else if (status) {
       const { error } = await supabase
         .from("orders")
@@ -211,7 +214,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    await cancelOrderAndFreeTable(Number(id), order.table_id);
+    const result = await cancelOrderAndFreeTable(Number(id), order.table_id);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 409 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

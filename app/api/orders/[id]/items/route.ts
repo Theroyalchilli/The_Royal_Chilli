@@ -121,6 +121,14 @@ export async function PUT(
     const { itemId, status, action, quantity } = await req.json();
 
     if (action === "void") {
+      // Once an order is paid, voiding an item wouldn't touch the money
+      // already taken for it — that's what Refund is for — so it's blocked
+      // here rather than left to silently drift out of sync.
+      const { data: orderForVoid } = await supabase.from("orders").select("status, table_id").eq("id", orderId).single();
+      if (orderForVoid?.status === "paid") {
+        return NextResponse.json({ error: "Cannot void items on a paid order — use Refund from Order History instead." }, { status: 409 });
+      }
+
       const { error } = await supabase
         .from("order_items")
         .update({ status: "cancelled" })
@@ -140,8 +148,7 @@ export async function PUT(
         .eq("order_id", orderId)
         .neq("status", "cancelled");
       if (remaining === 0) {
-        const { data: order } = await supabase.from("orders").select("table_id").eq("id", orderId).single();
-        await cancelOrderAndFreeTable(Number(orderId), order?.table_id ?? null);
+        await cancelOrderAndFreeTable(Number(orderId), orderForVoid?.table_id ?? null);
       }
     } else if (action === "reduce" && quantity > 0) {
       const { error } = await supabase

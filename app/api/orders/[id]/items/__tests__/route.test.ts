@@ -64,12 +64,13 @@ beforeEach(() => {
 
 describe("PUT /api/orders/[id]/items — void action closes an emptied-out order", () => {
   it("cancels the order and frees the table when the last active item is voided", async () => {
+    queue("orders", { data: { status: "pending", table_id: 5 }, error: null }); // paid-status guard read
     queue("order_items", { error: null }); // the void update itself
     queue("orders", { data: { discount: 0, service_charge_pct: 0 }, error: null }); // recalcTotals read
     queue("order_items", { data: [], error: null }); // recalcTotals: no active items left
     queue("orders", { data: null, error: null }); // recalcTotals write
     queue("order_items", { data: null, error: null, count: 0 }); // remaining-items check
-    queue("orders", { data: { table_id: 5 }, error: null }); // table lookup
+    queue("orders", { data: null, error: null }); // cancelOrderAndFreeTable's own status/email read
     queue("orders", { data: null, error: null }); // cancelOrderAndFreeTable's order update
     queue("restaurant_tables", { data: null, error: null }); // cancelOrderAndFreeTable's table update
 
@@ -80,6 +81,7 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
   });
 
   it("does NOT cancel the order or free the table when other active items remain", async () => {
+    queue("orders", { data: { status: "pending", table_id: 5 }, error: null }); // paid-status guard read
     queue("order_items", { error: null }); // the void update itself
     queue("orders", { data: { discount: 0, service_charge_pct: 0 }, error: null }); // recalcTotals read
     queue("order_items", { data: [{ item_price: 5, quantity: 1 }], error: null }); // one item still active
@@ -89,6 +91,15 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
     const res = await voidItem("77", 1);
     expect(res.status).toBe(200);
     expect(ordersUpdatePayloads.some((u) => u.status === "cancelled")).toBe(false);
+    expect(tablesUpdatePayloads).toHaveLength(0);
+  });
+
+  it("refuses to void an item on an already-paid order", async () => {
+    queue("orders", { data: { status: "paid", table_id: 5 }, error: null }); // paid-status guard read
+
+    const res = await voidItem("77", 1);
+    expect(res.status).toBe(409);
+    expect(ordersUpdatePayloads).toHaveLength(0);
     expect(tablesUpdatePayloads).toHaveLength(0);
   });
 });

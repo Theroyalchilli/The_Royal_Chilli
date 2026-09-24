@@ -30,7 +30,7 @@ export async function createCustomerSession(customer: CustomerSession): Promise<
 async function fromToken(token: string | undefined): Promise<CustomerSession | null> {
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.type !== "customer") return null;
     return { id: payload.id as number, name: payload.name as string, email: payload.email as string };
   } catch {
@@ -61,7 +61,7 @@ export async function createPasswordResetToken(customerId: number): Promise<stri
 
 export async function verifyPasswordResetToken(token: string): Promise<number | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.type !== "password_reset") return null;
     return payload.id as number;
   } catch {

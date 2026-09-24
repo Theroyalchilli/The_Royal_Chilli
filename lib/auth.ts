@@ -8,6 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 const COOKIE_NAME = "pos_session";
+const VALID_ROLES = new Set<SessionUser["role"]>(["employee", "manager", "hr", "admin"]);
 
 export async function createSession(user: SessionUser): Promise<string> {
   const token = await new SignJWT({
@@ -23,39 +24,37 @@ export async function createSession(user: SessionUser): Promise<string> {
   return token;
 }
 
-export async function getSession(): Promise<SessionUser | null> {
+// A staff session token carries no `type`/`purpose` marker of its own —
+// unlike customer_session/password_reset in lib/customer-auth.ts, which both
+// do specifically so they can't be replayed as each other. Without the same
+// shape check here, any other token signed with this shared JWT_SECRET (a
+// customer's 30-day login token, say) would verify successfully and get
+// treated as a logged-in staff member by any route that only checks "is
+// there a session" rather than also checking role. Requiring `role` to be a
+// real staff role — which no other token type here ever sets — closes that.
+async function verify(token: string | undefined): Promise<SessionUser | null> {
+  if (!token) return null;
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(COOKIE_NAME)?.value;
-    if (!token) return null;
-
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return {
-      id: payload.id as number,
-      name: payload.name as string,
-      role: payload.role as SessionUser["role"],
-    };
+    const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
+    const { id, name, role } = payload;
+    if (typeof id !== "number" || typeof name !== "string" || !VALID_ROLES.has(role as SessionUser["role"])) {
+      return null;
+    }
+    return { id, name, role: role as SessionUser["role"] };
   } catch {
     return null;
   }
 }
 
+export async function getSession(): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  return verify(cookieStore.get(COOKIE_NAME)?.value);
+}
+
 export async function getSessionFromRequest(
   req: NextRequest
 ): Promise<SessionUser | null> {
-  try {
-    const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (!token) return null;
-
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return {
-      id: payload.id as number,
-      name: payload.name as string,
-      role: payload.role as SessionUser["role"],
-    };
-  } catch {
-    return null;
-  }
+  return verify(req.cookies.get(COOKIE_NAME)?.value);
 }
 
 export function getSessionCookieOptions() {

@@ -280,9 +280,23 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
     setBirthdays(data.upcomingBirthdays || []);
   }, []);
 
-  useEffect(() => { loadCustomers(); }, [loadCustomers]);
-  useEffect(() => { loadRewards(); loadTiers(); loadBirthdays(); }, [loadRewards, loadTiers, loadBirthdays]);
-  useEffect(() => { if (tab === "redemptions") loadRedemptions(); }, [tab, loadRedemptions]);
+  useEffect(() => {
+    loadCustomers();
+    const t = setInterval(loadCustomers, 30000);
+    return () => clearInterval(t);
+  }, [loadCustomers]);
+  useEffect(() => {
+    const load = () => { loadRewards(); loadTiers(); loadBirthdays(); };
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [loadRewards, loadTiers, loadBirthdays]);
+  useEffect(() => {
+    if (tab !== "redemptions") return;
+    loadRedemptions();
+    const t = setInterval(loadRedemptions, 30000);
+    return () => clearInterval(t);
+  }, [tab, loadRedemptions]);
 
   async function addReward() {
     if (!newReward.name || !newReward.points_cost) return;

@@ -74,11 +74,15 @@ function PendingBillsReport() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/reports/pending-bills")
-      .then((r) => r.json())
-      .then((d) => { setBills(d.orders || []); setTotal(d.total || 0); })
-      .catch(() => { setBills([]); setTotal(0); })
-      .finally(() => setLoading(false));
+    const load = () =>
+      fetch("/api/reports/pending-bills")
+        .then((r) => r.json())
+        .then((d) => { setBills(d.orders || []); setTotal(d.total || 0); })
+        .catch(() => { setBills([]); setTotal(0); })
+        .finally(() => setLoading(false));
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
   }, []);
 
   if (loading) {
@@ -174,7 +178,6 @@ function SalesReport() {
   const [weekLoading, setWeekLoading] = useState(false);
 
   const fetchReports = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch(`/api/reports?from=${from}&to=${to}`);
       const json = await res.json();
@@ -191,7 +194,14 @@ function SalesReport() {
     setTo(todayStr());
   }
 
-  useEffect(() => { fetchReports(); }, [fetchReports]);
+  // Background refresh doesn't flip `loading` back on, so it can't flash
+  // the loading state over someone reading the report.
+  useEffect(() => {
+    setLoading(true);
+    fetchReports();
+    const t = setInterval(fetchReports, 30000);
+    return () => clearInterval(t);
+  }, [fetchReports]);
 
   const fetchWeekData = async () => {
     setWeekLoading(true);
@@ -529,7 +539,6 @@ function StaffLabourReport() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    setLoading(true);
     const res = await fetch(`/api/staff-reports?from=${from}&to=${to}`);
     const data = await res.json();
     setRows(data.rows || []);
@@ -537,7 +546,12 @@ function StaffLabourReport() {
     setLoading(false);
   }, [from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    setLoading(true);
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const isToday = from === today() && to === today();
 

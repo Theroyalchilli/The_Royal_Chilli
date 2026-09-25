@@ -27,7 +27,12 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 function SalesTab({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<SalesData | null>(null);
-  useEffect(() => { fetch(`/api/analytics/sales?from=${from}&to=${to}`).then((r) => r.json()).then(setData); }, [from, to]);
+  useEffect(() => {
+    const load = () => fetch(`/api/analytics/sales?from=${from}&to=${to}`).then((r) => r.json()).then(setData);
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [from, to]);
   if (!data) return null;
 
   const maxHourly = Math.max(...data.hourly.map((h) => h.orders), 1);
@@ -63,7 +68,12 @@ function SalesTab({ from, to }: { from: string; to: string }) {
 
 function MenuTab({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<{ best_sellers: MenuItemStat[]; worst_sellers: MenuItemStat[] } | null>(null);
-  useEffect(() => { fetch(`/api/analytics/menu?from=${from}&to=${to}`).then((r) => r.json()).then(setData); }, [from, to]);
+  useEffect(() => {
+    const load = () => fetch(`/api/analytics/menu?from=${from}&to=${to}`).then((r) => r.json()).then(setData);
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [from, to]);
   if (!data) return null;
 
   const List = ({ items, title }: { items: MenuItemStat[]; title: string }) => (
@@ -101,7 +111,12 @@ function MenuTab({ from, to }: { from: string; to: string }) {
 
 function InventoryTab({ from, to }: { from: string; to: string }) {
   const [data, setData] = useState<{ waste: WasteStat[]; total_waste_value: number; forecast: ForecastStat[] } | null>(null);
-  useEffect(() => { fetch(`/api/analytics/inventory?from=${from}&to=${to}`).then((r) => r.json()).then(setData); }, [from, to]);
+  useEffect(() => {
+    const load = () => fetch(`/api/analytics/inventory?from=${from}&to=${to}`).then((r) => r.json()).then(setData);
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [from, to]);
   if (!data) return null;
 
   return (

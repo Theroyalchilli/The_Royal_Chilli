@@ -22,10 +22,14 @@ export default function AuditLogView() {
   const [roleFilter, setRoleFilter] = useState("");
 
   useEffect(() => {
-    fetch("/api/audit-logs")
-      .then((r) => r.json())
-      .then((d) => setLogs(d.logs || []))
-      .finally(() => setLoading(false));
+    const load = () =>
+      fetch("/api/audit-logs")
+        .then((r) => r.json())
+        .then((d) => setLogs(d.logs || []))
+        .finally(() => setLoading(false));
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
   }, []);
 
   const roles = useMemo(() => [...new Set(logs.map((l) => l.staff_role).filter((r): r is string => !!r))], [logs]);

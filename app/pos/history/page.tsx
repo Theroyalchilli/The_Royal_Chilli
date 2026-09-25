@@ -97,7 +97,6 @@ export default function HistoryPage() {
   // outstanding regardless of date, since a bill from last week is exactly
   // as "pending" as one from an hour ago.
   const fetchOrders = useCallback(async () => {
-    setLoading(true);
     try {
       const url = category === "pending"
         ? `/api/orders?status=open&detailed=true`
@@ -112,7 +111,15 @@ export default function HistoryPage() {
     }
   }, [date, category]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  // Background refresh doesn't flip `loading` back on (see above) so it
+  // can't flash the "Loading orders…" state over someone mid-scroll or
+  // mid-refund.
+  useEffect(() => {
+    setLoading(true);
+    fetchOrders();
+    const t = setInterval(fetchOrders, 30000);
+    return () => clearInterval(t);
+  }, [fetchOrders]);
 
   const fetchItems = async (orderId: number): Promise<OrderItem[]> => {
     if (itemsCache[orderId]) return itemsCache[orderId];

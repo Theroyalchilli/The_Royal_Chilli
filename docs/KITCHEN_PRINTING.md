@@ -74,9 +74,13 @@ above automatically, from the same queue.
 
 1. Install the Star Windows driver so **Star MCP30** appears in Windows
    Printers, and make it the **default printer**.
-2. Create a Chrome shortcut on the desktop whose target ends with
-   `--kiosk-printing https://www.theroyalchilli.com/print-station` — this
-   makes Chrome print without the dialog.
+2. Create a Chrome shortcut on the desktop with these arguments:
+   `--user-data-dir="%LOCALAPPDATA%\RoyalChilliPrintStation" --kiosk-printing
+   --disable-background-timer-throttling --disable-renderer-backgrounding
+   --disable-backgrounding-occluded-windows --new-window
+   https://www.theroyalchilli.com/print-station` — its own profile so the
+   flags always apply, printing without the dialog, and no slow-down when the
+   window is hidden (otherwise tickets can take up to a minute).
 3. Open that shortcut. A manager logs in (in another tab) and presses
    **Pair this computer** once; it then stays connected on its own key
    (`lib/print-station.ts`) — it can only print. Press **Test print**.

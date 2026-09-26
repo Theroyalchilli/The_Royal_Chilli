@@ -8,7 +8,9 @@ import { ticketHtml } from "@/lib/ticket-html";
 // USB, printing everything the POS queues (kitchen tickets from the till, QR
 // and website; receipts; Z reports) while the printer can't reach the
 // internet for CloudPRNT. Open it from the Chrome shortcut with
-// --kiosk-printing so each ticket prints without a dialog.
+// --kiosk-printing so each ticket prints without a dialog (plus
+// --disable-background-timer-throttling --disable-renderer-backgrounding
+// --disable-backgrounding-occluded-windows, so it keeps pace when hidden).
 //
 // Stop using it once CloudPRNT works: both take jobs off the same queue, so
 // running the two together can print a ticket twice.
@@ -130,11 +132,27 @@ export default function PrintStationPage() {
     }
   }, [key]);
 
+  // The 3s tick comes from a Web Worker: Chrome throttles a hidden or
+  // minimised page's own timers to about once a minute, which delayed tickets
+  // by up to 60s; worker timers aren't throttled that way. (The desktop
+  // shortcut also starts Chrome with background throttling switched off.)
   useEffect(() => {
     if (!key) return;
     poll();
-    const t = setInterval(poll, POLL_MS);
-    return () => clearInterval(t);
+    let worker: Worker | null = null;
+    let fallback: ReturnType<typeof setInterval> | null = null;
+    try {
+      const src = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${POLL_MS});`], { type: "text/javascript" }));
+      worker = new Worker(src);
+      URL.revokeObjectURL(src);
+      worker.onmessage = () => poll();
+    } catch {
+      fallback = setInterval(poll, POLL_MS);
+    }
+    return () => {
+      worker?.terminate();
+      if (fallback) clearInterval(fallback);
+    };
   }, [key, poll]);
 
   // Keep the screen (and so the page) awake; re-acquired whenever the tab

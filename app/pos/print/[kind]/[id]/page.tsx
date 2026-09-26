@@ -45,17 +45,21 @@ export default async function BrowserPrintPage({ params }: { params: Promise<{ k
       </div>
 
       <style>{`
-        body { background: #fff; }
-        /* ${LINE_WIDTH} columns across 72mm of printable width, like the printer's Font A. */
-        .ticket { width: 72mm; margin: 0 auto; padding: 4mm 0; font-family: 'Courier New', monospace; color: #000; font-size: 2.5mm; line-height: 1.35; }
+        body { background: #fff; margin: 0; }
+        /* The Star MCP30 driver's paper is "72mm x Receipt" and 72mm is all the
+           print head can reach, so the page is exactly that wide and starts at
+           the left edge. Courier is 0.6em per character: ${LINE_WIDTH} columns at
+           2.45mm = 70.6mm, leaving a little slack so the last column never clips.
+           "tall" is double height only (still ${LINE_WIDTH} columns), "big" is
+           double width (${LINE_WIDTH / 2} columns). */
+        .ticket { width: 72mm; margin: 0; padding: 3mm 0; font-family: 'Courier New', monospace; color: #000; font-size: 2.45mm; line-height: 1.35; }
         .line { white-space: pre; overflow: hidden; }
         .center { text-align: center; }
         .bold { font-weight: 700; }
-        .tall { font-size: 3.4mm; font-weight: 700; }
-        .big { font-size: 5mm; font-weight: 700; }
+        .tall { font-weight: 700; transform: scaleY(1.6); transform-origin: 0 0; margin-bottom: 0.55em; }
+        .big { font-size: 4.9mm; font-weight: 700; }
         @media print {
-          @page { size: 80mm auto; margin: 0; }
-          body { margin: 0; }
+          @page { size: 72mm auto; margin: 0; }
           .no-print { display: none; }
         }
       `}</style>

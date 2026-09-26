@@ -11,12 +11,14 @@ export async function POST(req: NextRequest) {
     const session = await getCustomerSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { data: redemption } = await supabase
+    // The active points voucher — never the welcome voucher, which isn't
+    // bought with points and would just be lost.
+    const { data: issued } = await supabase
       .from("loyalty_redemptions")
-      .select("id, points_spent, customer_id, status")
+      .select("id, points_spent, customer_id, status, reward:loyalty_rewards(is_welcome_reward)")
       .eq("customer_id", session.id)
-      .eq("status", "issued")
-      .maybeSingle();
+      .eq("status", "issued");
+    const redemption = (issued ?? []).find((r) => !(r.reward as unknown as { is_welcome_reward?: boolean } | null)?.is_welcome_reward);
     if (!redemption) return NextResponse.json({ error: "No active voucher to cancel" }, { status: 404 });
 
     const { error: cancelErr } = await supabase.from("loyalty_redemptions").update({ status: "cancelled" }).eq("id", redemption.id);

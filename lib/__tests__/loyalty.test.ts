@@ -13,7 +13,7 @@ jest.mock("../supabase", () => ({
   },
 }));
 
-import { generateRedemptionCode, getCashCreditInfo } from "@/lib/loyalty";
+import { generateRedemptionCode, getCashCreditInfo, orderTypesLabel, rewardAllowsOrderType, rewardDiscount } from "@/lib/loyalty";
 
 describe("generateRedemptionCode", () => {
   it("avoids visually ambiguous characters (0/O, 1/I/L)", () => {
@@ -79,5 +79,30 @@ describe("getCashCreditInfo", () => {
     expect(info.rate).toBe(100);
     expect(info.cap).toBe(5);
     expect(info.eligible).toBe(true);
+  });
+});
+
+describe("reward discounts at the till", () => {
+  const welcome = { discount_amount: null, discount_pct: 20, max_discount: 20, order_types: ["dine_in"] };
+
+  it("takes 20% of the bill, capped at £20", () => {
+    expect(rewardDiscount(welcome, 45.5)).toBe(9.1);
+    expect(rewardDiscount(welcome, 100)).toBe(20);
+    expect(rewardDiscount(welcome, 250)).toBe(20);
+  });
+
+  it("an uncapped percentage keeps going; a £ reward is fixed; neither exceeds the bill", () => {
+    expect(rewardDiscount({ ...welcome, max_discount: null }, 250)).toBe(50);
+    expect(rewardDiscount({ discount_amount: 5, discount_pct: null, max_discount: null, order_types: null }, 30)).toBe(5);
+    expect(rewardDiscount({ discount_amount: 5, discount_pct: null, max_discount: null, order_types: null }, 3.5)).toBe(3.5);
+    expect(rewardDiscount({ discount_amount: null, discount_pct: null, max_discount: null, order_types: null }, 30)).toBe(0);
+  });
+
+  it("limits the welcome voucher to dine-in; other rewards work on any order", () => {
+    expect(rewardAllowsOrderType(welcome, "dine_in")).toBe(true);
+    expect(rewardAllowsOrderType(welcome, "takeaway")).toBe(false);
+    expect(rewardAllowsOrderType(welcome, "delivery")).toBe(false);
+    expect(rewardAllowsOrderType({ ...welcome, order_types: null }, "delivery")).toBe(true);
+    expect(orderTypesLabel(["dine_in"])).toBe("dine-in");
   });
 });

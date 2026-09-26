@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canViewCrm } from "@/lib/permissions";
 import { recalcTotals } from "@/lib/order-totals";
+import { orderTypesLabel, rewardAllowsOrderType, rewardDiscount, type RewardTerms } from "@/lib/loyalty";
 
-// Applies an issued redemption to a specific order at the till. A reward
-// with a £ discount_amount reduces the order's discount (same field/flow a
-// manager discount uses — this replaces rather than stacks with an existing
-// discount, same as that endpoint); a reward with no discount_amount (e.g.
-// "free soft drink") just gets marked redeemed — staff hand over the item.
+// Applies an issued redemption to a specific order at the till — any staff
+// member can (the "Loyalty Reward Code" box in the payment screen); codes
+// are one-time and fully checked here. A reward with money off (a £ amount,
+// or a % of the bill capped at max_discount — see rewardDiscount) sets the
+// order's discount (same field a manager discount uses; replaces rather than
+// stacks with an existing one); a reward with no money off (e.g. "free soft
+// drink") just gets marked redeemed — staff hand over the item. A reward
+// limited to some order types (the welcome voucher: dine-in only) is refused
+// on any other order.
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canViewCrm(session.role)) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { code, order_id } = await req.json();
@@ -20,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const { data: redemption, error: fetchErr } = await supabase
       .from("loyalty_redemptions")
-      .select("*, reward:loyalty_rewards(name, discount_amount, min_spend)")
+      .select("*, reward:loyalty_rewards(name, discount_amount, discount_pct, max_discount, order_types, min_spend)")
       .eq("code", String(code).trim().toUpperCase())
       .maybeSingle();
     if (fetchErr || !redemption) return NextResponse.json({ error: "INVALID_CODE", message: "No reward found with that code" }, { status: 404 });
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, status, subtotal, total")
+      .select("id, status, order_type, subtotal, total")
       .eq("id", order_id)
       .single();
     if (orderErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -46,7 +50,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This order can no longer be changed" }, { status: 409 });
     }
 
-    const reward = redemption.reward as { name: string; discount_amount: number | null; min_spend: number };
+    const reward = redemption.reward as RewardTerms & { name: string; min_spend: number };
+    if (!rewardAllowsOrderType(reward, order.order_type)) {
+      return NextResponse.json(
+        { error: "WRONG_ORDER_TYPE", message: `This voucher is for ${orderTypesLabel(reward.order_types!)} orders only` },
+        { status: 400 }
+      );
+    }
     if (reward.min_spend && Number(order.total) < Number(reward.min_spend)) {
       return NextResponse.json(
         { error: "MINIMUM_SPEND_NOT_MET", message: `This reward needs a spend of at least £${Number(reward.min_spend).toFixed(2)}` },
@@ -54,14 +64,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // A % reward is fixed to £ here (capped), from the bill as it stands now
+    // — recalculated first so every item on it counts.
+    const current = await recalcTotals(String(order_id));
+    const discount = rewardDiscount(reward, current.subtotal);
     let updatedBill = null;
-    if (reward.discount_amount != null && Number(reward.discount_amount) > 0) {
+    if (discount > 0) {
       await supabase
         .from("orders")
         .update({
           discount_type: "amount",
           discount_pct: null,
-          discount: Number(reward.discount_amount),
+          discount,
           discount_reason: `Loyalty reward: ${reward.name}`,
           updated_at: new Date().toISOString(),
         })
@@ -80,7 +94,7 @@ export async function POST(req: NextRequest) {
       .eq("id", redemption.id);
     if (updateErr) throw updateErr;
 
-    return NextResponse.json({ success: true, reward_name: reward.name, discount_applied: reward.discount_amount ?? 0, bill: updatedBill });
+    return NextResponse.json({ success: true, reward_name: reward.name, discount_applied: discount, bill: updatedBill });
   } catch (error) {
     console.error("Redemption redeem error:", error);
     return NextResponse.json({ error: "Failed to redeem reward" }, { status: 500 });

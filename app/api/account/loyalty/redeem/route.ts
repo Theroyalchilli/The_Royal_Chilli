@@ -14,13 +14,14 @@ export async function POST(req: NextRequest) {
     const { reward_id } = await req.json();
     if (!reward_id) return NextResponse.json({ error: "reward_id is required" }, { status: 400 });
 
-    // Only one active voucher at a time — matches "one reward per transaction".
-    const { data: existing } = await supabase
+    // Only one active points voucher at a time — matches "one reward per
+    // transaction". The welcome voucher from sign-up doesn't count.
+    const { data: issued } = await supabase
       .from("loyalty_redemptions")
-      .select("id")
+      .select("id, reward:loyalty_rewards(is_welcome_reward)")
       .eq("customer_id", session.id)
-      .eq("status", "issued")
-      .maybeSingle();
+      .eq("status", "issued");
+    const existing = (issued ?? []).find((r) => !(r.reward as unknown as { is_welcome_reward?: boolean } | null)?.is_welcome_reward);
     if (existing) {
       return NextResponse.json({ error: "You already have an active voucher — cancel it first to redeem a different reward" }, { status: 409 });
     }

@@ -38,7 +38,8 @@ function AuthForm() {
         setError(data.error || "Something went wrong");
         return;
       }
-      router.push("/account");
+      // A new account lands on Loyalty, where its welcome voucher is waiting.
+      router.push(mode === "signup" ? "/account/loyalty" : "/account");
       router.refresh();
     } finally {
       setSaving(false);
@@ -55,6 +56,9 @@ function AuthForm() {
           </span>
           <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-3xl">My Account</h1>
           <p className="mt-1 text-sm text-primary-foreground/70">Order, earn points and book a table — all in one place.</p>
+          {mode === "signup" && (
+            <p className="mt-2 text-sm font-semibold text-amber-200">Sign up and get 20% off your first dine-in visit (up to £20).</p>
+          )}
         </div>
 
         <div className="mt-7 rounded-2xl border border-amber-300/20 bg-white/5 p-5 backdrop-blur">

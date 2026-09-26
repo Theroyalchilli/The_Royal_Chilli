@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canViewCrm } from "@/lib/permissions";
 
 // Read-only lookup — lets staff preview a code (name, discount, expiry)
 // before committing to /redeem against a specific order.
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canViewCrm(session.role)) {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { code } = await req.json();
@@ -15,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const { data: redemption, error } = await supabase
     .from("loyalty_redemptions")
-    .select("*, reward:loyalty_rewards(name, description, discount_amount, min_spend), customer:customers(name, phone)")
+    .select("*, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend), customer:customers(name, phone)")
     .eq("code", String(code).trim().toUpperCase())
     .maybeSingle();
   if (error || !redemption) return NextResponse.json({ error: "INVALID_CODE", message: "No reward found with that code" }, { status: 404 });

@@ -156,3 +156,55 @@ export async function issueRedemption(customerId: number, rewardId: number, staf
 
   return { ok: true, redemption, rewardName: reward.name };
 }
+
+// ---------- reward discounts at the till ----------
+
+export type RewardTerms = {
+  discount_amount: number | string | null;
+  discount_pct: number | string | null;
+  max_discount: number | string | null;
+  order_types: string[] | null;
+};
+
+// £ off a bill for this reward: a percentage of the subtotal (capped at
+// max_discount if set), else a fixed amount; never more than the subtotal.
+// 0 = no money off (e.g. "free soft drink" — staff hand the item over).
+export function rewardDiscount(reward: RewardTerms, subtotal: number): number {
+  let off = 0;
+  if (reward.discount_pct != null && Number(reward.discount_pct) > 0) {
+    off = Math.round(subtotal * Number(reward.discount_pct)) / 100;
+    if (reward.max_discount != null) off = Math.min(off, Number(reward.max_discount));
+  } else if (reward.discount_amount != null) {
+    off = Number(reward.discount_amount);
+  }
+  return Math.max(0, Math.min(Math.round(off * 100) / 100, subtotal));
+}
+
+export function rewardAllowsOrderType(reward: RewardTerms, orderType: string): boolean {
+  return !reward.order_types || reward.order_types.length === 0 || reward.order_types.includes(orderType);
+}
+
+const ORDER_TYPE_LABEL: Record<string, string> = { dine_in: "dine-in", takeaway: "collection", delivery: "delivery" };
+export const orderTypesLabel = (types: string[]) => types.map((t) => ORDER_TYPE_LABEL[t] ?? t).join(" / ");
+
+// ---------- welcome voucher ----------
+
+// A new online account gets the welcome reward (migration 061: 20% off a
+// dine-in bill, max £20, 30 days, once) instead of bonus points. Never fails
+// the sign-up — no active welcome reward, or a hiccup, just means no voucher.
+export async function issueWelcomeVoucher(customerId: number): Promise<void> {
+  try {
+    const { data: reward } = await supabase
+      .from("loyalty_rewards")
+      .select("id")
+      .eq("is_welcome_reward", true)
+      .eq("active", 1)
+      .limit(1)
+      .maybeSingle();
+    if (!reward) return;
+    const result = await issueRedemption(customerId, reward.id, null);
+    if (!result.ok) console.error(`Welcome voucher not issued to customer ${customerId}: ${result.error}`);
+  } catch (err) {
+    console.error(`Welcome voucher not issued to customer ${customerId}:`, err);
+  }
+}

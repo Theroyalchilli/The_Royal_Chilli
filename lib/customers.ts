@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
-import { getPointsExpiryTimestamp } from "@/lib/loyalty";
+import { getPointsExpiryTimestamp, issueWelcomeVoucher } from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
 
 // Every column except password_hash — use this instead of select("*") on
@@ -33,7 +33,6 @@ export async function signupCustomer(
   }
 
   const password_hash = await bcrypt.hash(password, 10);
-  const WELCOME_BONUS_POINTS = 50;
 
   if (existing) {
     // Claim the existing guest row — keep its name if it already had a real
@@ -45,8 +44,9 @@ export async function signupCustomer(
       .select(CUSTOMER_SAFE_FIELDS)
       .single();
     if (error) return { ok: false, error: "Failed to create account" };
-    await supabase.from("loyalty_transactions").insert({ customer_id: existing.id, points_delta: WELCOME_BONUS_POINTS, reason: "welcome_bonus" });
-    return { ok: true, customer: { ...data, loyalty_points: (data as Customer).loyalty_points + WELCOME_BONUS_POINTS } as Customer };
+    // Signing up earns the welcome voucher (20% off a dine-in visit), not points.
+    await issueWelcomeVoucher(existing.id);
+    return { ok: true, customer: data as Customer };
   }
 
   const { data, error } = await supabase
@@ -55,8 +55,8 @@ export async function signupCustomer(
     .select(CUSTOMER_SAFE_FIELDS)
     .single();
   if (error) return { ok: false, error: "Failed to create account" };
-  await supabase.from("loyalty_transactions").insert({ customer_id: data.id, points_delta: WELCOME_BONUS_POINTS, reason: "welcome_bonus" });
-  return { ok: true, customer: { ...data, loyalty_points: (data as Customer).loyalty_points + WELCOME_BONUS_POINTS } as Customer };
+  await issueWelcomeVoucher(data.id);
+  return { ok: true, customer: data as Customer };
 }
 
 export async function verifyCustomerLogin(

@@ -11,9 +11,33 @@ type Redemption = {
   points_spent: number;
   issued_at: string;
   expires_at: string;
-  reward: { name: string; discount_amount: number | null } | null;
+  reward: { name: string; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
 };
-type LoyaltyData = { points: number; rewards: Reward[]; activeRedemption: Redemption | null };
+type LoyaltyData = { points: number; rewards: Reward[]; activeRedemption: Redemption | null; welcomeVoucher: Redemption | null };
+
+const spacedCode = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
+const expiryLabel = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
+// The sign-up voucher: 20% off a dine-in bill (up to £20), one use. Always
+// shown at the top while unused — it isn't bought with points.
+function WelcomeVoucher({ voucher }: { voucher: Redemption }) {
+  const r = voucher.reward;
+  return (
+    <div className="mt-3.5 rounded-2xl border-2 border-dashed border-primary bg-surface px-4 py-5 text-center shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Welcome gift</div>
+      <div className="mt-1 font-[family-name:var(--font-playfair)] text-xl">
+        {r?.discount_pct ? `${Number(r.discount_pct)}% off` : r?.name} your bill when you dine in
+      </div>
+      {r?.max_discount ? <div className="text-xs text-muted-foreground">Up to £{Number(r.max_discount).toFixed(2)} off · one use</div> : null}
+      <div className="mx-auto my-3 rounded-2xl bg-primary px-2 py-4 font-[family-name:var(--font-playfair)] text-2xl tracking-[3px] text-primary-foreground sm:text-3xl sm:tracking-[6px]">
+        {spacedCode(voucher.code)}
+      </div>
+      <div className="text-xs text-muted-foreground">Show this code to staff when you pay for a dine-in meal.</div>
+      <div className="mt-1 text-xs text-amber-600">Expires {expiryLabel(voucher.expires_at)}</div>
+    </div>
+  );
+}
 
 const R = 88;
 const CIRCUMFERENCE = 2 * Math.PI * R;
@@ -80,10 +104,8 @@ function VoucherPanel({ redemption, onCancel, busy }: { redemption: Redemption |
       </div>
     );
   }
-  const code = redemption.code;
-  const disp = `${code.slice(0, 4)} ${code.slice(4)}`;
-  const expires = new Date(redemption.expires_at);
-  const expiresLabel = expires.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const disp = spacedCode(redemption.code);
+  const expiresLabel = expiryLabel(redemption.expires_at);
 
   return (
     <div className="px-4 py-5 text-center">
@@ -166,6 +188,8 @@ function LoyaltyInner() {
   return (
     <div>
       <h1 className="font-[family-name:var(--font-playfair)] text-2xl">Loyalty</h1>
+
+      {data.welcomeVoucher && <WelcomeVoucher voucher={data.welcomeVoucher} />}
 
       <div className="mt-3.5 rounded-2xl border border-border bg-surface shadow-sm">
         <Donut points={data.points} nextReward={nextReward} />

@@ -107,6 +107,13 @@ describe("buildTicket (Z report)", () => {
     expect(total.endsWith("£18.00")).toBe(true);
   });
 
+  it("lays out narrower for the browser fallback without cutting amounts", async () => {
+    const t = await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 72, source: null }), 38);
+    const lines = (t ?? []).filter((l) => l.size !== "big").map((l) => l.text);
+    expect(Math.max(...lines.map((l) => l.length))).toBeLessThanOrEqual(38);
+    expect(lines.find((l) => l.startsWith("Expected closing cash balance"))).toMatch(/£\d+\.\d\d$/);
+  });
+
   it("prints nothing for a shift that doesn't exist", async () => {
     zReport = null;
     expect(await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 999, source: null }))).toBeNull();

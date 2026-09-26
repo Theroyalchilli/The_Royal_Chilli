@@ -29,7 +29,6 @@ export type PrintJob = {
 
 // 80mm paper, Font A: 48 characters per line at normal width.
 export const LINE_WIDTH = 48;
-const DIVIDER = "-".repeat(LINE_WIDTH);
 
 // Vercel runs in UTC — tickets must show restaurant-local time.
 function londonTime(iso: string, withDate = false): string {
@@ -46,22 +45,29 @@ function money(n: number): string {
   return `£${Number(n).toFixed(2)}`;
 }
 
-// Left text + right-aligned amount on one line (receipts).
-function row(left: string, right: string): string {
-  const room = LINE_WIDTH - right.length - 1;
+// Left text + right-aligned amount on one line, `width` columns wide.
+function rowAt(width: number, left: string, right: string): string {
+  const room = width - right.length - 1;
   const l = left.length > room ? left.slice(0, room) : left;
-  return l + " ".repeat(LINE_WIDTH - l.length - right.length) + right;
+  return l + " ".repeat(Math.max(1, width - l.length - right.length)) + right;
+}
+
+// Each builder lays out for a given line width: the printer's own 48, or
+// fewer (bigger text) for the browser-print fallback.
+function layout(width: number) {
+  return { row: (left: string, right: string) => rowAt(width, left, right), DIVIDER: "-".repeat(width) };
 }
 
 const SOURCE_LABEL: Record<string, string> = { till: "TILL", qr: "QR ORDER", online: "ONLINE" };
 
-export async function buildTicket(job: PrintJob): Promise<Ticket | null> {
-  if (job.kind === "zreport") return job.work_period_id ? buildZReportTicket(job.work_period_id) : null;
+export async function buildTicket(job: PrintJob, width = LINE_WIDTH): Promise<Ticket | null> {
+  if (job.kind === "zreport") return job.work_period_id ? buildZReportTicket(job.work_period_id, width) : null;
   if (!job.order_id) return null;
-  return job.kind === "receipt" ? buildReceipt(job.order_id) : buildKitchenTicket(job, job.order_id);
+  return job.kind === "receipt" ? buildReceipt(job.order_id, width) : buildKitchenTicket(job, job.order_id, width);
 }
 
-async function buildZReportTicket(workPeriodId: number): Promise<Ticket | null> {
+async function buildZReportTicket(workPeriodId: number, width: number): Promise<Ticket | null> {
+  const { row, DIVIDER } = layout(width);
   const report = await getZReport(workPeriodId);
   if (!report) return null;
   const t: Ticket = [];
@@ -80,7 +86,8 @@ async function buildZReportTicket(workPeriodId: number): Promise<Ticket | null> 
   return t;
 }
 
-async function buildKitchenTicket(job: PrintJob, orderId: number): Promise<Ticket | null> {
+async function buildKitchenTicket(job: PrintJob, orderId: number, width: number): Promise<Ticket | null> {
+  const { row, DIVIDER } = layout(width);
   const data = await getOrderForPrint(orderId);
   // A cancelled order (e.g. a scheduled one cancelled before its print time)
   // must not reach the kitchen.
@@ -137,7 +144,8 @@ async function buildKitchenTicket(job: PrintJob, orderId: number): Promise<Ticke
 
 const METHOD_LABEL: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
 
-async function buildReceipt(orderId: number): Promise<Ticket | null> {
+async function buildReceipt(orderId: number, width: number): Promise<Ticket | null> {
+  const { row, DIVIDER } = layout(width);
   const data = await getOrderForReceipt(orderId);
   if (!data) return null;
   const { order, items, payments } = data;

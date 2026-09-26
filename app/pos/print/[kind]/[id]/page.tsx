@@ -12,9 +12,9 @@ import PrintNav from "@/app/pos/kitchen/print/[orderId]/PrintNav";
 //
 // /pos/print/receipt/<orderId>, /pos/print/kot/<orderId>, /pos/print/zreport/<workPeriodId>
 
-// 38 columns instead of the printer's 48, so the text can be ~25% bigger and
+// 35 columns instead of the printer's 48, so the text can be ~38% bigger and
 // still fit the 72mm the Star MCP30 driver prints.
-const WIDTH = 38;
+const WIDTH = 35;
 export default async function BrowserPrintPage({ params }: { params: Promise<{ kind: string; id: string }> }) {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -53,15 +53,15 @@ export default async function BrowserPrintPage({ params }: { params: Promise<{ k
         /* The Star MCP30 driver's paper is "72mm x Receipt" and 72mm is all the
            print head can reach, so the page is exactly that wide and starts at
            the left edge. Courier is 0.6em per character: ${WIDTH} columns at
-           3.06mm = 69.8mm, leaving a little slack so the last column never clips.
+           3.37mm = 70.8mm, leaving a little slack so the last column never clips.
            "tall" is double height only (still ${WIDTH} columns), "big" is
            double width (${WIDTH / 2} columns). Anything longer wraps. */
-        .ticket { width: 72mm; margin: 0; padding: 3mm 0; font-family: 'Courier New', monospace; color: #000; font-size: 3.06mm; line-height: 1.3; }
+        .ticket { width: 72mm; margin: 0; padding: 3mm 0; font-family: 'Courier New', monospace; color: #000; font-size: 3.37mm; line-height: 1.3; }
         .line { white-space: pre-wrap; word-break: break-all; }
         .center { text-align: center; }
         .bold { font-weight: 700; }
         .tall { font-weight: 700; transform: scaleY(1.5); transform-origin: 0 0; margin-bottom: 0.5em; }
-        .big { font-size: 6.1mm; font-weight: 700; }
+        .big { font-size: 6.7mm; font-weight: 700; }
         @media print {
           @page { size: 72mm auto; margin: 0; }
           .no-print { display: none; }

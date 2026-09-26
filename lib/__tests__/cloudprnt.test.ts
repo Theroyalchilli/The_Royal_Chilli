@@ -108,10 +108,13 @@ describe("buildTicket (Z report)", () => {
   });
 
   it("lays out narrower for the browser fallback without cutting amounts", async () => {
-    const t = await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 72, source: null }), 38);
+    const t = await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 72, source: null }), 35);
     const lines = (t ?? []).filter((l) => l.size !== "big").map((l) => l.text);
-    expect(Math.max(...lines.map((l) => l.length))).toBeLessThanOrEqual(38);
-    expect(lines.find((l) => l.startsWith("Expected closing cash balance"))).toMatch(/£\d+\.\d\d$/);
+    expect(Math.max(...lines.map((l) => l.length))).toBeLessThanOrEqual(35);
+    // Too long to share a line with its amount: full label, amount below.
+    const i = lines.indexOf("Expected closing cash balance");
+    expect(i).toBeGreaterThan(-1);
+    expect(lines[i + 1]).toMatch(/^ +£\d+\.\d\d$/);
   });
 
   it("prints nothing for a shift that doesn't exist", async () => {

@@ -45,11 +45,18 @@ function money(n: number): string {
   return `£${Number(n).toFixed(2)}`;
 }
 
-// Left text + right-aligned amount on one line, `width` columns wide.
+// Left text + right-aligned amount, `width` columns wide. When the text is
+// too long to share a line with the amount, the amount drops to the next
+// line (split into separate ticket lines by buildTicket) rather than cutting
+// the text short.
 function rowAt(width: number, left: string, right: string): string {
-  const room = width - right.length - 1;
-  const l = left.length > room ? left.slice(0, room) : left;
-  return l + " ".repeat(Math.max(1, width - l.length - right.length)) + right;
+  if (left.length + 1 + right.length > width) return `${left}\n${right.padStart(width)}`;
+  return left + " ".repeat(width - left.length - right.length) + right;
+}
+
+// A line holding "\n" (a wrapped row) becomes separate lines, same style.
+function splitLines(ticket: Ticket): Ticket {
+  return ticket.flatMap((l) => (l.text.includes("\n") ? l.text.split("\n").map((text) => ({ ...l, text })) : [l]));
 }
 
 // Each builder lays out for a given line width: the printer's own 48, or
@@ -61,9 +68,10 @@ function layout(width: number) {
 const SOURCE_LABEL: Record<string, string> = { till: "TILL", qr: "QR ORDER", online: "ONLINE" };
 
 export async function buildTicket(job: PrintJob, width = LINE_WIDTH): Promise<Ticket | null> {
-  if (job.kind === "zreport") return job.work_period_id ? buildZReportTicket(job.work_period_id, width) : null;
-  if (!job.order_id) return null;
-  return job.kind === "receipt" ? buildReceipt(job.order_id, width) : buildKitchenTicket(job, job.order_id, width);
+  let ticket: Ticket | null = null;
+  if (job.kind === "zreport") ticket = job.work_period_id ? await buildZReportTicket(job.work_period_id, width) : null;
+  else if (job.order_id) ticket = job.kind === "receipt" ? await buildReceipt(job.order_id, width) : await buildKitchenTicket(job, job.order_id, width);
+  return ticket && splitLines(ticket);
 }
 
 async function buildZReportTicket(workPeriodId: number, width: number): Promise<Ticket | null> {

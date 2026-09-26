@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
+import { refundTransaction, sumupTransactionFromReference } from "@/lib/sumup";
 
 // A refund is just another row in `payments`, with a negative amount — same
 // pattern as a normal payment, so the existing trigger that keeps
@@ -50,19 +51,20 @@ export async function POST(
     }
 
     // Card and online refunds move real money — never record anything in our
-    // own ledger unless Stripe actually confirms it, so "Refund" here can
-    // never say yes while the customer's card still hasn't been credited.
+    // own ledger unless the provider (Stripe, or SumUp for the till's Solo
+    // reader) actually confirms it, so "Refund" here can never say yes while
+    // the customer's card still hasn't been credited.
     // Cash needs no such check: staff physically hand it back from the till.
     let refundAmount = requestedAmount;
-    let stripeRefundIds: string[] = [];
+    let providerRefundIds: string[] = [];
     let shortfall = 0;
     if (method === "card" || method === "card_online") {
-      const result = await refundViaStripe(Number(id), method, requestedAmount);
+      const result = await refundCard(Number(id), method, requestedAmount);
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: 502 });
       }
       refundAmount = result.refundedAmount;
-      stripeRefundIds = result.refundIds;
+      providerRefundIds = result.refundIds;
       shortfall = result.shortfall;
     }
 
@@ -71,7 +73,7 @@ export async function POST(
       method,
       amount: -refundAmount,
       staff_id: session.id,
-      reference: stripeRefundIds.length > 0 ? `Refund: ${String(reason).trim()} (Stripe: ${stripeRefundIds.join(", ")})` : `Refund: ${String(reason).trim()}`,
+      reference: providerRefundIds.length > 0 ? `Refund: ${String(reason).trim()} (${providerRefundIds.join(", ")})` : `Refund: ${String(reason).trim()}`,
     });
     if (insertError) throw insertError;
 
@@ -87,7 +89,7 @@ export async function POST(
       refunded_amount: refundAmount,
       warning:
         shortfall > 0
-          ? `Refunded £${refundAmount.toFixed(2)} via Stripe. £${shortfall.toFixed(2)} of the requested amount couldn't be matched to a Stripe payment — refund that portion manually and record it here separately.`
+          ? `Refunded £${refundAmount.toFixed(2)} to the card. £${shortfall.toFixed(2)} of the requested amount couldn't be matched to a card-reader or online payment (e.g. it was taken on a separate card machine) — refund that portion manually and record it here separately.`
           : undefined,
     });
   } catch (error) {
@@ -104,14 +106,16 @@ export async function POST(
 // oldest first, stopping the moment a refund attempt fails so a bad payment
 // never blocks the ones before it. Any amount left over after that is
 // reported back as a shortfall rather than silently dropped or over-claimed.
-async function refundViaStripe(
+// Refunds across the order's original card payments, oldest first. Each
+// payment's reference says where it was taken: "sumup:<id>" = the till's SumUp
+// Solo, otherwise a Stripe PaymentIntent (till Stripe reader) or Checkout
+// Session (online). Returned refund ids are labelled "Stripe re_…" /
+// "SumUp <id>" for the refund row's reference.
+async function refundCard(
   orderId: number,
   method: "card" | "card_online",
   amount: number
 ): Promise<{ ok: true; refundedAmount: number; refundIds: string[]; shortfall: number } | { ok: false; error: string }> {
-  if (!stripe) {
-    return { ok: false, error: "Stripe isn't configured — this refund can't be processed automatically. Issue it directly in the Stripe Dashboard, then record what happened here as a note." };
-  }
 
   const { data: originals } = await supabase
     .from("payments")
@@ -133,6 +137,22 @@ async function refundViaStripe(
     if (remainingPence <= 0) break;
     if (!p.reference) continue;
 
+    const sumupTxn = sumupTransactionFromReference(p.reference);
+    if (sumupTxn) {
+      const portion = Math.min(remainingPence, Math.round(Number(p.amount) * 100));
+      try {
+        await refundTransaction(sumupTxn, portion / 100);
+        refundIds.push(`SumUp ${sumupTxn}`);
+        refundedPence += portion;
+        remainingPence -= portion;
+      } catch (err) {
+        console.error("SumUp refund failed for transaction", sumupTxn, err);
+        break;
+      }
+      continue;
+    }
+
+    if (!stripe) continue;
     let paymentIntentId = p.reference;
     if (method === "card_online") {
       try {
@@ -147,7 +167,7 @@ async function refundViaStripe(
     const portion = Math.min(remainingPence, Math.round(Number(p.amount) * 100));
     try {
       const refund = await stripe.refunds.create({ payment_intent: paymentIntentId, amount: portion });
-      refundIds.push(refund.id);
+      refundIds.push(`Stripe ${refund.id}`);
       refundedPence += portion;
       remainingPence -= portion;
     } catch (err) {
@@ -157,7 +177,7 @@ async function refundViaStripe(
   }
 
   if (refundedPence === 0) {
-    return { ok: false, error: "Stripe refused the refund — the card payment may already be fully refunded, or its record has gone stale. Check the Stripe Dashboard directly." };
+    return { ok: false, error: "The refund didn't go through — the card payment may already be fully refunded, was taken on a separate card machine, or the payment provider refused it. Check the SumUp / Stripe dashboard directly." };
   }
 
   return { ok: true, refundedAmount: refundedPence / 100, refundIds, shortfall: remainingPence / 100 };

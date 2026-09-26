@@ -179,12 +179,15 @@ export default function PaymentModal({
   // same concept as Cash Received, once the cashier actually types a value.
   const [amountOverrideCents, setAmountOverrideCents] = useState<number | null>(null);
 
-  // Stripe Terminal card reader — falls back to the manual "Card Paid" button
-  // below if no reader is configured in Settings.
+  // Till card reader (SumUp Solo or Stripe Terminal, per Settings) — falls
+  // back to the manual "Card Paid" button below if no reader is configured.
   const [readerEnabled, setReaderEnabled] = useState(false);
   const [terminalStatus, setTerminalStatus] = useState<"idle" | "processing" | "failed">("idle");
   const [terminalError, setTerminalError] = useState("");
-  const [terminalPiId, setTerminalPiId] = useState<string | null>(null);
+  // The charge the polling loop is currently watching. Cancel clears it so
+  // the loop stops — otherwise a card that goes through after Cancel would be
+  // recorded twice (by the loop and by Cancel's final check).
+  const activeChargeRef = useRef<string | null>(null);
   const [useManualCard, setUseManualCard] = useState(false);
 
   useEffect(() => {
@@ -213,7 +216,7 @@ export default function PaymentModal({
       setTipCents(0);
       setTerminalStatus("idle");
       setTerminalError("");
-      setTerminalPiId(null);
+      activeChargeRef.current = null;
       setUseManualCard(false);
       setPayLaterNote("");
       setRewardCodeInput("");
@@ -475,11 +478,16 @@ export default function PaymentModal({
     }
   };
 
-  // Pushes a real charge to the restaurant's registered Stripe Terminal
-  // reader for the card leg of the bill (bill amount + tip in one real
+  // Pushes a real charge to the till's card reader (SumUp Solo or Stripe
+  // Terminal) for the card leg of the bill (bill amount + tip in one real
   // transaction), then polls until the customer has tapped/inserted their
   // card. Only reached when a reader is actually configured — otherwise the
   // existing manual "Card Paid" button below handles a separate card machine.
+  const checkTerminalCharge = async (chargeId: string) => {
+    const res = await fetch(`/api/pos/terminal/status?charge_id=${encodeURIComponent(chargeId)}`);
+    return res.json();
+  };
+
   const startTerminalCharge = async () => {
     setTerminalStatus("processing");
     setTerminalError("");
@@ -487,7 +495,7 @@ export default function PaymentModal({
       const chargeRes = await fetch("/api/pos/terminal/charge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: amountDue + tipAmount }),
+        body: JSON.stringify({ amount: amountDue + tipAmount, order_number: orderNumber || undefined }),
       });
       const chargeData = await chargeRes.json();
       if (!chargeRes.ok) {
@@ -495,16 +503,19 @@ export default function PaymentModal({
         setTerminalError(chargeData.error || "Failed to start card reader payment");
         return;
       }
-      const piId = chargeData.payment_intent_id as string;
-      setTerminalPiId(piId);
+      const chargeId = chargeData.charge_id as string;
+      activeChargeRef.current = chargeId;
+      const stillActive = () => activeChargeRef.current === chargeId;
 
       const deadline = Date.now() + 90_000; // 90s — plenty for a tap, avoids hanging forever if the reader loses connection
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 2000));
-        const statusRes = await fetch(`/api/pos/terminal/status?payment_intent_id=${piId}`);
-        const statusData = await statusRes.json();
+        if (!stillActive()) return; // cancelled — Cancel does the final check
+        const statusData = await checkTerminalCharge(chargeId);
+        if (!stillActive()) return;
         if (statusData.status === "succeeded") {
-          await handleProcessPayment(piId);
+          activeChargeRef.current = null;
+          await handleProcessPayment(statusData.reference || chargeId);
           return;
         }
         if (statusData.status === "canceled") {
@@ -518,8 +529,17 @@ export default function PaymentModal({
           return;
         }
         // requires_payment_method with no error yet just means "still waiting
-        // for the customer to tap/insert" — keep polling, same as
-        // requires_confirmation/processing.
+        // for the customer to tap/insert" — keep polling.
+      }
+      if (!stillActive()) return;
+      activeChargeRef.current = null;
+      // Stop the reader so a late tap can't take money the till never records,
+      // then look once more in case the card went through right at the end.
+      await fetch("/api/pos/terminal/cancel", { method: "POST" }).catch(() => {});
+      const last = await checkTerminalCharge(chargeId).catch(() => null);
+      if (last?.status === "succeeded") {
+        await handleProcessPayment(last.reference || chargeId);
+        return;
       }
       setTerminalStatus("failed");
       setTerminalError("Timed out waiting for the card reader");
@@ -530,11 +550,15 @@ export default function PaymentModal({
   };
 
   const cancelTerminalCharge = async () => {
-    if (terminalPiId) {
-      fetch("/api/pos/terminal/cancel", { method: "POST" }).catch(() => {});
-    }
+    const chargeId = activeChargeRef.current;
+    activeChargeRef.current = null;
     setTerminalStatus("idle");
-    setTerminalPiId(null);
+    if (!chargeId) return;
+    await fetch("/api/pos/terminal/cancel", { method: "POST" }).catch(() => {});
+    // The customer may have tapped a moment before Cancel — if the card was
+    // charged anyway, record it rather than leave money unaccounted for.
+    const last = await checkTerminalCharge(chargeId).catch(() => null);
+    if (last?.status === "succeeded") await handleProcessPayment(last.reference || chargeId);
   };
 
   const quickAmounts = [

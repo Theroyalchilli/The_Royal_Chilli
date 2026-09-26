@@ -3,10 +3,15 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { stripe, TERMINAL_LOCATION_ADDRESS } from "@/lib/stripe";
+import { pairReader } from "@/lib/sumup";
 
 type PairedReader = { id: string; label: string | null; status: string | null };
 
-// One-time setup: registers a physical Stripe Terminal reader to this account.
+// One-time setup: registers the till's card reader. For a SumUp Solo
+// (provider "sumup"), the pairing code is shown on the Solo under
+// Connections → API → Connect and expires after 5 minutes.
+//
+// For a Stripe Terminal reader:
 // Stripe requires every reader to belong to a Terminal "Location", so this
 // lazily creates one (from the fixed premises address in lib/stripe.ts) the
 // first time and reuses its id after. The registration_code is shown ON THE
@@ -20,13 +25,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!stripe) {
-      return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
-    }
-
-    const { registration_code, label } = await req.json();
+    const { registration_code, label, provider } = await req.json();
     if (!registration_code || !label) {
       return NextResponse.json({ error: "registration_code and label are required" }, { status: 400 });
+    }
+
+    if (provider === "sumup") {
+      const reader = await pairReader(String(registration_code).trim(), String(label).trim());
+      const paired: PairedReader = { id: reader.id, label: reader.name, status: reader.status };
+      return NextResponse.json({ reader: paired });
+    }
+
+    if (!stripe) {
+      return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
     }
 
     // --- ensure a Terminal Location exists ---

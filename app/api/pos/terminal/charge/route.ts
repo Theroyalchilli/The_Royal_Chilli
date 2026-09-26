@@ -1,48 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { stripe } from "@/lib/stripe";
+import { stripe, siteUrl } from "@/lib/stripe";
+import { startReaderCheckout } from "@/lib/sumup";
+import { getTillReader } from "@/lib/till-reader";
 
-// Drives a real charge on the restaurant's registered Stripe Terminal reader.
-// Server-driven flow: create a card_present PaymentIntent, then hand it to the
-// reader. Returns as soon as the reader has been told to collect — the client
-// polls /api/pos/terminal/status for the outcome, since the customer still
-// has to actually tap/insert their card.
+// Pushes a real charge to the till's card reader — a SumUp Solo or a Stripe
+// Terminal reader, whichever Settings selects. Returns as soon as the reader
+// has been told to collect; the client polls /api/pos/terminal/status with
+// the returned charge_id, since the customer still has to tap/insert.
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!stripe) {
-      return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
-    }
-
-    const { amount } = await req.json();
+    const { amount, order_number } = await req.json();
     const amountNum = Number(amount);
     if (!amountNum || amountNum <= 0) {
       return NextResponse.json({ error: "A positive amount is required" }, { status: 400 });
     }
 
-    const { data: setting } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "stripe_terminal_reader_id")
-      .maybeSingle();
-    const readerId = setting ? String(setting.value || "").trim() : "";
-    if (!readerId) {
+    const reader = await getTillReader();
+    if (reader.provider === "none") {
       return NextResponse.json({ error: "No card reader is configured in Settings" }, { status: 400 });
     }
 
+    if (reader.provider === "sumup") {
+      const chargeId = await startReaderCheckout(
+        reader.readerId,
+        amountNum,
+        `${siteUrl()}/api/sumup/webhook`,
+        order_number ? `Royal Chilli ${order_number}` : undefined
+      );
+      return NextResponse.json({ charge_id: chargeId });
+    }
+
+    if (!stripe) {
+      return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
+    }
     const intent = await stripe.paymentIntents.create({
       amount: Math.round(amountNum * 100),
       currency: "gbp",
       payment_method_types: ["card_present"],
       capture_method: "automatic",
     });
-
-    await stripe.terminal.readers.processPaymentIntent(readerId, { payment_intent: intent.id });
-
-    return NextResponse.json({ payment_intent_id: intent.id });
+    await stripe.terminal.readers.processPaymentIntent(reader.readerId, { payment_intent: intent.id });
+    return NextResponse.json({ charge_id: intent.id });
   } catch (error) {
     console.error("Terminal charge error:", error);
     const message = error instanceof Error ? error.message : "Failed to start card reader payment";

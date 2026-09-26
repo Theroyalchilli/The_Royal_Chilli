@@ -366,6 +366,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [uploadingHero, setUploadingHero] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [readerId, setReaderId] = useState("");
+  const [sumupReaderId, setSumupReaderId] = useState("");
+  const [tillProvider, setTillProvider] = useState<"sumup" | "stripe" | "none">("none");
   const [regCode, setRegCode] = useState("");
   const [readerName, setReaderName] = useState("Reception");
   const [pairing, setPairing] = useState(false);
@@ -398,6 +400,11 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.hero_content) setHeroContent(s.hero_content);
         if (Array.isArray(s.hero_images)) setHeroImages(s.hero_images);
         if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
+        if (s.sumup_reader_id !== undefined) setSumupReaderId(String(s.sumup_reader_id));
+        // Same default as lib/till-reader.ts: before this setting existed, a
+        // Stripe reader id alone meant Stripe.
+        if (s.till_card_provider === "sumup" || s.till_card_provider === "stripe" || s.till_card_provider === "none") setTillProvider(s.till_card_provider);
+        else if (String(s.stripe_terminal_reader_id || "").trim()) setTillProvider("stripe");
         setGeofenceEnabled(!!s.geofence_enabled);
         if (s.restaurant_latitude != null) setRestaurantLat(String(s.restaurant_latitude));
         if (s.restaurant_longitude != null) setRestaurantLng(String(s.restaurant_longitude));
@@ -442,11 +449,12 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
     try {
       const res = await fetch("/api/pos/terminal/pair", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ registration_code: regCode.trim(), label: readerName.trim() }),
+        body: JSON.stringify({ provider: tillProvider, registration_code: regCode.trim(), label: readerName.trim() }),
       });
       const data = await res.json();
       if (!res.ok) { setPairError(data.error || "Failed to pair reader"); return; }
-      setReaderId(data.reader.id);
+      if (tillProvider === "sumup") setSumupReaderId(data.reader.id);
+      else setReaderId(data.reader.id);
       setPairedStatus(`Paired — status: ${data.reader.status ?? "registered"}. Click Save below to store it.`);
       setRegCode("");
     } finally {
@@ -469,6 +477,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         hero_content: heroContent,
         hero_images: heroImages,
         stripe_terminal_reader_id: readerId.trim(),
+        sumup_reader_id: sumupReaderId.trim(),
+        till_card_provider: tillProvider,
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
         restaurant_longitude: restaurantLng ? Number(restaurantLng) : null,
@@ -701,40 +711,70 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
             </div>
 
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Card Reader ID (Stripe Terminal)</label>
-              <input type="text" placeholder="tmr_… (from pairing below)" value={readerId} onChange={(e) => setReaderId(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono" />
-              <p className="mt-1 text-muted-foreground text-xs">Leave blank to keep the manual &quot;Card Paid&quot; button (for a separate card machine). Set it to drive a Stripe Reader from the till.</p>
+              <label className="block text-xs text-muted-foreground mb-1">Till card reader</label>
+              <select value={tillProvider} onChange={(e) => { setTillProvider(e.target.value as "sumup" | "stripe" | "none"); setPairError(""); setPairedStatus(""); }} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+                <option value="none">None — manual &quot;Card Paid&quot; button (separate card machine)</option>
+                <option value="sumup">SumUp Solo</option>
+                <option value="stripe">Stripe Reader</option>
+              </select>
+              <p className="mt-1 text-muted-foreground text-xs">Online payments always use Stripe; this only sets the card reader at the till.</p>
             </div>
 
-            <div className="rounded-lg border border-border bg-surface-hover p-3">
-              <p className="text-xs font-semibold text-foreground">Pair a new Stripe Reader</p>
-              <p className="mt-1 text-muted-foreground text-xs">
-                On the reader, open its settings and choose to connect / generate a pairing code — it shows a
-                short registration code (e.g. <span className="font-mono">quick-brown-fox</span>). Enter it here
-                within a few minutes. This registers the reader and fills in the Card Reader ID field above.
-              </p>
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  type="text" placeholder="Registration code from the reader" value={regCode}
-                  onChange={(e) => setRegCode(e.target.value)}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono"
-                />
-                <input
-                  type="text" placeholder="Label (e.g. Reception)" value={readerName}
-                  onChange={(e) => setReaderName(e.target.value)}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-                />
-              </div>
-              <button
-                onClick={pairReader}
-                disabled={pairing || !regCode.trim() || !readerName.trim()}
-                className="mt-3 px-4 py-2 bg-elevated hover:bg-elevated-hover disabled:opacity-50 text-foreground text-xs font-semibold rounded-lg border border-elevated"
-              >
-                {pairing ? "Pairing…" : "Pair Reader"}
-              </button>
-              {pairError && <p className="mt-2 text-red-600 text-xs">{pairError}</p>}
-              {pairedStatus && <p className="mt-2 text-emerald-600 text-xs">{pairedStatus}</p>}
-            </div>
+            {tillProvider !== "none" && (
+              <>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">{tillProvider === "sumup" ? "SumUp Solo reader ID" : "Card Reader ID (Stripe Terminal)"}</label>
+                  <input
+                    type="text"
+                    placeholder={tillProvider === "sumup" ? "Filled in by pairing below" : "tmr_… (from pairing below)"}
+                    value={tillProvider === "sumup" ? sumupReaderId : readerId}
+                    onChange={(e) => (tillProvider === "sumup" ? setSumupReaderId(e.target.value) : setReaderId(e.target.value))}
+                    className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono"
+                  />
+                  <p className="mt-1 text-muted-foreground text-xs">Until a reader is paired, the till keeps the manual &quot;Card Paid&quot; button.</p>
+                </div>
+
+                <div className="rounded-lg border border-border bg-surface-hover p-3">
+                  <p className="text-xs font-semibold text-foreground">{tillProvider === "sumup" ? "Pair the SumUp Solo" : "Pair a new Stripe Reader"}</p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {tillProvider === "sumup" ? (
+                      <>
+                        On the Solo: make sure it&apos;s logged out and on Wi-Fi, then open the top menu →{" "}
+                        <b>Connections</b> → <b>API</b> → <b>Connect</b>. It shows a pairing code — enter it here
+                        within 5 minutes. This links the Solo and fills in the reader ID above.
+                      </>
+                    ) : (
+                      <>
+                        On the reader, open its settings and choose to connect / generate a pairing code — it shows a
+                        short registration code (e.g. <span className="font-mono">quick-brown-fox</span>). Enter it here
+                        within a few minutes. This registers the reader and fills in the Card Reader ID field above.
+                      </>
+                    )}
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text" placeholder={tillProvider === "sumup" ? "Pairing code from the Solo" : "Registration code from the reader"} value={regCode}
+                      onChange={(e) => setRegCode(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm font-mono"
+                    />
+                    <input
+                      type="text" placeholder="Label (e.g. Reception)" value={readerName}
+                      onChange={(e) => setReaderName(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={pairReader}
+                    disabled={pairing || !regCode.trim() || !readerName.trim()}
+                    className="mt-3 px-4 py-2 bg-elevated hover:bg-elevated-hover disabled:opacity-50 text-foreground text-xs font-semibold rounded-lg border border-elevated"
+                  >
+                    {pairing ? "Pairing…" : "Pair Reader"}
+                  </button>
+                  {pairError && <p className="mt-2 text-red-600 text-xs">{pairError}</p>}
+                  {pairedStatus && <p className="mt-2 text-emerald-600 text-xs">{pairedStatus}</p>}
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-foreground text-sm font-medium">Automatic Overtime</p>

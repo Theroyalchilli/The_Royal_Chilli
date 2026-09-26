@@ -169,7 +169,9 @@ export default function HistoryPage() {
   const openRefund = (order: OrderRow) => {
     setRefundOrder(order);
     setRefundAmount(order.amount_paid.toFixed(2));
-    setRefundMethod("cash");
+    // Default to how it was paid, so an online or card payment goes back to
+    // the customer's card (a "Cash" refund only records money handed back).
+    setRefundMethod(order.payment_method === "Online" ? "card_online" : order.payment_method === "Card" ? "card" : "cash");
     setRefundReason("");
     setRefundError("");
     setRefundNotice("");
@@ -508,7 +510,7 @@ export default function HistoryPage() {
                     onClick={() => setRefundMethod(m)}
                     className={`flex-1 py-2 text-xs font-bold transition-all ${refundMethod === m ? "bg-red-600 text-white" : "bg-elevated text-muted-foreground"}`}
                   >
-                    {m === "cash" ? "Cash" : m === "card" ? "Card" : "Online"}
+                    {m === "cash" ? "Cash" : m === "card" ? "Card (till)" : "Online card"}
                   </button>
                 ))}
               </div>

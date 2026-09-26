@@ -12,6 +12,7 @@ import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
 import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
+import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
 import ZReportView from "@/components/pos/ZReportView";
 import type { ZReport } from "@/lib/z-report";
 import type {
@@ -1015,6 +1016,7 @@ export default function POSPage() {
         </div>
       </div>
 
+      <NewOrderAlerts />
       <TableRequestsBanner />
 
       {/* ══════════════════════════════════════════

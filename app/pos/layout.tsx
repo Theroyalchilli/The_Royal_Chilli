@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
+import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -19,6 +20,7 @@ export default async function PosLayout({
   return (
     <div style={{ fontFamily: "var(--font-space-grotesk)" }}>
       {children}
+      <NewOrderAlerts />
       <Toaster />
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { playBuzzer } from "@/lib/buzzer";
 
 interface OrderAlert {
@@ -16,6 +17,9 @@ interface OrderAlert {
 const SEEN_KEY = "rc_seen_order_alerts";
 const POLL_MS = 10_000;
 const REPEAT_MS = 20_000;
+// On a device's very first load, orders older than this count as already
+// seen (no chiming through the evening's backlog); newer ones still alert.
+const FRESH_MS = 15 * 60 * 1000;
 
 function readSeen(): Set<number> | null {
   try {
@@ -36,9 +40,11 @@ const TYPE_LABEL: Record<string, string> = { takeaway: "collection", delivery: "
 // Chimes for orders customers placed themselves — website and table QR —
 // which no member of staff entered and so could otherwise go unnoticed. The
 // chime repeats every 20s until someone taps Seen; "seen" is remembered per
-// device, so a refresh doesn't re-alert. The first time a till opens this,
-// whatever's already there counts as seen (no chiming through a backlog).
+// device, so a refresh doesn't re-alert. Mounted in the POS and Staff Hub
+// layouts, so it follows staff to every screen — except the Kitchen Display,
+// which doesn't chime.
 export default function NewOrderAlerts() {
+  const hidden = usePathname()?.startsWith("/pos/kitchen") ?? false;
   const [pending, setPending] = useState<OrderAlert[]>([]);
   const [soundArmed, setSoundArmed] = useState(false);
   const seen = useRef<Set<number> | null>(null);
@@ -61,7 +67,8 @@ export default function NewOrderAlerts() {
       if (!res.ok) return;
       const alerts: OrderAlert[] = (await res.json()).alerts || [];
       if (!seen.current) {
-        seen.current = readSeen() ?? new Set(alerts.map((a) => a.id));
+        const cutoff = Date.now() - FRESH_MS;
+        seen.current = readSeen() ?? new Set(alerts.filter((a) => new Date(a.at).getTime() < cutoff).map((a) => a.id));
         writeSeen(seen.current);
       }
       const next = alerts.filter((a) => !seen.current!.has(a.id));
@@ -74,10 +81,11 @@ export default function NewOrderAlerts() {
   }, []);
 
   useEffect(() => {
+    if (hidden) return;
     poll();
     const t = setInterval(poll, POLL_MS);
     return () => clearInterval(t);
-  }, [poll]);
+  }, [poll, hidden]);
 
   // Keep chiming while anything is unseen.
   useEffect(() => {
@@ -94,10 +102,10 @@ export default function NewOrderAlerts() {
     setPending([]);
   };
 
-  if (pending.length === 0) return null;
+  if (hidden || pending.length === 0) return null;
 
   return (
-    <div className="bg-sky-50 border-b border-sky-300 px-4 py-2 flex-shrink-0">
+    <div className="fixed inset-x-0 top-0 z-[80] bg-sky-50 border-b-2 border-sky-400 px-4 py-2 shadow-lg">
       <div className="flex items-start justify-between gap-3 max-w-2xl mx-auto">
         <div className="space-y-1">
           {pending.map((a) => (

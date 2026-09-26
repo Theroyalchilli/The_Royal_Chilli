@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { canAccess, isStaffManagement, canViewCrm } from "@/lib/permissions";
 import StaffShell, { type NavGroup } from "@/components/staff/StaffShell";
 import { Toaster } from "@/components/ui/toaster";
+import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -61,6 +62,7 @@ export default async function StaffHubLayout({
   return (
     <StaffShell user={{ name: session.name, role: session.role }} nav={nav}>
       {children}
+      <NewOrderAlerts />
       <Toaster />
     </StaffShell>
   );

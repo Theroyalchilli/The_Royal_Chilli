@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { playBuzzer } from "@/lib/buzzer";
+import { audioBlocked, playBuzzer, unlockAudio } from "@/lib/buzzer";
 
 interface OrderAlert {
   id: number; // the kitchen ticket's print job id
@@ -46,20 +46,17 @@ const TYPE_LABEL: Record<string, string> = { takeaway: "collection", delivery: "
 export default function NewOrderAlerts() {
   const hidden = usePathname()?.startsWith("/pos/kitchen") ?? false;
   const [pending, setPending] = useState<OrderAlert[]>([]);
-  const [soundArmed, setSoundArmed] = useState(false);
+  const [soundBlocked, setSoundBlocked] = useState(false);
   const seen = useRef<Set<number> | null>(null);
   const shown = useRef<Set<number>>(new Set());
 
-  // Browsers only allow sound after the page has been tapped/clicked once.
-  useEffect(() => {
-    const arm = () => setSoundArmed(true);
-    window.addEventListener("pointerdown", arm, { once: true });
-    window.addEventListener("keydown", arm, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", arm);
-      window.removeEventListener("keydown", arm);
-    };
-  }, []);
+  // Browsers keep a page silent until it's been tapped (lib/buzzer.ts) —
+  // the banner shows a big button while that's still the case.
+  const enableSound = async () => {
+    await unlockAudio();
+    setSoundBlocked(audioBlocked());
+    playBuzzer();
+  };
 
   const poll = useCallback(async () => {
     try {
@@ -75,6 +72,7 @@ export default function NewOrderAlerts() {
       if (next.some((a) => !shown.current.has(a.id))) playBuzzer();
       shown.current = new Set(next.map((a) => a.id));
       setPending(next);
+      setSoundBlocked(audioBlocked());
     } catch {
       // next poll retries
     }
@@ -90,7 +88,10 @@ export default function NewOrderAlerts() {
   // Keep chiming while anything is unseen.
   useEffect(() => {
     if (pending.length === 0) return;
-    const t = setInterval(playBuzzer, REPEAT_MS);
+    const t = setInterval(() => {
+      playBuzzer();
+      setSoundBlocked(audioBlocked());
+    }, REPEAT_MS);
     return () => clearInterval(t);
   }, [pending.length]);
 
@@ -118,14 +119,23 @@ export default function NewOrderAlerts() {
               </span>
             </div>
           ))}
-          {!soundArmed && <div className="text-xs text-sky-700">🔔 Tap anywhere on the screen to turn on the alert sound</div>}
         </div>
-        <button
-          onClick={markSeen}
-          className="flex-shrink-0 px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-sm font-bold rounded-lg transition-colors"
-        >
-          Seen
-        </button>
+        <div className="flex flex-shrink-0 gap-2">
+          {soundBlocked && (
+            <button
+              onClick={enableSound}
+              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold rounded-lg transition-colors animate-pulse"
+            >
+              🔔 Tap to turn on sound
+            </button>
+          )}
+          <button
+            onClick={markSeen}
+            className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-sm font-bold rounded-lg transition-colors"
+          >
+            Seen
+          </button>
+        </div>
       </div>
     </div>
   );

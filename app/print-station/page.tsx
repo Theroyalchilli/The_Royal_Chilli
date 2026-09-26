@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ticket } from "@/lib/cloudprnt";
 import { ticketHtml } from "@/lib/ticket-html";
+import { playBuzzer } from "@/lib/buzzer";
 
 // USB Print Station — runs on the till laptop that has the Star mC-Print3 on
 // USB, printing everything the POS queues (kitchen tickets from the till, QR
@@ -10,7 +11,8 @@ import { ticketHtml } from "@/lib/ticket-html";
 // internet for CloudPRNT. Open it from the Chrome shortcut with
 // --kiosk-printing so each ticket prints without a dialog (plus
 // --disable-background-timer-throttling --disable-renderer-backgrounding
-// --disable-backgrounding-occluded-windows, so it keeps pace when hidden).
+// --disable-backgrounding-occluded-windows, so it keeps pace when hidden, and
+// --autoplay-policy=no-user-gesture-required, so it can chime untouched).
 //
 // Stop using it once CloudPRNT works: both take jobs off the same queue, so
 // running the two together can print a ticket twice.
@@ -68,8 +70,7 @@ function printTicket(ticket: Ticket): Promise<"printed" | "dialog"> {
   });
 }
 
-// Short beep for problems — browsers only allow sound after someone has
-// clicked on the page, so it's armed by the first click.
+// Short single beep for problems (different from the order chime).
 function beep() {
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -82,6 +83,13 @@ function beep() {
   } catch {}
 }
 
+// Three chimes a few seconds apart for a new customer order.
+function orderChime() {
+  playBuzzer();
+  setTimeout(playBuzzer, 3000);
+  setTimeout(playBuzzer, 6000);
+}
+
 export default function PrintStationPage() {
   const [key, setKey] = useState<string | null>(null);
   const [state, setState] = useState<State>("starting");
@@ -90,7 +98,6 @@ export default function PrintStationPage() {
   const [pairError, setPairError] = useState("");
   const [pairing, setPairing] = useState(false);
   const busy = useRef(false);
-  const soundArmed = useRef(false);
 
   useEffect(() => {
     const k = readKey();
@@ -123,6 +130,10 @@ export default function PrintStationPage() {
           body: JSON.stringify({ id: data.job.id }),
         });
         setPrinted((p) => [{ at: clock(), label: labelFor(data.ticket, data.job.kind) }, ...p].slice(0, 12));
+        // Orders customers placed themselves (website, table QR) chime here
+        // too — this window runs unattended with sound allowed (shortcut flag
+        // --autoplay-policy=no-user-gesture-required), so it needs no tap.
+        if (data.job.kind === "kot" && (data.job.source === "online" || data.job.source === "qr")) orderChime();
         setState(outcome === "dialog" ? "dialog" : "ok");
       }
     } catch {
@@ -167,10 +178,11 @@ export default function PrintStationPage() {
     return () => document.removeEventListener("visibilitychange", acquire);
   }, []);
 
-  // Beep every 15s while something's wrong, once sound has been armed.
+  // Beep every 15s while something's wrong (the shortcut allows sound
+  // without a tap; opened any other way it may stay silent).
   useEffect(() => {
     if (state === "ok" || state === "starting") return;
-    const t = setInterval(() => { if (soundArmed.current) beep(); }, 15000);
+    const t = setInterval(beep, 15000);
     return () => clearInterval(t);
   }, [state]);
 
@@ -212,7 +224,7 @@ export default function PrintStationPage() {
   const b = banner[state];
 
   return (
-    <div onClick={() => { soundArmed.current = true; }} style={{ minHeight: "100vh", background: "#f5f5f4", fontFamily: "system-ui, sans-serif", color: "#1c1917" }}>
+    <div style={{ minHeight: "100vh", background: "#f5f5f4", fontFamily: "system-ui, sans-serif", color: "#1c1917" }}>
       <div style={{ background: b.bg, color: "#fff", padding: "28px 24px" }}>
         <div style={{ fontSize: 30, fontWeight: 800 }}>{b.title}</div>
         {b.text && <div style={{ marginTop: 6, fontSize: 16, opacity: 0.95 }}>{b.text}</div>}

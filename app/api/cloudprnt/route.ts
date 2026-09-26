@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import supabase from "@/lib/supabase";
 import { buildTicket, toPlainText, toStarPrnt, type PrintJob, type Ticket } from "@/lib/cloudprnt";
+import { JOB_COLUMNS, markPrinted, nextDueJob } from "@/lib/print-queue";
 
 // Star CloudPRNT endpoint for the restaurant's one printer (Star mC-Print3).
 // The printer polls this URL every few seconds — no local device or browser
@@ -19,10 +20,6 @@ import { buildTicket, toPlainText, toStarPrnt, type PrintJob, type Ticket } from
 // DELETE param names below follow Star's CloudPRNT docs but haven't yet been
 // checked against this printer.
 
-// A ticket still unprinted after this long (printer off all day, say) is
-// stale — printing yesterday's orders into a live kitchen does more harm
-// than good.
-const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
 
 // The printer's Server URL carries ?key=<CLOUDPRNT_KEY>; HTTP Basic auth
 // (password = the key) is accepted too, for firmware that strips query
@@ -64,39 +61,9 @@ function paramsForLog(req: NextRequest): string {
   return p.toString();
 }
 
-const JOB_COLUMNS = "id, order_id, work_period_id, kind, source, item_ids";
-
-async function markPrinted(jobId: number) {
-  await supabase.from("print_jobs").update({ printed_at: new Date().toISOString() }).eq("id", jobId).is("printed_at", null);
-}
-
-// The next job that's due and still has something to print. A job whose
-// order was cancelled (or whose items all were) renders to nothing — it's
-// closed off here so it can't block the queue.
-async function nextJob(): Promise<{ job: PrintJob; ticket: Ticket } | null> {
-  const now = Date.now();
-  const { data: jobs } = await supabase
-    .from("print_jobs")
-    .select(JOB_COLUMNS)
-    .is("printed_at", null)
-    .lte("print_after", new Date(now).toISOString())
-    .gte("print_after", new Date(now - STALE_AFTER_MS).toISOString())
-    .order("print_after", { ascending: true })
-    .order("id", { ascending: true })
-    .limit(5);
-
-  for (const job of (jobs ?? []) as PrintJob[]) {
-    const ticket = await buildTicket(job);
-    if (ticket) return { job, ticket };
-    console.log(`[cloudprnt] job ${job.id} (${job.kind} ${job.order_id ?? job.work_period_id}) has nothing to print — skipping`);
-    await markPrinted(job.id);
-  }
-  return null;
-}
-
 async function jobFor(req: NextRequest): Promise<{ job: PrintJob; ticket: Ticket } | null> {
   const token = req.nextUrl.searchParams.get("token") || req.nextUrl.searchParams.get("jobToken");
-  if (!token) return nextJob();
+  if (!token) return nextDueJob();
   const { data: job } = await supabase.from("print_jobs").select(JOB_COLUMNS).eq("id", token).is("printed_at", null).maybeSingle();
   if (!job) return null;
   const ticket = await buildTicket(job as PrintJob);
@@ -114,7 +81,7 @@ export async function POST(req: NextRequest) {
     console.warn(`[cloudprnt] printer reports status "${statusCode}"`, JSON.stringify(status));
   }
 
-  const next = await nextJob();
+  const next = await nextDueJob();
   if (!next) return NextResponse.json({ jobReady: false });
 
   console.log(`[cloudprnt] POST poll -> job ${next.job.id} ready (${next.job.kind} ${next.job.order_id ?? next.job.work_period_id})`, JSON.stringify(status));
@@ -152,7 +119,7 @@ export async function DELETE(req: NextRequest) {
   } else {
     // No token echoed back — the job it just printed is the one we'd have
     // served, i.e. the next due job.
-    const next = await nextJob();
+    const next = await nextDueJob();
     if (next) await markPrinted(next.job.id);
   }
   return NextResponse.json({ success: true });

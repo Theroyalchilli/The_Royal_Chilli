@@ -65,3 +65,22 @@ few seconds. Then Print Receipt on a paid order.
 If nothing prints, check the Vercel runtime logs for `[cloudprnt]` lines —
 every job fetch and confirmation is logged with the printer's own request
 parameters (key removed).
+
+## Until the network works: USB Print Station
+
+If the printer can't reach the internet (no CloudPRNT), connect it to the
+till laptop by USB and run the **Print Station** there. It prints everything
+above automatically, from the same queue.
+
+1. Install the Star Windows driver so **Star MCP30** appears in Windows
+   Printers, and make it the **default printer**.
+2. Create a Chrome shortcut on the desktop whose target ends with
+   `--kiosk-printing https://www.theroyalchilli.com/print-station` — this
+   makes Chrome print without the dialog.
+3. Open that shortcut. A manager logs in (in another tab) and presses
+   **Pair this computer** once; it then stays connected on its own key
+   (`lib/print-station.ts`) — it can only print. Press **Test print**.
+4. Windows power settings: never sleep while plugged in.
+
+Keep it open during opening hours. **Stop using it once CloudPRNT works** —
+both take jobs off the same queue, so running both can print a ticket twice.

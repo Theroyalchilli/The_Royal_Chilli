@@ -1,5 +1,6 @@
 import supabase from "@/lib/supabase";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
+import { buildTicket, LINE_WIDTH, type PrintJob, type Ticket } from "@/lib/cloudprnt";
 
 // Queues tickets for the Star mC-Print3, which pulls them via CloudPRNT
 // (app/api/cloudprnt) — the one printer handles kitchen tickets from the
@@ -52,4 +53,45 @@ export async function queueKitchenTicketSafely(...args: Parameters<typeof queueK
   } catch (err) {
     console.error(`Failed to queue kitchen ticket for order ${args[0]}:`, err);
   }
+}
+
+// ---------- taking jobs off the queue ----------
+// Shared by the two things that print: the Star printer itself over the
+// network (app/api/cloudprnt) and the USB Print Station page on the till
+// laptop (app/api/print/station) — same order, same rules. Only one should
+// be in use at a time, or a ticket can print twice.
+
+// A ticket still unprinted after this long (printer off all day, say) is
+// stale — printing yesterday's orders into a live kitchen does more harm
+// than good.
+export const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
+
+export const JOB_COLUMNS = "id, order_id, work_period_id, kind, source, item_ids";
+
+export async function markPrinted(jobId: number) {
+  await supabase.from("print_jobs").update({ printed_at: new Date().toISOString() }).eq("id", jobId).is("printed_at", null);
+}
+
+// The next job that's due and still has something to print, laid out
+// `width` columns wide. A job whose order was cancelled (or whose items all
+// were) renders to nothing — it's closed off here so it can't block the queue.
+export async function nextDueJob(width = LINE_WIDTH): Promise<{ job: PrintJob; ticket: Ticket } | null> {
+  const now = Date.now();
+  const { data: jobs } = await supabase
+    .from("print_jobs")
+    .select(JOB_COLUMNS)
+    .is("printed_at", null)
+    .lte("print_after", new Date(now).toISOString())
+    .gte("print_after", new Date(now - STALE_AFTER_MS).toISOString())
+    .order("print_after", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(5);
+
+  for (const job of (jobs ?? []) as PrintJob[]) {
+    const ticket = await buildTicket(job, width);
+    if (ticket) return { job, ticket };
+    console.log(`[print] job ${job.id} (${job.kind} ${job.order_id ?? job.work_period_id}) has nothing to print — skipping`);
+    await markPrinted(job.id);
+  }
+  return null;
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ZReportView from "@/components/pos/ZReportView";
+import BrowserPrintButton from "@/components/pos/BrowserPrintButton";
 import { zDateTime, type ZReport } from "@/lib/z-report";
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
@@ -179,6 +180,7 @@ function ZReportsTab() {
             {status[p.id] && <span className="text-xs text-muted-foreground">{status[p.id]}</span>}
             <button onClick={() => view(p.id)} className="px-3 py-1.5 rounded-lg border border-border text-sm font-semibold text-foreground hover:bg-surface-hover">View</button>
             <button onClick={() => print(p.id)} className="px-3 py-1.5 rounded-lg bg-red-500 text-sm font-semibold text-white hover:bg-red-600">Print</button>
+            <BrowserPrintButton kind="zreport" id={p.id} className="px-3 py-1.5 rounded-lg border border-border text-sm font-semibold text-foreground hover:bg-surface-hover" />
           </div>
         </div>
       ))}

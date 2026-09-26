@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import BrowserPrintButton from "@/components/pos/BrowserPrintButton";
 
 // Sends a receipt or kitchen ticket to the CloudPRNT printer queue
 // (app/api/print) — the printer picks it up within a few seconds, so there's
@@ -36,9 +37,14 @@ export default function PrintButton({
 
   const text = { idle: label, sending: "Sending…", sent: "✓ Sent to printer", failed: "⚠️ Failed — try again" }[state];
 
+  // The "Browser" button beside it is a TEMPORARY fallback until the printer
+  // is on the network (components/pos/BrowserPrintButton.tsx).
   return (
-    <button onClick={send} disabled={!orderId || state === "sending"} className={className}>
-      {text}
-    </button>
+    <div className="flex flex-1 gap-1.5 min-w-0">
+      <button onClick={send} disabled={!orderId || state === "sending"} className={`${className ?? ""} flex-1 min-w-0`}>
+        {text}
+      </button>
+      <BrowserPrintButton kind={kind} id={orderId} />
+    </div>
   );
 }

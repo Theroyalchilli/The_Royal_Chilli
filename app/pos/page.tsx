@@ -13,6 +13,7 @@ import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import ZReportView from "@/components/pos/ZReportView";
+import BrowserPrintButton from "@/components/pos/BrowserPrintButton";
 import type { ZReport } from "@/lib/z-report";
 import type {
   MenuCategory,
@@ -1520,6 +1521,7 @@ export default function POSPage() {
                   >
                     🖨️ Print Z Report
                   </button>
+                  <BrowserPrintButton kind="zreport" id={eodData?.period_id ?? null} className="w-full py-2 rounded-xl border border-border bg-surface-hover text-foreground text-sm font-semibold disabled:opacity-40" />
                   {eodPrintStatus && <p className="text-center text-xs font-semibold text-muted-foreground">{eodPrintStatus}</p>}
                   <button
                     onClick={() => setEndOfDayOpen(false)}
@@ -1616,6 +1618,7 @@ export default function POSPage() {
                       {eodLoading ? "Closing..." : "🔒 Close Day"}
                     </button>
                   </div>
+                  <BrowserPrintButton kind="zreport" id={eodData?.period_id ?? null} className="w-full py-2 rounded-xl border border-border bg-surface-hover text-foreground text-sm font-semibold disabled:opacity-40" />
                   {eodPrintStatus && <p className="text-center text-xs font-semibold text-muted-foreground">{eodPrintStatus}</p>}
                 </>
               )}

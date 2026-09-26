@@ -5,6 +5,8 @@ let printData: { order: Record<string, unknown>; items: Item[] } | null;
 
 jest.mock("@/lib/kot", () => ({ getOrderForPrint: jest.fn(async () => printData) }));
 jest.mock("@/lib/receipt", () => ({ getOrderForReceipt: jest.fn(async () => null) }));
+let zReport: unknown = null;
+jest.mock("@/lib/z-report-db", () => ({ getZReport: jest.fn(async () => zReport) }));
 
 import { buildTicket, encodeCp437, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";
 
@@ -18,7 +20,7 @@ const baseOrder = {
   customer_address: null, customer_postcode: null, notes: null, total: 20, amount_paid: 0,
 };
 
-const job = (extra: Partial<PrintJob> = {}): PrintJob => ({ id: 1, order_id: 5, kind: "kot", source: "qr", item_ids: null, ...extra });
+const job = (extra: Partial<PrintJob> = {}): PrintJob => ({ id: 1, order_id: 5, work_period_id: null, kind: "kot", source: "qr", item_ids: null, ...extra });
 const texts = (t: { text: string }[] | null) => (t ?? []).map((l) => l.text);
 
 describe("buildTicket (kitchen)", () => {
@@ -86,5 +88,27 @@ describe("encoders", () => {
 
   it("centres plain text", () => {
     expect(toPlainText([{ text: "HI", align: "center" }]).split("\n")[0]).toBe(" ".repeat(23) + "HI");
+  });
+});
+
+describe("buildTicket (Z report)", () => {
+  it("prints the shift's report lines, amounts right-aligned", async () => {
+    const { computeZReport } = await import("@/lib/z-report");
+    zReport = computeZReport({
+      period: { id: 72, status: "closed", opened_at: "2026-09-07T12:22:00Z", closed_at: "2026-09-08T13:37:00Z", opening_cash: 77, closing_cash: 95, close_note: null },
+      openedByName: "Hari", closedByName: "Hari",
+      payments: [{ order_id: 1, method: "cash", amount: 18, tip_amount: 0 }],
+      orders: [], paidOuts: [],
+    });
+    const lines = texts(await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 72, source: null })));
+    expect(lines).toContain("Z Report 72");
+    const total = lines.find((l) => l.startsWith("Total sales amount"))!;
+    expect(total).toHaveLength(48);
+    expect(total.endsWith("£18.00")).toBe(true);
+  });
+
+  it("prints nothing for a shift that doesn't exist", async () => {
+    zReport = null;
+    expect(await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 999, source: null }))).toBeNull();
   });
 });

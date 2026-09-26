@@ -12,6 +12,8 @@ import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
 import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
+import ZReportView from "@/components/pos/ZReportView";
+import type { ZReport } from "@/lib/z-report";
 import type {
   MenuCategory,
   MenuItem,
@@ -90,38 +92,9 @@ export default function POSPage() {
 
   // End of Day modal
   const [endOfDayOpen, setEndOfDayOpen] = useState(false);
-  const [eodData, setEodData] = useState<{
-    total_revenue: number;
-    net_sales: number;
-    discount_total: number;
-    discount_count: number;
-    refunds_total: number;
-    refunds: { order_number: string; amount: number; created_at: string }[];
-    cash_total: number;
-    card_total: number;
-    total_orders: number;
-    open_orders: number;
-    pending_bills_total: number;
-    pending_bills: { order_number: string; total: number; customer_name: string | null }[];
-    unresolved_orders: { order_number: string; total: number; amount_paid: number; status: string }[];
-    cash_paid_out_total: number;
-    cash_paid_outs: { amount: number; reason: string; created_at: string }[];
-    collected: {
-      own_total: number;
-      prior_total: number;
-      total: number;
-      cash_total: number;
-      card_total: number;
-      tips_cash_total: number;
-      tips_card_total: number;
-      tips_total: number;
-      prior_settlements: { order_number: string; order_type: string | null; order_date: string | null; amount: number }[];
-    };
-  } | null>(null);
+  const [eodData, setEodData] = useState<ZReport | null>(null);
   const [eodClosingCash, setEodClosingCash] = useState("");
-  const [eodOpeningCash, setEodOpeningCash] = useState(0);
-  const [eodPeriodId, setEodPeriodId] = useState<number | null>(null);
-  const [eodOpenedByName, setEodOpenedByName] = useState<string | null>(null);
+  const [eodPrintStatus, setEodPrintStatus] = useState("");
   const [eodCloseNote, setEodCloseNote] = useState("");
   const [eodLoading, setEodLoading] = useState(false);
   const [eodClosed, setEodClosed] = useState(false);
@@ -687,6 +660,8 @@ export default function POSPage() {
   const openEndOfDay = async () => {
     setEndOfDayOpen(true);
     setEodClosed(false);
+    setEodData(null);
+    setEodPrintStatus("");
     setEodClosingCash("");
     setEodCloseNote("");
     setEodError("");
@@ -695,10 +670,7 @@ export default function POSPage() {
       const res = await fetch("/api/work-periods", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setEodData(data.summary);
-        setEodOpeningCash(data.period?.opening_cash || 0);
-        setEodPeriodId(data.period?.id ?? null);
-        setEodOpenedByName(data.period?.opened_by_name ?? null);
+        setEodData(data.report);
       } else {
         setEodError("Couldn't load today's summary. Try again.");
       }
@@ -723,7 +695,10 @@ export default function POSPage() {
         }),
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.report) setEodData(data.report);
         setEodClosed(true);
+        setEodPrintStatus("");
         setTillPeriod(null);
       } else {
         const data = await res.json().catch(() => ({}));
@@ -736,77 +711,17 @@ export default function POSPage() {
     }
   };
 
-  const handlePrintEod = () => {
+  // Sends the report to the Star printer (CloudPRNT) — a Z report once the
+  // day is closed, an X report (running totals) before that.
+  const handlePrintEod = async () => {
     if (!eodData) return;
-    const date = new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    const time = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    const html = `<!DOCTYPE html><html><head><title>End of Day Report</title>
-    <style>
-      body { font-family: monospace; font-size: 12px; max-width: 300px; margin: 20px auto; color: #000; }
-      h1 { text-align: center; font-size: 16px; margin-bottom: 4px; }
-      .sub { text-align: center; font-size: 11px; color: #555; margin-bottom: 16px; }
-      .divider { border-top: 1px dashed #000; margin: 10px 0; }
-      .row { display: flex; justify-content: space-between; margin: 4px 0; }
-      .label { color: #555; }
-      .value { font-weight: bold; }
-      .total { font-size: 15px; font-weight: bold; }
-      .footer { text-align: center; margin-top: 16px; font-size: 10px; color: #888; }
-    </style></head><body>
-    <h1>THE ROYAL CHILLI</h1>
-    <div class="sub">43 Kingsley Road, Hounslow TW3 1PA</div>
-    <div class="sub">Z REPORT ${eodPeriodId ?? "—"}</div>
-    <div class="divider"></div>
-    <div class="row"><span class="label">Opened</span><span class="value">${eodOpenedByName ?? "—"}</span></div>
-    <div class="row"><span class="label">Closed</span><span class="value">${session?.name || "Staff"}</span></div>
-    <div class="row"><span class="label"></span><span class="value">${date} · ${time}</span></div>
-    <div class="divider"></div>
-    <div class="row"><span class="label">Total Orders</span><span class="value">${eodData.total_orders}</span></div>
-    <div class="row"><span class="label">Sales (this shift)</span><span class="value">£${eodData.total_revenue.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Discounts (${eodData.discount_count})</span><span class="value">−£${eodData.discount_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Refunds (${eodData.refunds.length})</span><span class="value">£${eodData.refunds_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Net Sales</span><span class="value total">£${eodData.net_sales.toFixed(2)}</span></div>
-    <div class="divider"></div>
-    <div class="row"><span class="label">Collected Today</span><span class="value total">£${eodData.collected.total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">💵 Cash (bill)</span><span class="value">£${eodData.collected.cash_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">💳 Card (bill)</span><span class="value">£${eodData.collected.card_total.toFixed(2)}</span></div>
-    ${eodData.collected.tips_total > 0 ? `
-    <div class="row"><span class="label">🙌 Tips — cash</span><span class="value">£${eodData.collected.tips_cash_total.toFixed(2)}</span></div>
-    <div class="row"><span class="label">🙌 Tips — card</span><span class="value">£${eodData.collected.tips_card_total.toFixed(2)}</span></div>
-    ` : ""}
-    ${eodData.collected.prior_settlements.length > 0 ? `
-    <div class="row"><span class="label">  incl. prior-shift settlements</span><span class="value">£${eodData.collected.prior_total.toFixed(2)}</span></div>
-    ${eodData.collected.prior_settlements.map(s => `<div class="row"><span class="label">  ${s.order_number}${s.order_date ? ` — ${new Date(s.order_date).toLocaleDateString("en-GB")}` : ""}</span><span class="value">£${s.amount.toFixed(2)}</span></div>`).join("")}
-    ` : ""}
-    <div class="divider"></div>
-    <div class="row"><span class="label">Opening Float</span><span class="value">£${eodOpeningCash.toFixed(2)}</span></div>
-    <div class="row"><span class="label">Cash Paid Out</span><span class="value">−£${eodData.cash_paid_out_total.toFixed(2)}</span></div>
-    ${eodData.cash_paid_outs.map(p => `<div class="row"><span class="label">  ${p.reason}</span><span class="value">£${p.amount.toFixed(2)}</span></div>`).join("")}
-    <div class="row"><span class="label">Expected Cash</span><span class="value">£${(eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total).toFixed(2)}</span></div>
-    <div class="row"><span class="label">Closing Cash Count</span><span class="value">£${parseFloat(eodClosingCash || "0").toFixed(2)}</span></div>
-    <div class="row"><span class="label">Cash Variance</span><span class="value">£${(parseFloat(eodClosingCash || "0") - (eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total)).toFixed(2)}</span></div>
-    ${eodData.pending_bills.length > 0 ? `
-    <div class="divider"></div>
-    <div class="row"><span class="label">📌 Pending Bills</span><span class="value total">£${eodData.pending_bills_total.toFixed(2)}</span></div>
-    ${eodData.pending_bills.map(o => `<div class="row"><span class="label">${o.order_number}${o.customer_name ? ` — ${o.customer_name}` : ""}</span><span class="value">£${o.total.toFixed(2)}</span></div>`).join("")}
-    ` : ""}
-    ${eodData.unresolved_orders.length > 0 ? `
-    <div class="divider"></div>
-    <div class="row"><span class="label">⛔ UNRESOLVED — must pay or Pay Later</span><span class="value total">£${eodData.unresolved_orders.reduce((s, o) => s + (o.total - o.amount_paid), 0).toFixed(2)}</span></div>
-    ${eodData.unresolved_orders.map(o => `<div class="row"><span class="label">${o.order_number}</span><span class="value">£${(o.total - o.amount_paid).toFixed(2)}</span></div>`).join("")}
-    ` : ""}
-    ${eodCloseNote.trim() ? `
-    <div class="divider"></div>
-    <div class="row"><span class="label">Comment</span><span class="value">${eodCloseNote.trim()}</span></div>
-    ` : ""}
-    <div class="divider"></div>
-    <div class="footer">Printed by ${session?.name || "Staff"} · Royal Chilli POS</div>
-    <div style="margin-top:20px; font-size:11px;">
-      Manager: ________________________________<br><br>
-      Signature: ________________________________
-    </div>
-    </body></html>`;
-    const w = window.open("", "_blank", "width=400,height=600");
-    if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+    setEodPrintStatus("Sending…");
+    try {
+      const res = await fetch(`/api/work-periods/${eodData.period_id}/z-report`, { method: "POST" });
+      setEodPrintStatus(res.ok ? "Sent to printer ✓" : "Couldn't send to printer. Try again.");
+    } catch {
+      setEodPrintStatus("Couldn't send to printer. Try again.");
+    }
   };
 
   const handleTableSelect = async (t: RestaurantTable) => {
@@ -1593,17 +1508,19 @@ export default function POSPage() {
               ) : eodClosed ? (
                 /* Success State */
                 <div className="space-y-4">
-                  <div className="text-center py-4">
-                    <div className="text-4xl mb-3">✅</div>
+                  <div className="text-center pt-2">
+                    <div className="text-4xl mb-2">✅</div>
                     <p className="text-green-600 font-bold text-lg">Day Closed Successfully</p>
-                    <p className="text-muted-foreground text-sm mt-1">Cash drawer reconciliation complete</p>
                   </div>
+                  {eodData && <ZReportView report={eodData} />}
                   <button
                     onClick={handlePrintEod}
-                    className="w-full py-3 bg-elevated hover:bg-elevated-hover text-foreground font-bold rounded-xl transition-colors"
+                    disabled={!eodData}
+                    className="w-full py-3 bg-elevated hover:bg-elevated-hover disabled:opacity-40 text-foreground font-bold rounded-xl transition-colors"
                   >
-                    🖨️ Print Report
+                    🖨️ Print Z Report
                   </button>
+                  {eodPrintStatus && <p className="text-center text-xs font-semibold text-muted-foreground">{eodPrintStatus}</p>}
                   <button
                     onClick={() => setEndOfDayOpen(false)}
                     className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors"
@@ -1614,145 +1531,37 @@ export default function POSPage() {
               ) : (
                 /* Normal state */
                 <>
-                  {/* Sales — trading performance: orders served this shift, paid or not counted separately */}
-                  <div>
-                    <div className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-1.5">📊 Sales (this shift)</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-surface-hover rounded-xl p-3">
-                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Revenue</div>
-                        <div className="text-red-600 text-xl font-bold">
-                          £{(eodData?.total_revenue || 0).toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="bg-surface-hover rounded-xl p-3">
-                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">Total Orders</div>
-                        <div className="text-blue-600 text-xl font-bold">{eodData?.total_orders || 0}</div>
-                      </div>
-                    </div>
-                    <div className="mt-2 bg-surface-hover rounded-xl px-3 py-2 space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Discounts given ({eodData?.discount_count || 0})</span>
-                        <span className="text-yellow-600 font-semibold">−£{(eodData?.discount_total || 0).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Refunds</span>
-                        <span className="text-red-600 font-semibold">£{(eodData?.refunds_total || 0).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-bold pt-1 border-t border-border">
-                        <span className="text-foreground">Net Sales</span>
-                        <span className="text-red-600">£{(eodData?.net_sales || 0).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Collected — till reconciliation: money that actually landed today,
-                      including any prior-shift Pay Later bill settled just now. This is
-                      what Expected Cash below is based on, not Sales. */}
-                  <div>
-                    <div className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-1.5">💰 Collected Today</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-surface-hover rounded-xl p-3">
-                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💵 Cash</div>
-                        <div className="text-green-600 text-xl font-bold">£{(eodData?.collected.cash_total || 0).toFixed(2)}</div>
-                        {(eodData?.collected.tips_cash_total || 0) > 0 && (
-                          <div className="text-muted-foreground text-[10px] mt-0.5">+ £{eodData!.collected.tips_cash_total.toFixed(2)} tips</div>
-                        )}
-                      </div>
-                      <div className="bg-surface-hover rounded-xl p-3">
-                        <div className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide mb-1">💳 Card</div>
-                        <div className="text-purple-600 text-xl font-bold">£{(eodData?.collected.card_total || 0).toFixed(2)}</div>
-                        {(eodData?.collected.tips_card_total || 0) > 0 && (
-                          <div className="text-muted-foreground text-[10px] mt-0.5">+ £{eodData!.collected.tips_card_total.toFixed(2)} tips</div>
-                        )}
-                      </div>
-                    </div>
-                    {(eodData?.collected.prior_settlements?.length || 0) > 0 && (
-                      <div className="mt-2 bg-emerald-500/10 border border-emerald-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-emerald-700 text-xs font-bold">Includes prior-shift settlements</span>
-                          <span className="text-emerald-700 text-sm font-black">£{eodData?.collected.prior_total.toFixed(2)}</span>
-                        </div>
-                        <div className="space-y-1">
-                          {eodData?.collected.prior_settlements.map((s, i) => (
-                            <div key={i} className="flex items-center justify-between text-[11px] text-emerald-800">
-                              <span>{s.order_number}{s.order_date ? ` — ${new Date(s.order_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span>
-                              <span className="font-semibold">£{s.amount.toFixed(2)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pending Bills — Pay Later orders, informational, doesn't block closing. */}
-                  {(eodData?.pending_bills?.length || 0) > 0 && (
-                    <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-amber-700 text-xs font-bold">📌 Pending Bills (this shift)</span>
-                        <span className="text-amber-700 text-sm font-black">£{(eodData?.pending_bills_total || 0).toFixed(2)}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {eodData?.pending_bills.map((o) => (
-                          <div key={o.order_number} className="flex items-center justify-between text-[11px] text-amber-800">
-                            <span>{o.order_number}{o.customer_name ? ` — ${o.customer_name}` : ""}</span>
-                            <span className="font-semibold">£{o.total.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Unresolved orders — blocks Close Day entirely. Every order this
                       shift must be paid or explicitly marked Pay Later before you can
                       close; this is what's stopping you. */}
-                  {(eodData?.unresolved_orders?.length || 0) > 0 && (
+                  {(eodData?.other.unresolved.length || 0) > 0 && (
                     <div className="bg-red-500/10 border-2 border-red-500/50 rounded-xl px-3 py-2.5 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-red-600">⛔</span>
                         <span className="text-red-700 text-xs font-bold">
-                          Can't close yet — {eodData?.unresolved_orders.length} order{(eodData?.unresolved_orders.length || 0) > 1 ? "s" : ""} still need{(eodData?.unresolved_orders.length || 0) > 1 ? "" : "s"} to be paid or marked Pay Later
+                          Can't close yet — {eodData?.other.unresolved.length} order{(eodData?.other.unresolved.length || 0) > 1 ? "s" : ""} still need{(eodData?.other.unresolved.length || 0) > 1 ? "" : "s"} to be paid or marked Pay Later
                         </span>
                       </div>
                       <div className="space-y-1">
-                        {eodData?.unresolved_orders.map((o) => (
+                        {eodData?.other.unresolved.map((o) => (
                           <div key={o.order_number} className="flex items-center justify-between text-[11px] text-red-800">
                             <span>{o.order_number}</span>
-                            <span className="font-semibold">£{(o.total - o.amount_paid).toFixed(2)}</span>
+                            <span className="font-semibold">£{o.balance.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Cash Paid Out — cash physically removed from the till this shift,
-                      subtracted from Expected Cash below. */}
-                  {(eodData?.cash_paid_outs?.length || 0) > 0 && (
-                    <div className="bg-red-500/10 border border-red-500/40 rounded-xl px-3 py-2.5 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-red-700 text-xs font-bold">💵 Cash Paid Out</span>
-                        <span className="text-red-700 text-sm font-black">−£{(eodData?.cash_paid_out_total || 0).toFixed(2)}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {eodData?.cash_paid_outs.map((p, i) => (
-                          <div key={i} className="flex items-center justify-between text-[11px] text-red-800">
-                            <span>{p.reason}</span>
-                            <span className="font-semibold">£{p.amount.toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  {/* The report exactly as it will print — Counted/Difference follow
+                      the closing cash typed in below. */}
+                  {eodData ? (
+                    <ZReportView report={eodData} counted={eodClosingCash === "" ? null : parseFloat(eodClosingCash) || 0} />
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      The till wasn&apos;t opened today — closing will record today&apos;s orders as one shift.
+                    </p>
                   )}
-
-                  {/* Opening float + expected cash — based on Collected (cash physically
-                      taken this shift) minus any Cash Paid Out, not Sales, since a
-                      prior-shift settlement adds real cash to the drawer today even
-                      though it isn't today's sale, and a cash-out removes it. */}
-                  <div className="flex items-center justify-between bg-surface-hover rounded-xl px-3 py-2.5 text-xs">
-                    <span className="text-muted-foreground font-semibold">Opening Float + Cash Collected (incl. tips) − Paid Out</span>
-                    <span className="text-foreground font-bold">
-                      £{(eodOpeningCash + (eodData?.collected.cash_total || 0) + (eodData?.collected.tips_cash_total || 0) - (eodData?.cash_paid_out_total || 0)).toFixed(2)} expected
-                    </span>
-                  </div>
 
                   {/* Closing Cash Input */}
                   <div>
@@ -1769,8 +1578,8 @@ export default function POSPage() {
                       className="w-full bg-surface-hover border border-border text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red-500"
                     />
                     {eodClosingCash && eodData && (
-                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
-                        Variance: £{(parseFloat(eodClosingCash) - (eodOpeningCash + eodData.collected.cash_total + eodData.collected.tips_cash_total - eodData.cash_paid_out_total)).toFixed(2)}
+                      <p className={`mt-1.5 text-xs font-semibold ${Math.abs(parseFloat(eodClosingCash) - eodData.cash.expected) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
+                        Expected £{eodData.cash.expected.toFixed(2)} · Difference £{(parseFloat(eodClosingCash) - eodData.cash.expected).toFixed(2)}
                       </p>
                     )}
                   </div>
@@ -1796,17 +1605,18 @@ export default function POSPage() {
                       disabled={!eodData}
                       className="py-3 bg-elevated hover:bg-elevated-hover disabled:opacity-40 text-foreground font-bold rounded-xl transition-colors text-sm"
                     >
-                      🖨️ Print
+                      🖨️ Print X Report
                     </button>
                     <button
                       onClick={handleCloseDay}
-                      disabled={eodLoading || (eodData?.unresolved_orders?.length || 0) > 0}
-                      title={(eodData?.unresolved_orders?.length || 0) > 0 ? "Resolve every unpaid order first" : undefined}
+                      disabled={eodLoading || (eodData?.other.unresolved.length || 0) > 0}
+                      title={(eodData?.other.unresolved.length || 0) > 0 ? "Resolve every unpaid order first" : undefined}
                       className="py-3 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm"
                     >
                       {eodLoading ? "Closing..." : "🔒 Close Day"}
                     </button>
                   </div>
+                  {eodPrintStatus && <p className="text-center text-xs font-semibold text-muted-foreground">{eodPrintStatus}</p>}
                 </>
               )}
             </div>

@@ -38,6 +38,11 @@ export async function queueReceipt(orderId: number) {
   if (error) throw error;
 }
 
+export async function queueZReport(workPeriodId: number) {
+  const { error } = await supabase.from("print_jobs").insert({ work_period_id: workPeriodId, kind: "zreport" });
+  if (error) throw error;
+}
+
 // For callers where the order itself has already succeeded — a printer
 // problem must never turn a placed order into an error for the customer or
 // the till, so failures are logged, not thrown.

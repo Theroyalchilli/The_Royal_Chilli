@@ -1,5 +1,7 @@
 import { getOrderForPrint } from "@/lib/kot";
 import { getOrderForReceipt } from "@/lib/receipt";
+import { zReportLines } from "@/lib/z-report";
+import { getZReport } from "@/lib/z-report-db";
 
 // Renders print_jobs rows (lib/print-queue.ts) into what the Star mC-Print3
 // prints. A ticket is built once as styled lines, then encoded either as
@@ -18,8 +20,9 @@ export type Ticket = TicketLine[];
 
 export type PrintJob = {
   id: number;
-  order_id: number;
-  kind: "kot" | "receipt";
+  order_id: number | null;
+  work_period_id: number | null;
+  kind: "kot" | "receipt" | "zreport";
   source: "till" | "qr" | "online" | null;
   item_ids: number[] | null;
 };
@@ -53,11 +56,32 @@ function row(left: string, right: string): string {
 const SOURCE_LABEL: Record<string, string> = { till: "TILL", qr: "QR ORDER", online: "ONLINE" };
 
 export async function buildTicket(job: PrintJob): Promise<Ticket | null> {
-  return job.kind === "receipt" ? buildReceipt(job.order_id) : buildKitchenTicket(job);
+  if (job.kind === "zreport") return job.work_period_id ? buildZReportTicket(job.work_period_id) : null;
+  if (!job.order_id) return null;
+  return job.kind === "receipt" ? buildReceipt(job.order_id) : buildKitchenTicket(job, job.order_id);
 }
 
-async function buildKitchenTicket(job: PrintJob): Promise<Ticket | null> {
-  const data = await getOrderForPrint(job.order_id);
+async function buildZReportTicket(workPeriodId: number): Promise<Ticket | null> {
+  const report = await getZReport(workPeriodId);
+  if (!report) return null;
+  const t: Ticket = [];
+  t.push({ text: "THE ROYAL CHILLI", align: "center", bold: true, size: "tall" });
+  t.push({ text: DIVIDER });
+  for (const l of zReportLines(report)) {
+    if (l.kind === "title") t.push({ text: l.text, bold: true, size: "tall" });
+    else if (l.kind === "heading") t.push({ text: l.text, bold: true });
+    else if (l.kind === "row") t.push({ text: row(l.label, l.value), bold: l.bold });
+    else if (l.kind === "text") t.push({ text: l.text });
+    else if (l.kind === "divider") t.push({ text: DIVIDER });
+    else t.push({ text: "" });
+  }
+  t.push({ text: DIVIDER });
+  t.push({ text: `Printed ${londonTime(new Date().toISOString(), true)}`, align: "center" });
+  return t;
+}
+
+async function buildKitchenTicket(job: PrintJob, orderId: number): Promise<Ticket | null> {
+  const data = await getOrderForPrint(orderId);
   // A cancelled order (e.g. a scheduled one cancelled before its print time)
   // must not reach the kitchen.
   if (!data || data.order.status === "cancelled") return null;

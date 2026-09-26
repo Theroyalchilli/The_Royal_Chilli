@@ -9,6 +9,7 @@ One printer — a Star mC-Print3 — prints everything:
 | Kitchen ticket, **ONLINE** | pay on collection/delivery: as soon as it's placed. Pay online: once Stripe confirms payment. Scheduled for later: ~30 min before the slot (45 for delivery) |
 | Customer receipt | when staff press **Print Receipt** (after payment) or **Reprint Receipt** (Order History) |
 | Kitchen ticket, **REPRINT** | when staff press **Print KOT** on the Kitchen Display |
+| **Z report** (end of day) | **Print Z Report** after Close Day, or **Print** in Finance → Z Reports. Before closing, **Print X Report** prints the running totals |
 
 The printer itself polls the POS over the internet every few seconds
 (Star's CloudPRNT protocol) — no PC, browser tab, driver or

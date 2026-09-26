@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { calculateZReport, snapshotZReport } from "@/lib/z-report-db";
 
-// GET — return the current open work period with today's revenue summary
+// GET — the current open work period plus its live Z report (lib/z-report.ts),
+// which the End of Day screen shows before closing.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Fetch the open work period
   const { data: period, error: periodError } = await supabase
     .from("work_periods")
     .select("*")
@@ -20,234 +21,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: periodError.message }, { status: 500 });
   }
 
-  // Z-report header — "Opened by X" / "Closed by Y", not just a timestamp.
-  let openedByName: string | null = null;
-  if (period?.opened_by) {
-    const { data: opener } = await supabase.from("staff").select("name").eq("id", period.opened_by).maybeSingle();
-    openedByName = opener?.name ?? null;
-  }
-
-  // Today's date range
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
-
-  // Fetch today's paid orders
-  const { data: orders, error: ordersError } = await supabase
-    .from("orders")
-    .select("id, total")
-    .eq("status", "paid")
-    .gte("created_at", todayStart.toISOString())
-    .lte("created_at", todayEnd.toISOString());
-
-  if (ordersError) {
-    return NextResponse.json({ error: ordersError.message }, { status: 500 });
-  }
-
-  const orderIds = (orders || []).map((o) => o.id);
-  const totalRevenue = (orders || []).reduce((sum, o) => sum + (o.total || 0), 0);
-  const totalOrders = (orders || []).length;
-
-  // Fetch payments for today's orders to get cash/card split
-  let cashTotal = 0;
-  let cardTotal = 0;
-
-  if (orderIds.length > 0) {
-    const { data: payments, error: paymentsError } = await supabase
-      .from("payments")
-      .select("method, amount")
-      .in("order_id", orderIds);
-
-    if (!paymentsError && payments) {
-      for (const p of payments) {
-        if (p.method === "cash") cashTotal += p.amount || 0;
-        else cardTotal += p.amount || 0;
-      }
-    }
-  }
-
-  // Count open (unpaid) orders
-  const { count: openOrdersCount } = await supabase
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .in("status", ["open", "sent_to_kitchen", "ready"]);
-
-  // Pending Bills — orders from *this specific till shift* marked Pay Later
-  // and still not fully paid off. Scoped to work_period_id, not calendar
-  // date, since a late-night shift can run past midnight.
-  let pendingBills: { order_number: string; total: number; customer_name: string | null }[] = [];
-  let pendingBillsTotal = 0;
-  if (period?.id) {
-    const { data: pending } = await supabase
-      .from("orders")
-      .select("order_number, total, amount_paid, customer_name")
-      .eq("work_period_id", period.id)
-      .eq("pay_later", true)
-      .not("status", "eq", "cancelled")
-      .not("status", "eq", "paid");
-    pendingBills = (pending || []).map((o) => ({
-      order_number: o.order_number,
-      total: Number(o.total) - Number(o.amount_paid),
-      customer_name: o.customer_name,
-    }));
-    pendingBillsTotal = Math.round(pendingBills.reduce((s, o) => s + o.total, 0) * 100) / 100;
-  }
-
-  // Collected — actual money received during THIS shift, regardless of which
-  // day/shift the underlying order was placed under. Different question from
-  // Sales above ("how much did we trade") — this is "what should physically
-  // be in the drawer + terminal right now", so it must include a Pay Later
-  // order from an earlier, already-closed shift being settled just now.
-  let collectedOwn = 0;
-  let collectedPriorTotal = 0;
-  let collectedCash = 0;
-  let collectedCard = 0;
-  // Tips are gratuity, never part of Sales/Net Sales — but a cash tip
-  // physically sits in the drawer the same as a cash bill payment, so it has
-  // to be its own line feeding Expected Cash, not silently folded into
-  // collectedCash (which would blur "what we sold" into "what's in the
-  // till") and not left out of it either (which is the bug that made every
-  // cash tip look like an unexplained variance at close).
-  let tipsCash = 0;
-  let tipsCard = 0;
-  const priorSettlements: { order_number: string; order_type: string | null; order_date: string | null; amount: number }[] = [];
-
-  if (period?.id) {
-    const { data: periodPayments } = await supabase
-      .from("payments")
-      .select("amount, tip_amount, method, order_id")
-      .gte("created_at", period.opened_at)
-      .lte("created_at", new Date().toISOString());
-
-    const pays = periodPayments || [];
-    const payOrderIds = [...new Set(pays.map((p) => p.order_id))];
-    const orderById: Record<number, { order_number: string; order_type: string; work_period_id: number | null; created_at: string }> = {};
-    if (payOrderIds.length > 0) {
-      const { data: relatedOrders } = await supabase
-        .from("orders")
-        .select("id, order_number, order_type, work_period_id, created_at")
-        .in("id", payOrderIds);
-      for (const o of relatedOrders || []) orderById[o.id] = o;
-    }
-
-    for (const p of pays) {
-      const amt = Number(p.amount);
-      const tip = Number(p.tip_amount || 0);
-      if (p.method === "cash") { collectedCash += amt; tipsCash += tip; } else { collectedCard += amt; tipsCard += tip; }
-      const o = orderById[p.order_id];
-      if (o && o.work_period_id === period.id) {
-        collectedOwn += amt + tip;
-      } else {
-        collectedPriorTotal += amt + tip;
-        priorSettlements.push({
-          order_number: o?.order_number ?? `#${p.order_id}`,
-          order_type: o?.order_type ?? null,
-          order_date: o?.created_at ?? null,
-          amount: Math.round((amt + tip) * 100) / 100,
-        });
-      }
-    }
-  }
-
-  // Cash Paid Out — cash physically removed from the till during this shift
-  // (a driver tip, petty cash for supplies) — subtracted from Expected Cash.
-  let cashPaidOutTotal = 0;
-  let cashPaidOuts: { amount: number; reason: string; created_at: string }[] = [];
-  if (period?.id) {
-    const { data: paidOuts } = await supabase
-      .from("cash_paid_outs")
-      .select("amount, reason, created_at")
-      .eq("work_period_id", period.id);
-    cashPaidOuts = (paidOuts || []).map((p) => ({ amount: Number(p.amount), reason: p.reason, created_at: p.created_at }));
-    cashPaidOutTotal = Math.round(cashPaidOuts.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-  }
-
-  // Unresolved orders — anything this shift that's neither paid, cancelled,
-  // nor explicitly marked Pay Later. By close-of-day every order must land
-  // in one of those three buckets; this list is what's blocking Close Day
-  // until staff either take payment or mark it Pay Later.
-  let unresolvedOrders: { order_number: string; total: number; amount_paid: number; status: string }[] = [];
-
-  // Discounts + Refunds — against orders belonging to THIS period
-  // specifically, whenever the refund itself happens, mirroring how Sales
-  // already only cares about the order's own period, not payment timing.
-  let discountTotal = 0;
-  let discountCount = 0;
-  let refundsTotal = 0;
-  let refunds: { order_number: string; amount: number; created_at: string }[] = [];
-
-  if (period?.id) {
-    const { data: periodOrders } = await supabase
-      .from("orders")
-      .select("id, order_number, total, amount_paid, discount, status, pay_later")
-      .eq("work_period_id", period.id);
-
-    for (const o of periodOrders || []) {
-      if (o.status !== "paid" && o.status !== "cancelled" && !o.pay_later) {
-        unresolvedOrders.push({
-          order_number: o.order_number,
-          total: Number(o.total),
-          amount_paid: Number(o.amount_paid),
-          status: o.status,
-        });
-      }
-      if (o.status === "paid" && Number(o.discount || 0) > 0) {
-        discountTotal += Number(o.discount);
-        discountCount += 1;
-      }
-    }
-    discountTotal = Math.round(discountTotal * 100) / 100;
-
-    const periodOrderIds = (periodOrders || []).map((o) => o.id);
-    const orderNumberById: Record<number, string> = Object.fromEntries((periodOrders || []).map((o) => [o.id, o.order_number]));
-    if (periodOrderIds.length > 0) {
-      const { data: refundPayments } = await supabase
-        .from("payments")
-        .select("amount, order_id, created_at")
-        .in("order_id", periodOrderIds)
-        .lt("amount", 0);
-      for (const p of refundPayments || []) {
-        refunds.push({
-          order_number: orderNumberById[p.order_id] ?? `#${p.order_id}`,
-          amount: Math.round(Number(p.amount) * 100) / 100,
-          created_at: p.created_at,
-        });
-      }
-      refundsTotal = Math.round(refunds.reduce((s, r) => s + r.amount, 0) * 100) / 100;
-    }
-  }
-
+  const report = period ? await calculateZReport(period.id) : null;
   return NextResponse.json({
-    period: period ? { ...period, opened_by_name: openedByName } : period,
-    summary: {
-      total_revenue: Math.round(totalRevenue * 100) / 100,
-      net_sales: Math.round((totalRevenue + refundsTotal) * 100) / 100,
-      discount_total: discountTotal,
-      discount_count: discountCount,
-      refunds_total: refundsTotal,
-      refunds,
-      total_orders: totalOrders,
-      cash_total: Math.round(cashTotal * 100) / 100,
-      card_total: Math.round(cardTotal * 100) / 100,
-      open_orders: openOrdersCount || 0,
-      pending_bills_total: pendingBillsTotal,
-      pending_bills: pendingBills,
-      unresolved_orders: unresolvedOrders,
-      cash_paid_out_total: cashPaidOutTotal,
-      cash_paid_outs: cashPaidOuts,
-      collected: {
-        own_total: Math.round(collectedOwn * 100) / 100,
-        prior_total: Math.round(collectedPriorTotal * 100) / 100,
-        total: Math.round((collectedOwn + collectedPriorTotal) * 100) / 100,
-        cash_total: Math.round(collectedCash * 100) / 100,
-        card_total: Math.round(collectedCard * 100) / 100,
-        tips_cash_total: Math.round(tipsCash * 100) / 100,
-        tips_card_total: Math.round(tipsCard * 100) / 100,
-        tips_total: Math.round((tipsCash + tipsCard) * 100) / 100,
-        prior_settlements: priorSettlements,
-      },
-    },
+    period: period ? { ...period, opened_by_name: report?.opened_by_name ?? null } : period,
+    report,
   });
 }
 
@@ -338,7 +115,17 @@ export async function PUT(req: NextRequest) {
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  return NextResponse.json({ period: updated });
+  // Freeze the Z report as it stands at close, so a reprint later shows the
+  // same figures. The day is already closed — a failure here only means a
+  // reprint falls back to calculating live, so it's logged, not returned.
+  let report = null;
+  try {
+    report = await snapshotZReport(period.id);
+  } catch (err) {
+    console.error(`Failed to snapshot Z report for work period ${period.id}:`, err);
+  }
+
+  return NextResponse.json({ period: updated, report });
 }
 
 // POST — open a new work period

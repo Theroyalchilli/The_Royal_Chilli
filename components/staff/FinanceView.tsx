@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ZReportView from "@/components/pos/ZReportView";
+import { zDateTime, type ZReport } from "@/lib/z-report";
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 function firstOfMonth() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); }
@@ -139,6 +141,64 @@ function CashReconTab() {
   );
 }
 
+function ZReportsTab() {
+  const [reports, setReports] = useState<{ id: number; opened_at: string; closed_at: string | null; close_note: string | null; net_sales: number | null; difference: number | null }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewing, setViewing] = useState<ZReport | null>(null);
+  const [status, setStatus] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    fetch("/api/work-periods/z-reports").then((r) => r.json()).then((d) => { setReports(d.reports || []); setLoading(false); });
+  }, []);
+
+  async function view(id: number) {
+    const res = await fetch(`/api/work-periods/${id}/z-report`);
+    if (res.ok) setViewing((await res.json()).report);
+  }
+
+  async function print(id: number) {
+    setStatus((s) => ({ ...s, [id]: "Sending…" }));
+    const res = await fetch(`/api/work-periods/${id}/z-report`, { method: "POST" }).catch(() => null);
+    setStatus((s) => ({ ...s, [id]: res?.ok ? "Sent to printer ✓" : "Couldn't send" }));
+  }
+
+  return (
+    <div className="space-y-2">
+      {reports.map((p) => (
+        <div key={p.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <p className="text-foreground font-semibold">Z Report {p.id}<span className="ml-2 text-muted-foreground font-normal text-sm">{p.closed_at ? zDateTime(p.closed_at) : ""}</span></p>
+            <p className="text-muted-foreground text-sm">
+              Opened {zDateTime(p.opened_at)}
+              {p.net_sales !== null && ` · Net sales ${fmtMoney(p.net_sales)}`}
+              {p.difference !== null && p.difference !== 0 && ` · Cash ${p.difference > 0 ? "+" : ""}${fmtMoney(p.difference)}`}
+              {p.close_note && ` · ${p.close_note}`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {status[p.id] && <span className="text-xs text-muted-foreground">{status[p.id]}</span>}
+            <button onClick={() => view(p.id)} className="px-3 py-1.5 rounded-lg border border-border text-sm font-semibold text-foreground hover:bg-surface-hover">View</button>
+            <button onClick={() => print(p.id)} className="px-3 py-1.5 rounded-lg bg-red-500 text-sm font-semibold text-white hover:bg-red-600">Print</button>
+          </div>
+        </div>
+      ))}
+      {!loading && reports.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No closed till sessions yet.</p>}
+
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setViewing(null)}>
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-surface p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <ZReportView report={viewing} />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button onClick={() => setViewing(null)} className="py-2.5 rounded-xl bg-surface-hover text-sm font-semibold text-foreground">Close</button>
+              <button onClick={() => print(viewing.period_id)} className="py-2.5 rounded-xl bg-red-500 text-sm font-semibold text-white">{status[viewing.period_id] || "🖨️ Print"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExpensesTab() {
   const [expenses, setExpenses] = useState<{ id: number; category: string; description: string; amount: number; expense_date: string; vat_applicable: number }[]>([]);
   const [form, setForm] = useState({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
@@ -262,11 +322,12 @@ function SupplierPaymentsTab() {
 }
 
 export default function FinanceView() {
-  const [tab, setTab] = useState<"pnl" | "vat" | "cash" | "expenses" | "supplier_payments">("pnl");
+  const [tab, setTab] = useState<"pnl" | "vat" | "cash" | "zreports" | "expenses" | "supplier_payments">("pnl");
   const tabs = [
     { id: "pnl", label: "Profit & Loss" },
     { id: "vat", label: "VAT" },
     { id: "cash", label: "Cash Reconciliation" },
+    { id: "zreports", label: "Z Reports" },
     { id: "expenses", label: "Expenses" },
     { id: "supplier_payments", label: "Supplier Payments" },
   ] as const;
@@ -296,6 +357,7 @@ export default function FinanceView() {
           {tab === "pnl" && <PnlTab />}
           {tab === "vat" && <VatTab />}
           {tab === "cash" && <CashReconTab />}
+          {tab === "zreports" && <ZReportsTab />}
           {tab === "expenses" && <ExpensesTab />}
           {tab === "supplier_payments" && <SupplierPaymentsTab />}
         </div>

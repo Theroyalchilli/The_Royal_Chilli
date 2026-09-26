@@ -1,0 +1,136 @@
+// Z report figures (payment-based, like SumUp) and the line layout shared by
+// the screen and the printer.
+import { computeZReport, zReportLines, type ZOrder, type ZPayment, type ZPeriod } from "@/lib/z-report";
+
+const period = (extra: Partial<ZPeriod> = {}): ZPeriod => ({
+  id: 72,
+  status: "closed",
+  opened_at: "2026-09-07T12:22:00Z",
+  closed_at: "2026-09-08T13:37:00Z",
+  opening_cash: 77,
+  closing_cash: 195.7,
+  close_note: "Monday",
+  ...extra,
+});
+
+const order = (id: number, extra: Partial<ZOrder> = {}): ZOrder => ({
+  id,
+  order_number: `RC-${id}`,
+  work_period_id: 72,
+  status: "paid",
+  pay_later: false,
+  total: 0,
+  amount_paid: 0,
+  discount: 0,
+  customer_name: null,
+  created_at: "2026-09-07T13:00:00Z",
+  ...extra,
+});
+
+const pay = (order_id: number, method: string, amount: number, tip_amount = 0): ZPayment => ({ order_id, method, amount, tip_amount });
+
+// The owner's template: 12 sales, £578.98 incl. £2.46 tips, 4 discounts
+// (£19.89), Card £460.28 / Cash £118.70, £77 float counted to £195.70.
+function templateShift() {
+  const orders = Array.from({ length: 12 }, (_, i) => order(i + 1, { discount: [5, 5, 4.89, 5][i] ?? 0 }));
+  const payments: ZPayment[] = [
+    ...Array.from({ length: 8 }, (_, i) => pay(i + 1, "card", i === 0 ? 460.28 - 7 * 50 - 2.46 : 50, i === 0 ? 2.46 : 0)),
+    ...Array.from({ length: 4 }, (_, i) => pay(i + 9, "cash", i === 0 ? 118.7 - 3 * 30 : 30)),
+  ];
+  return { period: period(), openedByName: "Hari Kammeni", closedByName: "Hari Kammeni", payments, orders, paidOuts: [] };
+}
+
+describe("computeZReport", () => {
+  it("matches the template's figures", () => {
+    const r = computeZReport(templateShift());
+    expect(r.sales_count).toBe(12);
+    expect(r.sales_total).toBe(578.98);
+    expect(r.refunds_count).toBe(0);
+    expect(r.net_sales).toBe(578.98);
+    expect(r.discount_count).toBe(4);
+    expect(r.discount_total).toBe(19.89);
+    expect(r.tips_total).toBe(2.46);
+    expect(r.payments).toEqual({ card: 460.28, cash: 118.7, online: 0 });
+    expect(r.cash).toEqual({ opening: 77, cash_in: 118.7, cash_out: 0, expected: 195.7, counted: 195.7, difference: 0 });
+  });
+
+  it("Card + Cash + Online always equals Total sales", () => {
+    const r = computeZReport({
+      ...templateShift(),
+      payments: [pay(1, "card", 20, 2), pay(2, "cash", 15), pay(3, "card_online", 30.5)],
+    });
+    expect(r.payments.card + r.payments.cash + r.payments.online).toBeCloseTo(r.sales_total);
+  });
+
+  it("counts an earlier shift's Pay Later bill as a sale on the day it's paid", () => {
+    const r = computeZReport({
+      ...templateShift(),
+      payments: [pay(1, "cash", 10), pay(99, "card", 40)],
+      orders: [order(1), order(99, { work_period_id: 71, created_at: "2026-09-06T19:00:00Z" })],
+    });
+    expect(r.sales_count).toBe(2);
+    expect(r.sales_total).toBe(50);
+    expect(r.other.earlier_bills_paid).toEqual([{ order_number: "RC-99", order_date: "2026-09-06T19:00:00Z", amount: 40 }]);
+  });
+
+  it("takes refunds off net sales, and cash refunds and paid-outs out of the drawer", () => {
+    const r = computeZReport({
+      ...templateShift(),
+      period: period({ closing_cash: 100 }),
+      payments: [pay(1, "cash", 50), pay(2, "card", 30), pay(1, "cash", -10), pay(2, "card", -5)],
+      paidOuts: [{ reason: "Driver", amount: 7 }],
+    });
+    expect(r.refunds_count).toBe(2);
+    expect(r.refunds_total).toBe(15);
+    expect(r.net_sales).toBe(65);
+    expect(r.cash).toEqual({ opening: 77, cash_in: 50, cash_out: 17, expected: 110, counted: 100, difference: -10 });
+  });
+
+  it("lists unpaid Pay Later bills, and unresolved orders only while open", () => {
+    const input = {
+      ...templateShift(),
+      payments: [],
+      orders: [
+        order(1, { status: "open", pay_later: true, total: 25, amount_paid: 5, customer_name: "Sam" }),
+        order(2, { status: "sent_to_kitchen", total: 12 }),
+        order(3, { status: "cancelled", total: 9 }),
+      ],
+    };
+    const open = computeZReport({ ...input, period: period({ status: "open", closed_at: null }) });
+    expect(open.other.pending_bills).toEqual([{ order_number: "RC-1", customer_name: "Sam", balance: 20 }]);
+    expect(open.other.unresolved).toEqual([{ order_number: "RC-2", balance: 12 }]);
+    expect(open.cash.counted).toBeNull();
+    expect(computeZReport(input).other.unresolved).toEqual([]);
+  });
+});
+
+describe("zReportLines", () => {
+  const rows = (lines: ReturnType<typeof zReportLines>) =>
+    Object.fromEntries(lines.flatMap((l) => (l.kind === "row" ? [[l.label, l.value]] : [])));
+
+  it("lays the report out like the template", () => {
+    const lines = zReportLines(computeZReport(templateShift()));
+    expect(lines[0]).toEqual({ kind: "title", text: "Z Report 72" });
+    const r = rows(lines);
+    expect(r["Opened"]).toBe("07 Sept 2026 13:22");
+    expect(r["Closed"]).toBe("08 Sept 2026 14:37");
+    expect(r["Total sales amount"]).toBe("£578.98");
+    expect(r["Total discount amount"]).toBe("-£19.89");
+    expect(r["Expected closing cash balance"]).toBe("£195.70");
+    expect(r["Difference"]).toBe("£0.00");
+    expect(lines).toContainEqual({ kind: "text", text: "By Hari Kammeni" });
+    expect(lines).toContainEqual({ kind: "text", text: "Monday" });
+    expect(r["Online"]).toBeUndefined();
+    expect(lines.some((l) => l.kind === "heading" && l.text === "Other")).toBe(false);
+  });
+
+  it("shows an open shift as an X report, with the count being typed in", () => {
+    const report = computeZReport({ ...templateShift(), period: period({ status: "open", closed_at: null, close_note: null }) });
+    const lines = zReportLines(report, 190);
+    expect(lines[0]).toEqual({ kind: "title", text: "X Report 72 (not closed)" });
+    const r = rows(lines);
+    expect(r["Closed"]).toBe("Not closed yet");
+    expect(r["Counted closing cash balance"]).toBe("£190.00");
+    expect(r["Difference"]).toBe("-£5.70");
+  });
+});

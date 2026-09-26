@@ -9,7 +9,7 @@ import { buildTicket, toPlainText, toStarPrnt, type PrintJob, type Ticket } from
 // "here's the ticket" -> DELETE (confirm) -> "mark it printed."
 //
 // Jobs come from the print_jobs queue (lib/print-queue.ts): kitchen tickets
-// from the till, table QR and the website, plus customer receipts.
+// from the till, table QR and the website, customer receipts and Z reports.
 //
 // Only one printer is registered, so jobs aren't routed by printerMAC. If a
 // second printer is ever added, this needs to key off printerMAC instead.
@@ -64,7 +64,7 @@ function paramsForLog(req: NextRequest): string {
   return p.toString();
 }
 
-const JOB_COLUMNS = "id, order_id, kind, source, item_ids";
+const JOB_COLUMNS = "id, order_id, work_period_id, kind, source, item_ids";
 
 async function markPrinted(jobId: number) {
   await supabase.from("print_jobs").update({ printed_at: new Date().toISOString() }).eq("id", jobId).is("printed_at", null);
@@ -88,7 +88,7 @@ async function nextJob(): Promise<{ job: PrintJob; ticket: Ticket } | null> {
   for (const job of (jobs ?? []) as PrintJob[]) {
     const ticket = await buildTicket(job);
     if (ticket) return { job, ticket };
-    console.log(`[cloudprnt] job ${job.id} (order ${job.order_id}) has nothing to print — skipping`);
+    console.log(`[cloudprnt] job ${job.id} (${job.kind} ${job.order_id ?? job.work_period_id}) has nothing to print — skipping`);
     await markPrinted(job.id);
   }
   return null;
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
   const next = await nextJob();
   if (!next) return NextResponse.json({ jobReady: false });
 
-  console.log(`[cloudprnt] POST poll -> job ${next.job.id} ready (${next.job.kind}, order ${next.job.order_id})`, JSON.stringify(status));
+  console.log(`[cloudprnt] POST poll -> job ${next.job.id} ready (${next.job.kind} ${next.job.order_id ?? next.job.work_period_id})`, JSON.stringify(status));
   return NextResponse.json({ jobReady: true, mediaTypes: [STARPRNT, "text/plain"], jobToken: String(next.job.id) });
 }
 

@@ -7,6 +7,7 @@ import { toDateInputValue } from "@/lib/hours";
 import PaymentModal from "@/components/pos/PaymentModal";
 import PrintButton from "@/components/pos/PrintButton";
 import type { CartItem } from "@/lib/types";
+import { amountHeld, isFullyPaid } from "@/lib/payment-status";
 
 interface OrderRow {
   id: number;
@@ -63,7 +64,7 @@ function endOfDay(dateStr: string): Date {
 // was ordered or why it's unpaid.
 function matchesCategory(order: OrderRow, category: CategoryFilter): boolean {
   if (category === "all") return true;
-  if (category === "pending") return order.status !== "paid" && order.status !== "cancelled";
+  if (category === "pending") return !isFullyPaid(order) && order.status !== "cancelled";
   if (category === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
   if (category === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
   if (category === "delivery") return order.order_type === "delivery" && !!order.staff_id;
@@ -349,6 +350,16 @@ export default function HistoryPage() {
                             📌 Pay Later
                           </span>
                         )}
+                        {order.status !== "paid" && order.status !== "cancelled" && isFullyPaid(order) && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/40 text-emerald-700">
+                            ✓ Paid
+                          </span>
+                        )}
+                        {order.status === "cancelled" && amountHeld(order) > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-red-500/15 border-red-500/50 text-red-700">
+                            ⚠ Refund needed
+                          </span>
+                        )}
                         {order.order_type !== "dine_in" && (
                           <span className="text-[10px] text-muted-foreground font-semibold">
                             {order.order_type === "delivery" ? "🛵 Delivery" : "🥡 Takeaway"}
@@ -436,7 +447,12 @@ export default function HistoryPage() {
                           className="flex-1 h-9 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-all no-select flex items-center justify-center gap-2"
                         />
                       </div>
-                      {Number(order.amount_paid) > 0 && order.status !== "cancelled" && (
+                      {order.status === "cancelled" && amountHeld(order) > 0 && (
+                        <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700">
+                          ⚠ Cancelled — {formatCurrency(amountHeld(order))} is still paid. Refund it so the customer gets their money back.
+                        </div>
+                      )}
+                      {amountHeld(order) > 0 && (
                         <button
                           onClick={() => openRefund(order)}
                           className="w-full h-9 bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-700 text-xs font-bold rounded-lg transition-all no-select flex items-center justify-center gap-2"

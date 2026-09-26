@@ -1,5 +1,6 @@
 import { getOrderForPrint } from "@/lib/kot";
 import { getOrderForReceipt } from "@/lib/receipt";
+import { isFullyPaid } from "@/lib/payment-status";
 import { zReportLines } from "@/lib/z-report";
 import { getZReport } from "@/lib/z-report-db";
 
@@ -159,7 +160,7 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
   const { order, items, payments } = data;
 
   const balanceDue = Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100;
-  const isPaid = order.status === "paid";
+  const isPaid = isFullyPaid(order);
   const place = order.order_type === "dine_in"
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
     : String(order.order_type).toUpperCase();

@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { amountHeld } from "@/lib/payment-status";
 import { sendPaymentReceiptEmail, sendOrderCancellationEmail } from "@/lib/email";
 
 // Cancelling an order and freeing its table are always done together — a
@@ -14,12 +15,16 @@ import { sendPaymentReceiptEmail, sendOrderCancellationEmail } from "@/lib/email
 export async function cancelOrderAndFreeTable(orderId: number, tableId: number | null): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: order } = await supabase
     .from("orders")
-    .select("status, order_number, customer_name, customer_email, customers(email)")
+    .select("status, total, amount_paid, order_number, customer_name, customer_email, customers(email)")
     .eq("id", orderId)
     .single();
 
-  if (order?.status === "paid") {
-    return { ok: false, error: "This order is already paid — cancel it through Refund instead, so the payment and any loyalty points get reversed too." };
+  // Any money still held — including an online payment on an order the
+  // kitchen hasn't finished (its status isn't "paid") — must be refunded
+  // first, so the customer's card, the reports and loyalty points all match.
+  const held = order ? amountHeld(order) : 0;
+  if (held > 0) {
+    return { ok: false, error: `£${held.toFixed(2)} has been paid on this order — refund it first (Refund in Order History), then cancel.` };
   }
 
   await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", orderId);

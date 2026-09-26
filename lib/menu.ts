@@ -18,11 +18,26 @@ export type MenuItemModifierGroup = {
 
 export type MenuChannel = "pos" | "online";
 
+// Which of an item's two prices an order pays. Collection = the till price
+// (menu_items.price) — also dine-in, table QR and till takeaway. Delivery =
+// menu_items.online_price, falling back to the till price when unset —
+// website delivery and till (phone) delivery orders alike.
+export type PriceType = "collection" | "delivery";
+
+export function priceTypeFor(orderType: string): PriceType {
+  return orderType === "delivery" ? "delivery" : "collection";
+}
+
+export function basePriceFor(item: { price: number | string; online_price?: number | string | null }, type: PriceType): number {
+  return type === "delivery" && item.online_price != null ? Number(item.online_price) : Number(item.price);
+}
+
 export type MenuItem = {
   id: number;
   name: string;
   description: string | null;
-  price: number; // the price for the requested channel (see getActiveMenu)
+  price: number; // collection / till price
+  delivery_price: number; // delivery price (= price when no separate delivery price is set)
   is_veg: number;
   display_order: number;
   allergens: string[];
@@ -40,11 +55,11 @@ export type MenuCategory = {
   items: MenuItem[];
 };
 
-// channel decides which price and which availability flag each item is read
-// through: "pos" (default) is the in-house till / dine-in menu, "online" is the
-// website collection/delivery menu. The returned `price` is already the correct
-// one for that channel, and categories with no items for the channel are
-// dropped.
+// channel decides which availability flag each item is read through: "pos"
+// (default) is the in-house till / dine-in menu, "online" is the website
+// collection/delivery menu. Every item carries both prices (see PriceType);
+// the order type picks which one applies. Categories with no items for the
+// channel are dropped.
 export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuCategory[]> {
   const { data: categories, error: catErr } = await supabase
     .from("menu_categories")
@@ -98,7 +113,8 @@ export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuC
         .filter((i) => i.category_id === c.id)
         .map(({ id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g }) => ({
           id, name, description,
-          price: channel === "online" ? Number(online_price ?? price) : Number(price),
+          price: basePriceFor({ price, online_price }, "collection"),
+          delivery_price: basePriceFor({ price, online_price }, "delivery"),
           is_veg, display_order,
           allergens: allergens || [],
           calories: calories ?? null,

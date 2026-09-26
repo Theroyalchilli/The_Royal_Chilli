@@ -11,8 +11,9 @@ export async function GET() {
 
     if (catError) throw catError;
 
-    // This endpoint feeds the POS till menu, so it serves the in-house `price`
-    // and only items flagged pos_available.
+    // This endpoint feeds the POS till menu: only items flagged pos_available,
+    // with both `price` (till/collection) and `online_price` (delivery) — the
+    // till uses the delivery price for delivery orders (components/pos/MenuPanel).
     const { data: items, error: itemError } = await supabase
       .from("menu_items")
       .select(`

@@ -4,6 +4,7 @@ import supabase from "@/lib/supabase";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
+import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen } from "@/lib/hours";
 import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
@@ -64,7 +65,9 @@ export async function POST(req: NextRequest) {
 
     const orderItems = await Promise.all(
       items.map(async (item: { menu_item_id: number; quantity: number; notes?: string; selected_options?: number[] }) => {
-        const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || [], "online");
+        // Collection pays the till price, delivery the delivery price — decided
+        // here from the order type, never from prices the browser sent.
+        const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || [], priceTypeFor(order_type));
         const quantity = Math.max(1, Number(item.quantity) || 1);
         return {
           menu_item_id: resolved.menuItemId,

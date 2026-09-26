@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { siteContent } from "@/lib/site-content";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
-import { readCart, writeCart, makeLineId, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
+import { readCart, writeCart, makeLineId, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
 import { isRestaurantOpen } from "@/lib/hours";
 import ModifierPickerModal from "./ModifierPickerModal";
 import ParticleButton from "@/components/kokonutui/particle-button";
@@ -20,7 +20,18 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   const [openNow, setOpenNow] = useState(true);
   const { activeCategory, sectionRefs, navRefs, navScrollerRef, jumpTo } = useCategoryNav(categories);
 
-  useEffect(() => setCart(readCart()), []);
+  // Baskets saved before collection/delivery pricing lack the two base
+  // prices — fill them in from the menu so switching re-prices them too.
+  useEffect(() => {
+    const byId = new Map(categories.flatMap((c) => c.items).map((i) => [i.id, i]));
+    const saved = readCart();
+    const filled = saved.map((l) => {
+      const item = byId.get(l.menu_item_id);
+      return l.collectionPrice === undefined && item ? { ...l, collectionPrice: item.price, deliveryPrice: item.delivery_price } : l;
+    });
+    if (filled.some((l, i) => l !== saved[i])) writeCart(filled);
+    setCart(filled);
+  }, [categories]);
   useEffect(() => {
     setOrderType(readOrderType());
     setOpenNow(isRestaurantOpen());
@@ -30,6 +41,9 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
     setOrderType(type);
     writeOrderType(type);
   }
+
+  // Collection pays the till price, delivery the delivery price.
+  const priceOf = (item: MenuItem) => (orderType === "delivery" ? item.delivery_price : item.price);
 
   function addLine(item: MenuItem, selectedOptionIds: number[], unitPrice: number, quantity: number, notes: string) {
     const lineId = makeLineId(item.id, selectedOptionIds, notes);
@@ -43,6 +57,8 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
               lineId,
               menu_item_id: item.id,
               name: item.name,
+              collectionPrice: item.price,
+              deliveryPrice: item.delivery_price,
               unitPrice,
               quantity,
               selectedOptions: item.modifierGroups
@@ -71,12 +87,12 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
     if (isNarrow || item.modifierGroups.length > 0) {
       setPickerFor(item);
     } else {
-      addLine(item, [], item.price, 1, "");
+      addLine(item, [], priceOf(item), 1, "");
     }
   }
 
   const linesForItem = (id: number) => cart.filter((l) => l.menu_item_id === id);
-  const total = cart.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const total = cartTotal(cart, orderType);
   const itemCount = cart.reduce((sum, l) => sum + l.quantity, 0);
 
   function renderWideItemRow(item: MenuItem) {
@@ -98,7 +114,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
             {item.allergens.length > 0 && (
               <p className="mt-0.5 text-xs text-muted-foreground/80">Contains: <span className="capitalize">{item.allergens.join(", ")}</span></p>
             )}
-            <p className="mt-1 font-semibold text-primary">{formatCurrency(item.price)}</p>
+            <p className="mt-1 font-semibold text-primary">{formatCurrency(priceOf(item))}</p>
           </div>
           <div className="flex items-center gap-3">
             {!hasModifiers && lines[0] && (
@@ -121,7 +137,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
           <div className="mt-2 space-y-1 pl-1">
             {lines.map((l) => (
               <div key={l.lineId} className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{l.selectedOptions.map((o) => o.name).join(", ") || "Standard"}{l.notes ? ` · ${l.notes}` : ""} · {formatCurrency(l.unitPrice)}</span>
+                <span>{l.selectedOptions.map((o) => o.name).join(", ") || "Standard"}{l.notes ? ` · ${l.notes}` : ""} · {formatCurrency(lineUnitPrice(l, orderType))}</span>
                 <div className="flex items-center gap-2">
                   <button onClick={() => bumpLine(l.lineId, -1)} className="h-9 w-9 rounded-full border border-border text-base leading-none">−</button>
                   <span className="w-3 text-center">{l.quantity}</span>
@@ -151,7 +167,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
           {item.allergens.length > 0 && (
             <p className="mt-0.5 text-xs text-muted-foreground/80">Contains: <span className="capitalize">{item.allergens.join(", ")}</span></p>
           )}
-          <p className="mt-1 font-semibold text-primary">{formatCurrency(item.price)}</p>
+          <p className="mt-1 font-semibold text-primary">{formatCurrency(priceOf(item))}</p>
         </div>
         <button
           onClick={() => handleAddClick(item)}
@@ -187,15 +203,18 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
             </button>
           ))}
         </div>
+        <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">
+          Showing {orderType === "delivery" ? "delivery" : "collection"} prices.
+        </p>
         {orderType === "takeaway" ? (
-          <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">
+          <p className="mx-auto mt-1 max-w-xs text-center text-xs text-muted-foreground">
             Free collection from{" "}
             <a href={siteContent.contact.googleMapsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
               {siteContent.contact.address}
             </a>
           </p>
         ) : (
-          <p className="mx-auto mt-2 max-w-xs text-center text-xs text-muted-foreground">
+          <p className="mx-auto mt-1 max-w-xs text-center text-xs text-muted-foreground">
             Delivery fee and minimum order depend on your postcode — checked at checkout.
           </p>
         )}
@@ -248,7 +267,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
                     <div key={l.lineId} className="text-sm">
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-medium">{l.name}</span>
-                        <span className="text-muted-foreground">{formatCurrency(l.unitPrice * l.quantity)}</span>
+                        <span className="text-muted-foreground">{formatCurrency(lineUnitPrice(l, orderType) * l.quantity)}</span>
                       </div>
                       {(l.selectedOptions.length > 0 || l.notes) && (
                         <p className="text-xs text-muted-foreground">
@@ -297,7 +316,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
 
       {pickerFor && (
         <ModifierPickerModal
-          item={pickerFor}
+          item={{ ...pickerFor, price: priceOf(pickerFor) }}
           withQuantityAndNotes={isNarrow}
           onClose={() => setPickerFor(null)}
           onConfirm={(ids, unitPrice, quantity, notes) => {

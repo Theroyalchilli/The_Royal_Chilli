@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { formatCurrency, isValidEmail, isValidUkMobile } from "@/lib/utils";
-import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
+import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType, cartTotal } from "@/lib/cart";
 import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, toDateTimeInputValue } from "@/lib/hours";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
@@ -73,12 +73,18 @@ export default function CheckoutPage() {
     window.scrollTo(0, 0);
   }, [cart]);
 
+  // Collection and delivery are priced differently, so switching re-prices
+  // the basket — say so when the total actually changes.
+  const [priceNote, setPriceNote] = useState("");
   function selectOrderType(type: OrderType) {
+    if (type !== orderType && cartTotal(cart, type) !== cartTotal(cart, orderType)) {
+      setPriceNote(`Prices updated for ${type === "delivery" ? "delivery" : "collection"}.`);
+    }
     setOrderType(type);
     writeOrderType(type);
   }
 
-  const subtotal = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
+  const subtotal = cartTotal(cart, orderType);
   const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? computeDeliveryFee(subtotal) : 0;
   const total = subtotal + deliveryFee;
 
@@ -246,6 +252,7 @@ export default function CheckoutPage() {
           </button>
         ))}
       </div>
+      {priceNote && <p className="mt-2 text-xs font-medium text-primary">{priceNote}</p>}
 
       <div className="mt-6 flex gap-3">
         {([false, true] as const).map((scheduled) => {

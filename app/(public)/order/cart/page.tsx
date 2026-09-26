@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { readCart, writeCart, readOrderType, writeOrderType, type CartLine, type OrderType } from "@/lib/cart";
+import { readCart, writeCart, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
 import { siteContent } from "@/lib/site-content";
 
 export default function CartPage() {
@@ -18,7 +18,13 @@ export default function CartPage() {
     setOrderType(readOrderType());
   }, []);
 
+  // Collection and delivery are priced differently, so switching re-prices
+  // the basket — say so when the total actually changes.
+  const [priceNote, setPriceNote] = useState("");
   function selectOrderType(type: OrderType) {
+    if (type !== orderType && cartTotal(cart, type) !== cartTotal(cart, orderType)) {
+      setPriceNote(`Prices updated for ${type === "delivery" ? "delivery" : "collection"}.`);
+    }
     setOrderType(type);
     writeOrderType(type);
   }
@@ -41,7 +47,7 @@ export default function CartPage() {
     });
   }
 
-  const subtotal = cart.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const subtotal = cartTotal(cart, orderType);
 
   return (
     <div className="mx-auto max-w-lg pb-28">
@@ -65,6 +71,7 @@ export default function CartPage() {
           </button>
         ))}
       </div>
+      {priceNote && <p className="px-4 mt-2 text-xs font-medium text-primary">{priceNote}</p>}
 
       {cart.length === 0 ? (
         <div className="px-4 py-24 text-center">
@@ -98,7 +105,7 @@ export default function CartPage() {
                     <span className="w-4 text-center text-sm">{l.quantity}</span>
                     <button onClick={() => bumpLine(l.lineId, 1)} aria-label={`Increase ${l.name} quantity`} className="h-7 w-7 rounded-full border border-border text-sm leading-none hover:border-primary">+</button>
                   </div>
-                  <span className="text-sm font-semibold text-primary">{formatCurrency(l.unitPrice * l.quantity)}</span>
+                  <span className="text-sm font-semibold text-primary">{formatCurrency(lineUnitPrice(l, orderType) * l.quantity)}</span>
                 </div>
                 <button onClick={() => removeLine(l.lineId)} aria-label={`Remove ${l.name}`} className="flex-shrink-0 text-muted-foreground hover:text-red-500">
                   <X size={14} />

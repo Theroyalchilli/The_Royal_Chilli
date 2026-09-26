@@ -137,7 +137,8 @@ export interface MenuItem {
   category_id: number;
   name: string;
   description: string | null;
-  price: number;
+  price: number; // collection / till price
+  online_price?: number | null; // delivery price (null = same as price) — see PriceType in lib/menu.ts
   is_veg: number;
   active: number;
   display_order: number;

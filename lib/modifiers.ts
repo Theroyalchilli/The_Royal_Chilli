@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { basePriceFor, type PriceType } from "@/lib/menu";
 
 export type SelectedModifier = { id: number; name: string; price_delta: number };
 
@@ -13,12 +14,13 @@ export type ResolvedItem = {
 // what's actually attached to that item — quantities, names, and prices are never trusted
 // from the client, same principle as menu item pricing elsewhere in the ordering flow.
 //
-// channel picks the base price: "online" uses online_price (falling back to
-// price), "pos" (default, also dine-in QR ordering) uses price.
+// priceType picks the base price: "collection" (default — till, dine-in QR,
+// website collection) uses price; "delivery" uses online_price, falling back
+// to price (see PriceType in lib/menu.ts).
 export async function resolveItemWithModifiers(
   menuItemId: number,
   selectedOptionIds: number[],
-  channel: "pos" | "online" = "pos"
+  priceType: PriceType = "collection"
 ): Promise<ResolvedItem> {
   const { data: menuItem } = await supabase
     .from("menu_items")
@@ -28,7 +30,7 @@ export async function resolveItemWithModifiers(
     .single();
   if (!menuItem) throw new Error(`Menu item ${menuItemId} is no longer available`);
 
-  const basePrice = channel === "online" ? Number(menuItem.online_price ?? menuItem.price) : Number(menuItem.price);
+  const basePrice = basePriceFor(menuItem, priceType);
 
   const { data: attachments } = await supabase
     .from("menu_item_modifier_groups")

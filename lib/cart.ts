@@ -8,7 +8,12 @@ export type CartLine = {
   lineId: string;
   menu_item_id: number;
   name: string;
-  unitPrice: number; // base price + sum of selected option deltas
+  // The dish's two base prices (see PriceType in lib/menu.ts) — the line's
+  // price follows whichever of Collection / Delivery is selected, so switching
+  // re-prices the whole basket. Missing on baskets saved before this existed.
+  collectionPrice?: number;
+  deliveryPrice?: number;
+  unitPrice: number; // price when added (base + option deltas) — fallback for old baskets
   quantity: number;
   selectedOptions: SelectedOption[];
   notes?: string;
@@ -24,6 +29,18 @@ export function makeLineId(menuItemId: number, optionIds: number[], notes?: stri
 }
 
 export type OrderType = "takeaway" | "delivery";
+
+// One unit of this line at the selected order type's prices. Display only —
+// the server re-prices every order (app/api/public/orders).
+export function lineUnitPrice(line: CartLine, orderType: OrderType): number {
+  const base = orderType === "delivery" ? line.deliveryPrice : line.collectionPrice;
+  if (base === undefined) return line.unitPrice;
+  return Math.round((base + line.selectedOptions.reduce((s, o) => s + o.price_delta, 0)) * 100) / 100;
+}
+
+export function cartTotal(cart: CartLine[], orderType: OrderType): number {
+  return Math.round(cart.reduce((sum, l) => sum + lineUnitPrice(l, orderType) * l.quantity, 0) * 100) / 100;
+}
 const ORDER_TYPE_KEY = "rc_order_type";
 
 export function readOrderType(): OrderType {

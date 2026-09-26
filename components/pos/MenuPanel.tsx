@@ -60,6 +60,12 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
   });
   const activeCategory = visibleCategories.find(c => c.id === activeCat);
 
+  // Delivery orders (e.g. phone orders) pay the delivery price, the same as
+  // website delivery; everything else pays the till price. Switching order
+  // type empties the basket, so items are always added at the right price.
+  const priceOf = (item: MenuItem) =>
+    orderType === "delivery" && item.online_price != null ? Number(item.online_price) : Number(item.price);
+
   const handleAdd = (item: MenuItem) => {
     if (disableAdd) {
       onBlockedAdd?.();
@@ -72,7 +78,7 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
     onAddItem({
       menu_item_id: item.id,
       item_name: item.name,
-      item_price: item.price,
+      item_price: priceOf(item),
       quantity: 1,
       is_veg: item.is_veg,
     });
@@ -92,7 +98,7 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
   };
 
   const picker = pickerItem && (
-    <ModifierPickerModal item={pickerItem} onClose={() => setPickerItem(null)} onConfirm={handleConfirmModifiers} />
+    <ModifierPickerModal item={{ ...pickerItem, price: priceOf(pickerItem) }} onClose={() => setPickerItem(null)} onConfirm={handleConfirmModifiers} />
   );
 
   // ── Horizontal layout (mobile/tablet) ─────────────────────────────────
@@ -171,7 +177,7 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
                     className="text-sm font-black mt-auto"
                     style={{ color: activeCategory?.color ?? "#dc2626" }}
                   >
-                    {formatCurrency(item.price)}
+                    {formatCurrency(priceOf(item))}
                   </div>
                 </button>
               ))}
@@ -259,7 +265,7 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
                     className="text-sm font-black mt-auto"
                     style={{ color: activeCategory?.color ?? "#dc2626" }}
                   >
-                    {formatCurrency(item.price)}
+                    {formatCurrency(priceOf(item))}
                   </div>
                 </button>
               ))}

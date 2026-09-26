@@ -45,11 +45,16 @@ describe("resolveItemWithModifiers", () => {
     await expect(resolveItemWithModifiers(42, [])).rejects.toThrow("no longer available");
   });
 
-  it("uses the till price for the pos channel and online price for the online channel", async () => {
-    const pos = await resolveItemWithModifiers(42, [], "pos");
-    const online = await resolveItemWithModifiers(42, [], "online");
-    expect(pos.unitPrice).toBe(10);
-    expect(online.unitPrice).toBe(12);
+  it("charges collection the till price and delivery the delivery price", async () => {
+    const collection = await resolveItemWithModifiers(42, [], "collection");
+    const delivery = await resolveItemWithModifiers(42, [], "delivery");
+    expect(collection.unitPrice).toBe(10);
+    expect(delivery.unitPrice).toBe(12);
+  });
+
+  it("charges delivery the till price when no delivery price is set", async () => {
+    menuItemRow = { ...menuItemRow, online_price: null };
+    expect((await resolveItemWithModifiers(42, [], "delivery")).unitPrice).toBe(10);
   });
 
   it("rejects a modifier option id that isn't actually attached to this item", async () => {
@@ -91,7 +96,7 @@ describe("resolveItemWithModifiers", () => {
       { id: 5, group_id: 1, name: "Cheese", price_delta: 1.5 },
       { id: 6, group_id: 1, name: "Bacon", price_delta: 2 },
     ];
-    const result = await resolveItemWithModifiers(42, [5, 6], "pos");
+    const result = await resolveItemWithModifiers(42, [5, 6], "collection");
     expect(result.unitPrice).toBe(13.5);
     expect(result.selectedModifiers).toHaveLength(2);
   });

@@ -94,7 +94,7 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
   }
 
   async function save() {
-    if (!form.name.trim() || !form.price) return toast({ variant: "destructive", title: "Name and till price are required" });
+    if (!form.name.trim() || !form.price) return toast({ variant: "destructive", title: "Name and collection / till price are required" });
     const payload = {
       category_id: form.category_id, name: form.name.trim(), description: form.description.trim() || null,
       price: Number(form.price),
@@ -141,12 +141,12 @@ function ItemModal({ item, categoryOptions, allGroups, defaultCategoryId, onClos
           <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-muted-foreground text-xs">Till price (dine-in)</label>
+              <label className="text-muted-foreground text-xs">Collection / till price</label>
               <input type="number" step="0.01" placeholder="0.00" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="mt-1 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             </div>
             <div>
-              <label className="text-muted-foreground text-xs">Website price</label>
-              <input type="number" step="0.01" placeholder="same as till" value={form.online_price} onChange={(e) => setForm({ ...form, online_price: e.target.value })} className="mt-1 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              <label className="text-muted-foreground text-xs">Delivery price (website + till)</label>
+              <input type="number" step="0.01" placeholder="same as collection" value={form.online_price} onChange={(e) => setForm({ ...form, online_price: e.target.value })} className="mt-1 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 pt-1">
@@ -421,7 +421,7 @@ export default function MenuManagementView() {
       </div>
       <span className="text-foreground whitespace-nowrap text-sm">
         {fmtMoney(i.price)}
-        <span className="text-muted-foreground"> · web {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
+        <span className="text-muted-foreground"> · delivery {i.online_price != null ? fmtMoney(i.online_price) : fmtMoney(i.price)}</span>
       </span>
     </button>
   );

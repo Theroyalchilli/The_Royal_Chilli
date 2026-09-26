@@ -111,6 +111,7 @@ export async function addItemsToTable(
       .eq("id", order!.id);
   }
 
+  const insertedItemIds: number[] = [];
   for (const item of itemRows) {
     const { _modifiers, ...itemRow } = item;
     const { data: insertedItem, error: itemErr } = await supabase
@@ -119,6 +120,7 @@ export async function addItemsToTable(
       .select("id")
       .single();
     if (itemErr) throw itemErr;
+    insertedItemIds.push(insertedItem.id);
 
     if (_modifiers.length > 0) {
       const { error: modErr } = await supabase.from("order_item_modifiers").insert(
@@ -129,5 +131,5 @@ export async function addItemsToTable(
   }
 
   await recalcTotals(String(order!.id));
-  return order!.id;
+  return { orderId: order!.id as number, itemIds: insertedItemIds };
 }

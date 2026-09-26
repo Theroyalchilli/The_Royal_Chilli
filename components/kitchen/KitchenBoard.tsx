@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } fr
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
+import PrintButton from "@/components/pos/PrintButton";
 
 interface OrderWithItems extends Order {
   items: OrderItem[];
@@ -137,30 +138,6 @@ function usePaginatedGrid<T>(groups: T[]) {
   }, [pages.length]);
 
   return { containerRef, measureRef, page, pageCount: pages.length, visible: pages[page] ?? [] };
-}
-
-// Every "Send to Kitchen" click creates a brand-new order row (even for a 2nd
-// round on the same table), so "new sent_to_kitchen order id we haven't
-// auto-printed yet" is a complete, reliable signal for "this needs a ticket" —
-// no separate per-item tracking required.
-const AUTO_PRINT_KEY = "rc_kitchen_auto_printed";
-
-function loadPrintedIds(): Set<number> {
-  try {
-    const raw = localStorage.getItem(AUTO_PRINT_KEY);
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function savePrintedIds(ids: Set<number>) {
-  try {
-    // Cap so this doesn't grow forever on a kitchen device left running for weeks.
-    localStorage.setItem(AUTO_PRINT_KEY, JSON.stringify([...ids].slice(-500)));
-  } catch {
-    // ignore
-  }
 }
 
 // One order's header + items + notes + actions — no outer card border, so it
@@ -325,12 +302,12 @@ function OrderTicketBody({
         </div>
       ) : (
         <div className="mt-3 space-y-2">
-          <button
-            onClick={() => window.open(`/pos/kitchen/print/${order.id}`, "_blank", "width=400,height=600")}
+          <PrintButton
+            orderId={order.id}
+            kind="kot"
+            label="🖨️ Print KOT"
             className="pos-btn no-select w-full py-2 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-lg text-xs transition-colors"
-          >
-            🖨️ Print KOT
-          </button>
+          />
           {order.status === "sent_to_kitchen" && (
             <button
               onClick={() => onMarkReady(order.id)}
@@ -437,12 +414,6 @@ export default function KitchenBoard() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [tick, setTick] = useState(0);
-  const [autoPrintQueue, setAutoPrintQueue] = useState<number[]>([]);
-  const printedRef = useRef<Set<number>>(new Set());
-
-  useEffect(() => {
-    printedRef.current = loadPrintedIds();
-  }, []);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -451,15 +422,6 @@ export default function KitchenBoard() {
       const newOrders: OrderWithItems[] = data.orders || [];
       setOrders(newOrders);
       setLastRefresh(new Date());
-
-      const toPrint = newOrders
-        .filter((o) => o.status === "sent_to_kitchen" && !printedRef.current.has(o.id))
-        .map((o) => o.id);
-      if (toPrint.length > 0) {
-        for (const id of toPrint) printedRef.current.add(id);
-        savePrintedIds(printedRef.current);
-        setAutoPrintQueue((prev) => [...prev, ...toPrint]);
-      }
     } catch (err) {
       console.error("Failed to fetch kitchen orders", err);
     } finally {
@@ -541,21 +503,6 @@ export default function KitchenBoard() {
 
   return (
     <>
-      {/* Silent auto-print for every new order — invisible iframes so no popup
-          blocker interferes. Requires the kitchen device's browser to be set
-          up for silent/no-dialog printing (e.g. Chrome with --kiosk-printing),
-          otherwise each ticket still needs someone to click "Print" in the
-          browser's native dialog. */}
-      {autoPrintQueue.map((id) => (
-        <iframe
-          key={id}
-          src={`/pos/kitchen/print/${id}`}
-          style={{ position: "fixed", top: 0, left: 0, width: 0, height: 0, border: 0, opacity: 0, pointerEvents: "none" }}
-          onLoad={() => {
-            setTimeout(() => setAutoPrintQueue((q) => q.filter((x) => x !== id)), 8000);
-          }}
-        />
-      ))}
     <div className="h-full flex flex-col">
       {/* Header — title on top, Back button underneath it */}
       <div className="bg-surface border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex-shrink-0">
@@ -565,10 +512,6 @@ export default function KitchenBoard() {
           <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-          <div className="hidden md:flex items-center gap-2" title="New orders auto-print to this device's default printer">
-            <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />
-            <span className="text-blue-600 text-xs font-medium">🖨️ Auto-print ON</span>
-          </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-yellow-500 inline-block" />
             <span className="text-yellow-600 text-xs sm:text-sm font-medium">

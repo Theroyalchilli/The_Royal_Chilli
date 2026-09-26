@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { getSessionFromRequest } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -26,10 +27,7 @@ export async function GET(req: NextRequest) {
     // without this, it shows up on the board hours or days early and is
     // still sitting there, indistinguishable from a live ticket, whenever
     // staff next open the screen. Reveal it once it's within normal prep
-    // time of its slot: matches the ETA windows already quoted to customers
-    // in the order-confirmation email (lib/email.ts) — ~20-30 min for
-    // takeaway, ~45-60 min for delivery (extra time for the drive).
-    const KITCHEN_LEAD_MINUTES: Record<string, number> = { takeaway: 30, delivery: 45 };
+    // time of its slot (KITCHEN_LEAD_MINUTES, lib/scheduling.ts).
     const now = Date.now();
     const orders = (rawOrders ?? []).filter((o) => {
       if (!o.scheduled_for) return true;

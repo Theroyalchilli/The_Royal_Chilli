@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTableByNumber, addItemsToTable, getOpenOrderForTable, getOrderItems } from "@/lib/dine-in";
+import { queueKitchenTicketSafely } from "@/lib/print-queue";
 
 export async function POST(
   req: NextRequest,
@@ -26,12 +27,15 @@ export async function POST(
       return NextResponse.json({ error: "No items provided" }, { status: 400 });
     }
 
-    const orderId = await addItemsToTable(table.id, items, {
+    const { orderId, itemIds } = await addItemsToTable(table.id, items, {
       phone: customer_phone,
       name: customer_name,
       email: customer_email,
       marketingConsent: marketing_consent === true,
     });
+    // A later round joins the table's existing order — the ticket lists only
+    // this round's items.
+    await queueKitchenTicketSafely(orderId, "qr", { itemIds });
     const order = await getOpenOrderForTable(table.id);
     const orderItems = await getOrderItems(orderId);
 

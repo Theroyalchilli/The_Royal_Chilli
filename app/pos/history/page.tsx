@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { toDateInputValue } from "@/lib/hours";
 import PaymentModal from "@/components/pos/PaymentModal";
+import PrintButton from "@/components/pos/PrintButton";
 import type { CartItem } from "@/lib/types";
 
 interface OrderRow {
@@ -428,12 +429,12 @@ export default function HistoryPage() {
                             💰 Take Payment — {formatCurrency(Number(order.total) - Number(order.amount_paid))}
                           </button>
                         )}
-                        <button
-                          onClick={() => window.open(`/pos/receipt/${order.id}`, "_blank")}
+                        <PrintButton
+                          orderId={order.id}
+                          kind="receipt"
+                          label="🖨️ Reprint Receipt"
                           className="flex-1 h-9 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-all no-select flex items-center justify-center gap-2"
-                        >
-                          🖨️ Reprint Receipt
-                        </button>
+                        />
                       </div>
                       {Number(order.amount_paid) > 0 && order.status !== "cancelled" && (
                         <button

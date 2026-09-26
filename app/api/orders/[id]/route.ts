@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
 import { recalcTotals } from "@/lib/order-totals";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
+import { queueKitchenTicketSafely } from "@/lib/print-queue";
 
 export async function GET(
   req: NextRequest,
@@ -93,6 +94,12 @@ export async function PUT(
         .eq("id", id);
 
       if (error) throw error;
+
+      // Till "Send to Kitchen": each send is its own order row (created
+      // "open", then flipped here), so the whole order is exactly this round.
+      if (status === "sent_to_kitchen" && order.status === "open") {
+        await queueKitchenTicketSafely(order.id, "till");
+      }
 
       // Free table when the order is fully paid this way (rare — normal
       // payments go through /payment, which handles this itself).

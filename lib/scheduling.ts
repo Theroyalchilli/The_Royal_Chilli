@@ -27,3 +27,10 @@ export function validateScheduledTime(scheduledFor: string): string | null {
 }
 
 export { MIN_LEAD_MINUTES, MAX_ADVANCE_DAYS };
+
+// How long before a scheduled slot the kitchen should start on it — matches
+// the ETA windows quoted in the order-confirmation email (lib/email.ts):
+// ~20-30 min for takeaway, ~45-60 min for delivery (extra time for the
+// drive). Used both to reveal scheduled orders on the Kitchen Display and to
+// hold their printed ticket back until then.
+export const KITCHEN_LEAD_MINUTES: Record<string, number> = { takeaway: 30, delivery: 45 };

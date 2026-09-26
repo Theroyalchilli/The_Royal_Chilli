@@ -9,7 +9,7 @@ import { isRestaurantOpen } from "@/lib/hours";
 import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { sendOrderConfirmationEmail } from "@/lib/email";
-import { formatTicketText } from "@/lib/cloudprnt";
+import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
 
 export async function POST(req: NextRequest) {
   try {
@@ -171,16 +171,12 @@ export async function POST(req: NextRequest) {
       }));
     }
 
-    // Queues a ticket for the reception printer (Star mC-Print3, CloudPRNT)
-    // so staff see the order without watching any screen — see
-    // app/api/cloudprnt and lib/cloudprnt.ts.
-    waitUntil(
-      formatTicketText(order.id)
-        .then(async (content) => {
-          if (content) await supabase.from("print_jobs").insert({ order_id: order.id, content });
-        })
-        .catch((err) => console.error("Failed to queue reception print job:", err))
-    );
+    // Kitchen ticket for the printer (CloudPRNT, lib/print-queue.ts). A
+    // pay-online order isn't real until Stripe confirms it — the webhook
+    // queues its ticket then, so an abandoned checkout never prints.
+    if (!pay_online) {
+      await queueKitchenTicketSafely(order.id, "online", { printAfter: printAfterFor(order) });
+    }
 
     return NextResponse.json(
       { success: true, id: order.id, order_number: orderNumber, total, scheduled_for: scheduled_for || null },

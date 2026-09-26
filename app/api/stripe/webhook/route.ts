@@ -4,6 +4,7 @@ import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { stripe } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
 
 // Stripe is the source of truth for "did the payment actually succeed" — the
 // browser redirect back to success_url is just a UX hint, never trusted on
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
             staff_id: null,
             reference: session.id,
           });
+
+          // Pay-online orders only reach the kitchen printer once paid (the
+          // order route skipped them) — inside the idempotency guard, so a
+          // redelivered event can't print a second ticket.
+          await queueKitchenTicketSafely(Number(order_id), "online", { printAfter: printAfterFor(order) });
 
           // First real confirmation this order gets — the order-creation
           // route deliberately skipped it for pay-online orders, since

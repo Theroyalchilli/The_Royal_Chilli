@@ -66,12 +66,13 @@ beforeEach(() => {
 describe("PUT /api/orders/[id] — discount rule", () => {
   it("applies a percent discount and recomputes the bill", async () => {
     queue("orders", { data: { id: 1, table_id: null, status: "open" }, error: null }); // initial fetch
+    queue("staff", { data: { id: 7, name: "Hari" }, error: null }); // who's giving it
     queue("orders", { data: null, error: null }); // discount_type update
     queueRecalcAndRefetch({ discountType: "percent", discountPct: 10 });
 
-    const res = await patchOrder("1", { discount_type: "percent", discount_value: 10, discount_reason: "loyalty" });
+    const res = await patchOrder("1", { discount_type: "percent", discount_value: 10, discount_reason: "loyalty", discount_given_by_staff_id: 7 });
     expect(res.status).toBe(200);
-    expect(ordersUpdatePayloads[0]).toMatchObject({ discount_type: "percent", discount_pct: 10, discount_reason: "loyalty" });
+    expect(ordersUpdatePayloads[0]).toMatchObject({ discount_type: "percent", discount_pct: 10, discount_reason: "loyalty", discount_given_by_staff_id: 7, discount_given_by: "Hari" });
   });
 
   it("rejects a percent discount value outside 0-100", async () => {
@@ -82,12 +83,22 @@ describe("PUT /api/orders/[id] — discount rule", () => {
 
   it("applies a flat-amount discount", async () => {
     queue("orders", { data: { id: 1, table_id: null, status: "open" }, error: null });
+    queue("staff", { data: { id: 7, name: "Hari" }, error: null });
     queue("orders", { data: null, error: null }); // discount_type update
     queueRecalcAndRefetch({ discountType: "amount", discount: 15 });
 
-    const res = await patchOrder("1", { discount_type: "amount", discount_value: 15 });
+    const res = await patchOrder("1", { discount_type: "amount", discount_value: 15, discount_given_by_staff_id: 7 });
     expect(res.status).toBe(200);
-    expect(ordersUpdatePayloads[0]).toMatchObject({ discount_type: "amount", discount: 15 });
+    expect(ordersUpdatePayloads[0]).toMatchObject({ discount_type: "amount", discount: 15, discount_given_by: "Hari" });
+  });
+
+  it("refuses a discount without saying who's giving it (or an inactive/unknown staff member)", async () => {
+    queue("orders", { data: { id: 1, table_id: null, status: "open" }, error: null });
+    queue("staff", { data: null, error: null });
+    const res = await patchOrder("1", { discount_type: "amount", discount_value: 5 });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Choose who is giving this discount" });
+    expect(ordersUpdatePayloads).toHaveLength(0);
   });
 
   it("clears the discount when discount_type is null", async () => {

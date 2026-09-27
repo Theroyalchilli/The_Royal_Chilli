@@ -121,28 +121,30 @@ export async function PUT(
 
       // A manual discount must say who gave it (the till is one shared
       // login, so staff pick their name) — recorded on the order only.
-      let givenBy: { discount_given_by_staff_id: number | null; discount_given_by: string | null } = { discount_given_by_staff_id: null, discount_given_by: null };
-      if (discount_type !== null) {
+      // Removing the discount clears it.
+      const resolveGiver = async () => {
         const { data: giver } = await supabase
           .from("staff")
           .select("id, name")
           .eq("id", Number(discount_given_by_staff_id) || 0)
           .eq("active", 1)
           .maybeSingle();
-        if (!giver) return NextResponse.json({ error: "Choose who is giving this discount" }, { status: 400 });
-        givenBy = { discount_given_by_staff_id: giver.id, discount_given_by: giver.name };
-      }
+        return giver ? { discount_given_by_staff_id: giver.id as number, discount_given_by: giver.name as string } : null;
+      };
+      const noGiver = NextResponse.json({ error: "Choose who is giving this discount" }, { status: 400 });
 
       if (discount_type === null) {
         const { error } = await supabase
           .from("orders")
-          .update({ discount_type: null, discount_pct: null, discount: 0, discount_reason: null, ...givenBy, updated_at: new Date().toISOString() })
+          .update({ discount_type: null, discount_pct: null, discount: 0, discount_reason: null, discount_given_by_staff_id: null, discount_given_by: null, updated_at: new Date().toISOString() })
           .eq("id", id);
         if (error) throw error;
       } else if (discount_type === "percent") {
         if (typeof discount_value !== "number" || discount_value <= 0 || discount_value > 100) {
           return NextResponse.json({ error: "discount_value must be between 0 and 100 for a percent discount" }, { status: 400 });
         }
+        const givenBy = await resolveGiver();
+        if (!givenBy) return noGiver;
         const { error } = await supabase
           .from("orders")
           .update({ discount_type: "percent", discount_pct: discount_value, discount_reason: discount_reason || null, ...givenBy, updated_at: new Date().toISOString() })
@@ -152,6 +154,8 @@ export async function PUT(
         if (typeof discount_value !== "number" || discount_value < 0) {
           return NextResponse.json({ error: "discount_value must be a positive amount" }, { status: 400 });
         }
+        const givenBy = await resolveGiver();
+        if (!givenBy) return noGiver;
         const { error } = await supabase
           .from("orders")
           .update({ discount_type: "amount", discount_pct: null, discount: discount_value, discount_reason: discount_reason || null, ...givenBy, updated_at: new Date().toISOString() })

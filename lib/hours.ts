@@ -85,6 +85,15 @@ export function isRestaurantOpen(date: Date = new Date()): boolean {
   return false;
 }
 
+// Open now, or within `bufferMinutes` of opening/closing — the window in
+// which the till's background checks (Print Station, new-order alerts) run
+// at full speed. Outside it they slow right down, to stay well inside
+// Vercel's free-plan function limits (see lib/poll-schedule.ts).
+export function isNearOpeningHours(date: Date = new Date(), bufferMinutes = 30): boolean {
+  const ms = bufferMinutes * 60_000;
+  return isRestaurantOpen(date) || isRestaurantOpen(new Date(date.getTime() + ms)) || isRestaurantOpen(new Date(date.getTime() - ms));
+}
+
 function wrapMinutes(minutes: number): number {
   return ((minutes % 1440) + 1440) % 1440;
 }

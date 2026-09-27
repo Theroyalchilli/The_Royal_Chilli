@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Ticket } from "@/lib/cloudprnt";
 import { ticketHtml } from "@/lib/ticket-html";
 import { playBuzzer } from "@/lib/buzzer";
+import { checkDue } from "@/lib/poll-schedule";
 
 // USB Print Station — runs on the till laptop that has the Star mC-Print3 on
 // USB, printing everything the POS queues (kitchen tickets from the till, QR
@@ -18,7 +19,9 @@ import { playBuzzer } from "@/lib/buzzer";
 // running the two together can print a ticket twice.
 
 const KEY_STORAGE = "rc_print_station_key";
-const POLL_MS = 3000;
+// Every 5s around opening hours; every couple of minutes otherwise
+// (lib/poll-schedule.ts — keeps the POS inside Vercel's free-plan limits).
+const POLL_MS = 5000;
 
 type State = "starting" | "unpaired" | "ok" | "offline" | "dialog";
 type Printed = { at: string; label: string };
@@ -149,6 +152,12 @@ export default function PrintStationPage() {
   // shortcut also starts Chrome with background throttling switched off.)
   useEffect(() => {
     if (!key) return;
+    let lastCheck = Date.now();
+    const tick = () => {
+      if (!checkDue(lastCheck)) return;
+      lastCheck = Date.now();
+      poll();
+    };
     poll();
     let worker: Worker | null = null;
     let fallback: ReturnType<typeof setInterval> | null = null;
@@ -156,9 +165,9 @@ export default function PrintStationPage() {
       const src = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${POLL_MS});`], { type: "text/javascript" }));
       worker = new Worker(src);
       URL.revokeObjectURL(src);
-      worker.onmessage = () => poll();
+      worker.onmessage = () => tick();
     } catch {
-      fallback = setInterval(poll, POLL_MS);
+      fallback = setInterval(tick, POLL_MS);
     }
     return () => {
       worker?.terminate();

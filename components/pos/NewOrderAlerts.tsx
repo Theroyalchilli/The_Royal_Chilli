@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { audioBlocked, playBuzzer, unlockAudio } from "@/lib/buzzer";
+import { checkDue } from "@/lib/poll-schedule";
 
 interface OrderAlert {
   id: number; // the kitchen ticket's print job id
@@ -15,7 +16,10 @@ interface OrderAlert {
 }
 
 const SEEN_KEY = "rc_seen_order_alerts";
-const POLL_MS = 10_000;
+// Every 15s around opening hours, only in the tab on screen (a hidden or
+// duplicate tab doesn't check, and catches up the moment it's shown);
+// every couple of minutes outside opening hours (lib/poll-schedule.ts).
+const POLL_MS = 15_000;
 const REPEAT_MS = 20_000;
 // On a device's very first load, orders older than this count as already
 // seen (no chiming through the evening's backlog); newer ones still alert.
@@ -80,9 +84,24 @@ export default function NewOrderAlerts() {
 
   useEffect(() => {
     if (hidden) return;
-    poll();
-    const t = setInterval(poll, POLL_MS);
-    return () => clearInterval(t);
+    let lastCheck = Date.now();
+    const check = () => {
+      lastCheck = Date.now();
+      poll();
+    };
+    const tick = () => {
+      if (document.visibilityState === "visible" && checkDue(lastCheck)) check();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    check();
+    const t = setInterval(tick, POLL_MS);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [poll, hidden]);
 
   // Keep chiming while anything is unseen.

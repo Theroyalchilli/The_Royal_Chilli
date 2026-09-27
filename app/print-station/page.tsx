@@ -23,7 +23,13 @@ const KEY_STORAGE = "rc_print_station_key";
 // (lib/poll-schedule.ts — keeps the POS inside Vercel's free-plan limits).
 const POLL_MS = 5000;
 
-type State = "starting" | "unpaired" | "ok" | "offline" | "dialog";
+type State = "starting" | "wrongWindow" | "unpaired" | "ok" | "offline" | "dialog";
+
+// The desktop shortcut opens /print-station?station=1 in its own Chrome
+// profile, with silent printing. Opened any other way (a normal tab), Chrome
+// shows a print dialog per ticket — so the page refuses to pair or take
+// tickets there, instead of losing them.
+const SHORTCUT_MARKER = "station";
 type Printed = { at: string; label: string };
 
 function readKey(): string | null {
@@ -101,15 +107,22 @@ export default function PrintStationPage() {
   const [pairError, setPairError] = useState("");
   const [pairing, setPairing] = useState(false);
   const busy = useRef(false);
+  // Set once a print dialog has appeared: printing stops (tickets stay
+  // queued) until the page is reopened from the shortcut.
+  const halted = useRef(false);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get(SHORTCUT_MARKER) !== "1") {
+      setState("wrongWindow");
+      return;
+    }
     const k = readKey();
     setKey(k);
     setState(k ? "ok" : "unpaired");
   }, []);
 
   const poll = useCallback(async () => {
-    if (!key || busy.current) return;
+    if (!key || busy.current || halted.current) return;
     busy.current = true;
     try {
       // Drain the backlog one ticket at a time, oldest first.
@@ -127,6 +140,14 @@ export default function PrintStationPage() {
           return;
         }
         const outcome = await printTicket(data.ticket);
+        if (outcome === "dialog") {
+          // A dialog means silent printing is off — the ticket may never
+          // have printed, so it's NOT marked done: it stays queued and
+          // prints once the page is opened properly.
+          halted.current = true;
+          setState("dialog");
+          return;
+        }
         await fetch("/api/print/station/done", {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -137,7 +158,7 @@ export default function PrintStationPage() {
         // too — this window runs unattended with sound allowed (shortcut flag
         // --autoplay-policy=no-user-gesture-required), so it needs no tap.
         if (data.job.kind === "kot" && (data.job.source === "online" || data.job.source === "qr")) orderChime();
-        setState(outcome === "dialog" ? "dialog" : "ok");
+        setState("ok");
       }
     } catch {
       setState("offline");
@@ -225,10 +246,11 @@ export default function PrintStationPage() {
 
   const banner: Record<State, { bg: string; title: string; text: string }> = {
     starting: { bg: "#6b7280", title: "Starting…", text: "" },
+    wrongWindow: { bg: "#dc2626", title: "⚠️ Open the Print Station from its desktop shortcut", text: "This window can't print tickets automatically (Chrome would show a print dialog for each one), so it isn't taking any. Close this tab and double-click \"Print Station\" on the till computer's desktop." },
     ok: { bg: "#059669", title: "✅ Printing automatically", text: `Checking for new tickets every few seconds${lastCheck ? ` · last check ${lastCheck}` : ""}. Leave this page open.` },
     offline: { bg: "#dc2626", title: "⚠️ Can't reach the POS", text: "Check this computer's internet connection. Tickets are kept and will print when it's back." },
     unpaired: { bg: "#d97706", title: "Not paired", text: "This computer isn't the Print Station yet (or another computer was paired since). A manager needs to pair it below." },
-    dialog: { bg: "#dc2626", title: "⚠️ Print dialog is appearing", text: "Chrome wasn't opened with the Print Station shortcut, so tickets won't print on their own. Close Chrome and open it from the \"Print Station\" shortcut." },
+    dialog: { bg: "#dc2626", title: "⚠️ Printing stopped — a print dialog appeared", text: "Silent printing is off in this window, so printing has paused. No tickets are lost: they stay waiting and print as soon as the Print Station is reopened from its desktop shortcut." },
   };
   const b = banner[state];
 
@@ -239,6 +261,7 @@ export default function PrintStationPage() {
         {b.text && <div style={{ marginTop: 6, fontSize: 16, opacity: 0.95 }}>{b.text}</div>}
       </div>
 
+      {state !== "wrongWindow" && (
       <div style={{ maxWidth: 720, margin: "0 auto", padding: 24, display: "grid", gap: 20 }}>
         {state === "unpaired" && (
           <section style={{ background: "#fff", borderRadius: 12, padding: 20 }}>
@@ -283,6 +306,7 @@ export default function PrintStationPage() {
           and print when it&apos;s back (anything older than 6 hours is skipped).
         </p>
       </div>
+      )}
     </div>
   );
 }

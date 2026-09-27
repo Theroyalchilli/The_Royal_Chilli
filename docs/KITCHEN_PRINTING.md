@@ -78,7 +78,7 @@ above automatically, from the same queue.
    `--user-data-dir="%LOCALAPPDATA%\RoyalChilliPrintStation" --kiosk-printing
    --disable-background-timer-throttling --disable-renderer-backgrounding
    --disable-backgrounding-occluded-windows --new-window
-   https://www.theroyalchilli.com/print-station` — its own profile so the
+   https://www.theroyalchilli.com/print-station?station=1` — the `?station=1` marker is required (opened any other way the page won't pair or print), its own profile so the
    flags always apply, printing without the dialog, and no slow-down when the
    window is hidden (otherwise tickets can take up to a minute).
 3. Open that shortcut. A manager logs in (in another tab) and presses

@@ -3,15 +3,17 @@ import type { Ticket } from "@/lib/cloudprnt";
 // Tickets printed through a browser onto the Star MCP30 over USB, by the
 // Print Station (app/print-station). Safe to import in the browser.
 
-// The standard 80mm receipt layout: 48 columns, the same as the printer's own
-// font when it prints over the network (CloudPRNT).
-export const BROWSER_TICKET_WIDTH = 48;
+// 45 columns: at 48 the last ~3 characters of each line (the right-aligned
+// prices) were cut off on the real printer, so lines are 3 shorter — the gap
+// between text and amount shrinks, the text size stays the same.
+export const BROWSER_TICKET_WIDTH = 45;
 
 // The driver's paper is "72mm x Receipt" and 72mm is all the print head can
 // reach, so the page is exactly that wide and starts at the left edge.
-// Courier is 0.6em per character: 48 columns at 2.45mm = 70.6mm, leaving a
-// little slack so the last column never clips. "tall" is double height only
-// (still 48 columns), "big" is double width (24 columns). Anything longer wraps.
+// Courier is 0.6em per character: 45 columns at 2.45mm = 66.2mm, inside the
+// ~69mm this printer actually reaches through the browser. "tall" is double
+// height only (still 45 columns), "big" is double width (22 columns).
+// Anything longer wraps.
 export const TICKET_CSS = `
   body { background: #fff; margin: 0; }
   .ticket { width: 72mm; margin: 0; padding: 3mm 0; font-family: 'Courier New', monospace; color: #000; font-size: 2.45mm; line-height: 1.35; }

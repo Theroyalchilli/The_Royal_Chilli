@@ -17,8 +17,9 @@ export type TicketLine = {
   bold?: boolean;
   // "tall" = double height (same columns); "big" = double width + height (half the columns)
   size?: "normal" | "tall" | "big";
-  // White text on a black band (Z report section headings).
-  inverse?: boolean;
+  // Extra-thick strokes (Z report section headings). The browser draws it
+  // heavier; the printer's own font has no heavier weight, so it's bold there.
+  thick?: boolean;
 };
 export type Ticket = TicketLine[];
 
@@ -106,8 +107,8 @@ async function buildZReportTicket(workPeriodId: number, width: number): Promise<
   t.push({ text: DIVIDER });
   for (const l of zReportLines(report)) {
     if (l.kind === "title") t.push({ text: l.text, bold: true, size: "tall" });
-    // Section headings: a full-width black band, so each section is easy to find.
-    else if (l.kind === "heading") t.push({ text: ` ${l.text}`.padEnd(width), bold: true, inverse: true });
+    // Section headings: extra-thick, so each section reads as a title.
+    else if (l.kind === "heading") t.push({ text: l.text, bold: true, thick: true });
     // The key figures (Total net sales, Difference) print tall.
     else if (l.kind === "row") t.push({ text: row(l.label, l.value), bold: l.bold, size: l.bold ? "tall" : undefined });
     else if (l.kind === "text") t.push({ text: l.text });
@@ -279,12 +280,10 @@ export function toStarPrnt(ticket: Ticket): Uint8Array {
   for (const l of ticket) {
     out.push(ESC, GS, 0x61, l.align === "center" ? 1 : 0);
     if (l.bold) out.push(ESC, 0x45);
-    if (l.inverse) out.push(ESC, 0x34); // white/black reverse on
     if (l.size === "big") out.push(ESC, 0x69, 1, 1);
     else if (l.size === "tall") out.push(ESC, 0x69, 1, 0);
     out.push(...encodeCp437(l.text), LF);
     if (l.size === "big" || l.size === "tall") out.push(ESC, 0x69, 0, 0);
-    if (l.inverse) out.push(ESC, 0x35); // reverse off
     if (l.bold) out.push(ESC, 0x46);
   }
   out.push(ESC, GS, 0x61, 0);

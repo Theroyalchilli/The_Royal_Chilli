@@ -3,25 +3,25 @@ import type { Ticket } from "@/lib/cloudprnt";
 // Tickets printed through a browser onto the Star MCP30 over USB, by the
 // Print Station (app/print-station). Safe to import in the browser.
 
-// 45 columns: at 48 the last ~3 characters of each line (the right-aligned
-// prices) were cut off on the real printer, so lines are 3 shorter — the gap
-// between text and amount shrinks, the text size stays the same.
-export const BROWSER_TICKET_WIDTH = 45;
+// 35 columns of larger, bold text. On the real printer 48 columns at 2.45mm
+// lost their last ~3 characters, i.e. it reaches ~66mm through the browser;
+// 35 columns at 3mm is 63mm, leaving a safety margin at the right edge.
+export const BROWSER_TICKET_WIDTH = 35;
 
 // The driver's paper is "72mm x Receipt" and 72mm is all the print head can
 // reach, so the page is exactly that wide and starts at the left edge.
-// Courier is 0.6em per character: 45 columns at 2.45mm = 66.2mm, inside the
-// ~69mm this printer actually reaches through the browser. "tall" is double
-// height only (still 45 columns), "big" is double width (22 columns).
-// Anything longer wraps.
+// Courier is 0.6em per character: 35 columns at 3mm = 63mm. Everything is
+// bold — thin strokes print faint on thermal paper. "tall" is 1.5x height
+// (still 35 columns), "big" is double size (17 columns). Anything longer
+// wraps rather than being cut.
 export const TICKET_CSS = `
   body { background: #fff; margin: 0; }
-  .ticket { width: 72mm; margin: 0; padding: 3mm 0; font-family: 'Courier New', monospace; color: #000; font-size: 2.45mm; line-height: 1.35; }
+  .ticket { width: 72mm; margin: 0; padding: 3mm 0; font-family: 'Courier New', monospace; font-weight: 700; color: #000; font-size: 3mm; line-height: 1.35; }
   .line { white-space: pre-wrap; word-break: break-all; }
   .center { text-align: center; }
   .bold { font-weight: 700; }
   .tall { font-weight: 700; transform: scaleY(1.5); transform-origin: 0 0; margin-bottom: 0.5em; }
-  .big { font-size: 4.9mm; font-weight: 700; }
+  .big { font-size: 6mm; font-weight: 700; }
   @media print {
     @page { margin: 0; }
     .no-print { display: none; }

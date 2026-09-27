@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { formatCurrency, isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType, cartTotal } from "@/lib/cart";
-import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, toDateTimeInputValue } from "@/lib/hours";
+import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue } from "@/lib/hours";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 
@@ -19,8 +19,9 @@ const STRIPE_ENABLED = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
 function defaultScheduleDate() {
   return toDateInputValue(nextValidScheduleSlot(new Date()));
 }
-function defaultScheduleTime() {
-  return toDateTimeInputValue(nextValidScheduleSlot(new Date()));
+// The earliest time an order can be scheduled for, for the closed notice.
+function earliestSlotLabel() {
+  return nextValidScheduleSlot(new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 function maxScheduleDate() {
   const d = new Date();
@@ -44,7 +45,9 @@ export default function CheckoutPage() {
   const [openNow, setOpenNow] = useState(true);
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate());
-  const [scheduleTime, setScheduleTime] = useState(defaultScheduleTime());
+  // Never pre-filled: the customer picks the time themselves, so a
+  // next-morning order is always a deliberate choice.
+  const [scheduleTime, setScheduleTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState<{ orderNumber: string; total: number; scheduledFor: string | null }>({ orderNumber: "", total: 0, scheduledFor: null });
@@ -97,8 +100,8 @@ export default function CheckoutPage() {
   // switching from a day open 9am to Friday (opens 11am) could otherwise
   // leave a 9:00/9:15/9:30/9:45 selection that Friday doesn't actually offer.
   useEffect(() => {
-    if (scheduleSlots.length > 0 && !scheduleSlots.some((s) => s.value === scheduleTime)) {
-      setScheduleTime(scheduleSlots[0].value);
+    if (scheduleTime && !scheduleSlots.some((s) => s.value === scheduleTime)) {
+      setScheduleTime("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleDate]);
@@ -132,7 +135,7 @@ export default function CheckoutPage() {
 
     let scheduledFor: string | undefined;
     if (isScheduled) {
-      if (!scheduleDate || !scheduleTime) return setError("Please choose a date and time.");
+      if (!scheduleDate || !scheduleTime) return setError("Please choose a date and time for your order.");
       // scheduleTime is already a full "YYYY-MM-DDTHH:MM" (not just a time) —
       // a post-midnight slot falls on the day after scheduleDate, and its
       // value already reflects that correctly.
@@ -272,9 +275,12 @@ export default function CheckoutPage() {
         })}
       </div>
       {!openNow && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          We&apos;re closed right now — please choose a time to schedule your order for.
-        </p>
+        <div className="mt-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
+          <p className="font-semibold">🕘 We&apos;re closed right now.</p>
+          <p className="mt-1 text-sm">
+            You can still order for later — the earliest is <strong>{earliestSlotLabel()}</strong>. Choose your date and time below.
+          </p>
+        </div>
       )}
       {isScheduled && (
         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -294,9 +300,12 @@ export default function CheckoutPage() {
             {scheduleSlots.length === 0 ? (
               <option value="">No slots left today</option>
             ) : (
-              scheduleSlots.map((slot) => (
-                <option key={slot.value} value={slot.value}>{slot.label}</option>
-              ))
+              <>
+                <option value="" disabled>Choose a time…</option>
+                {scheduleSlots.map((slot) => (
+                  <option key={slot.value} value={slot.value}>{slot.label}</option>
+                ))}
+              </>
             )}
           </select>
         </div>
@@ -411,7 +420,11 @@ export default function CheckoutPage() {
         disabled={submitting || (orderType === "delivery" && (!zoneCheck || !zoneCheck.deliverable)) || (isScheduled && scheduleSlots.length === 0)}
         className="mt-6 w-full bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
       >
-        {submitting ? "Placing Order…" : payOnline ? `Continue to Payment · ${formatCurrency(total)}` : `Place Order · ${formatCurrency(total)}`}
+        {submitting
+          ? "Placing Order…"
+          : isScheduled && scheduleTime
+            ? `${payOnline ? "Pay & schedule" : "Place order"} for ${new Date(`${scheduleTime}:00`).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · ${formatCurrency(total)}`
+            : payOnline ? `Continue to Payment · ${formatCurrency(total)}` : `Place Order · ${formatCurrency(total)}`}
       </button>
       {!payOnline && (
         <p className="mt-3 text-center text-xs text-muted-foreground">Pay by cash or card on {orderType === "delivery" ? "delivery" : "collection"}.</p>

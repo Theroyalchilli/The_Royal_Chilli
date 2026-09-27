@@ -6,7 +6,7 @@ import { formatCurrency } from "@/lib/utils";
 import { siteContent } from "@/lib/site-content";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { readCart, writeCart, makeLineId, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
-import { isRestaurantOpen } from "@/lib/hours";
+import { isRestaurantOpen, nextValidScheduleSlot } from "@/lib/hours";
 import ModifierPickerModal from "./ModifierPickerModal";
 import ParticleButton from "@/components/kokonutui/particle-button";
 import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav, useIsNarrow } from "./CategoryNav";
@@ -184,10 +184,23 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
       <div className="mx-auto max-w-4xl px-4 pt-16 pb-6">
         <div className="text-center">
           <h1 className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</h1>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-            <span className={`h-2 w-2 rounded-full ${openNow ? "bg-green-500" : "bg-amber-500"}`} />
-            {openNow ? "Open now" : "Closed right now — you can still order for later"}
-          </div>
+          {openNow ? (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              Open now
+            </div>
+          ) : (
+            <div className="mx-auto mt-4 max-w-md rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
+              <p className="font-semibold">🕘 We&apos;re closed right now</p>
+              <p className="mt-1 text-sm">
+                You can still order for later — earliest{" "}
+                <strong>
+                  {nextValidScheduleSlot(new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                </strong>
+                . You&apos;ll choose the time at checkout.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mx-auto mt-8 flex max-w-xs gap-3">

@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 import { amountHeld } from "@/lib/payment-status";
 import { sendPaymentReceiptEmail, sendOrderCancellationEmail } from "@/lib/email";
 
@@ -60,11 +61,11 @@ export async function cancelOrderAndFreeTable(orderId: number, tableId: number |
 // rest of the day) the moment any of today's orders is deleted rather than
 // just cancelled, e.g. test-data cleanup against production.
 export async function generateOrderNumber(): Promise<string> {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const prefix = `RC-${dateStr}-`;
-  const todayStart = now.toISOString().slice(0, 10) + "T00:00:00.000Z";
-  const todayEnd = now.toISOString().slice(0, 10) + "T23:59:59.999Z";
+  // Numbered by UK date (lib/london-date.ts): after midnight in summer time
+  // it's already the next day here, even though UTC is still on the last one.
+  const today = londonDateStr();
+  const prefix = `RC-${today.replace(/-/g, "")}-`;
+  const { start: todayStart, end: todayEnd } = londonDayRangeUtc(today);
 
   const { data: rows } = await supabase
     .from("orders")

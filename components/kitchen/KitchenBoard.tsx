@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from "react";
+import { createContext, useState, useEffect, useCallback, useContext, useRef, useLayoutEffect, useMemo } from "react";
+import { paginateCards } from "@/lib/kitchen-pages";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
@@ -76,10 +77,17 @@ const ROTATE_MS = 10_000;
 // children still lay out and measure normally) is what gets measured; the
 // visible grid only ever renders the current page. Multiple pages rotate on
 // a timer so nothing needs touching the screen.
+// A page of the Active grid. `wide` = a single order too tall for the screen
+// even on its own: it's shown full width with its items in columns
+// (WideCardContext), instead of having its bottom cut off.
+type GridPage<T> = { groups: T[]; wide: boolean };
+
+const WideCardContext = createContext(false);
+
 function usePaginatedGrid<T>(groups: T[]) {
   const measureRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(0);
-  const [pages, setPages] = useState<T[][]>([groups]);
+  const [pages, setPages] = useState<GridPage<T>[]>([{ groups, wide: false }]);
   const [page, setPage] = useState(0);
 
   // A callback ref, not useRef + a mount-only effect — the grid doesn't
@@ -102,31 +110,16 @@ function usePaginatedGrid<T>(groups: T[]) {
   useLayoutEffect(() => {
     const measureEl = measureRef.current;
     if (!measureEl || containerHeight === 0 || groups.length === 0) {
-      setPages([groups]);
+      setPages([{ groups, wide: false }]);
       setPage(0);
       return;
     }
     const cardEls = Array.from(measureEl.children) as HTMLElement[];
-    const newPages: T[][] = [];
-    let current: T[] = [];
-    let i = 0;
-    while (i < cardEls.length) {
-      const rowTop = cardEls[i].offsetTop;
-      let j = i;
-      let rowBottom = 0;
-      while (j < cardEls.length && cardEls[j].offsetTop === rowTop) {
-        rowBottom = Math.max(rowBottom, cardEls[j].offsetTop + cardEls[j].offsetHeight);
-        j++;
-      }
-      if (rowBottom > containerHeight && current.length > 0) {
-        newPages.push(current);
-        current = [];
-      }
-      current.push(...groups.slice(i, j));
-      i = j;
-    }
-    if (current.length > 0) newPages.push(current);
-    setPages(newPages.length > 0 ? newPages : [groups]);
+    const newPages = paginateCards(
+      cardEls.map((el) => ({ top: el.offsetTop, height: el.offsetHeight })),
+      containerHeight
+    ).map((p) => ({ groups: p.indexes.map((k) => groups[k]), wide: p.wide }));
+    setPages(newPages.length > 0 ? newPages : [{ groups, wide: false }]);
     setPage(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, containerHeight]);
@@ -137,7 +130,8 @@ function usePaginatedGrid<T>(groups: T[]) {
     return () => clearInterval(id);
   }, [pages.length]);
 
-  return { containerRef, measureRef, page, pageCount: pages.length, visible: pages[page] ?? [] };
+  const current = pages[page] ?? { groups: [], wide: false };
+  return { containerRef, measureRef, page, pageCount: pages.length, visible: current.groups, wide: current.wide };
 }
 
 // One order's header + items + notes + actions — no outer card border, so it
@@ -228,6 +222,7 @@ function OrderTicketBody({
   onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
   const canBumpItems = order.status === "sent_to_kitchen" && !order.just_cancelled;
+  const wide = useContext(WideCardContext);
   return (
     <>
       <div className="flex items-start justify-between mb-3">
@@ -281,7 +276,7 @@ function OrderTicketBody({
         </div>
       )}
 
-      <div className="border-t border-border pt-3 space-y-1.5">
+      <div className={`border-t border-border pt-3 ${wide ? "columns-2 xl:columns-3 gap-6 [&>*]:break-inside-avoid [&>*]:mb-1.5" : "space-y-1.5"}`}>
         {order.items.map((item) => (
           <ItemRow key={item.id} item={item} orderId={order.id} canBump={canBumpItems} onBumpItem={onBumpItem} />
         ))}
@@ -365,15 +360,16 @@ function TableGroupCard({
   onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
   const oldest = orders[0];
+  const wide = useContext(WideCardContext);
   return (
     <div className={`rounded-xl border-2 p-4 transition-all ${getOrderCardClass(oldest)}`}>
       <div className="text-foreground font-bold text-lg mb-1">
         {oldest.table_number ? `Table ${oldest.table_number}` : "Table"}
         <span className="text-muted-foreground text-xs font-medium ml-2">{orders.length} rounds</span>
       </div>
-      <div className="space-y-3 divide-y divide-border">
+      <div className={wide ? "grid grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-3 divide-y divide-border"}>
         {orders.map((order, i) => (
-          <div key={order.id} className={i > 0 ? "pt-3" : ""}>
+          <div key={order.id} className={wide ? "" : i > 0 ? "pt-3" : ""}>
             <div className="text-[10px] font-black tracking-wide text-muted-foreground uppercase mb-1.5">Round {i + 1}</div>
             <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} onBumpItem={onBumpItem} />
           </div>
@@ -489,7 +485,7 @@ export default function KitchenBoard() {
   const readyOrders = useMemo(() => orders.filter((o) => o.status === "ready"), [orders]);
   const activeGroups = useMemo(() => groupByTable(activeOrders), [activeOrders]);
   const readyGroups = useMemo(() => groupByTable(readyOrders), [readyOrders]);
-  const { containerRef: activeGridRef, measureRef: activeMeasureRef, page: activePage, pageCount: activePageCount, visible: visibleActiveGroups } = usePaginatedGrid(activeGroups);
+  const { containerRef: activeGridRef, measureRef: activeMeasureRef, page: activePage, pageCount: activePageCount, visible: visibleActiveGroups, wide: activeWide } = usePaginatedGrid(activeGroups);
 
   if (loading) {
     return (
@@ -600,7 +596,8 @@ export default function KitchenBoard() {
                   )}
                 </h2>
                 <div ref={activeGridRef} className="flex-1 min-h-0 overflow-hidden">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  <WideCardContext.Provider value={activeWide}>
+                  <div className={activeWide ? "grid grid-cols-1" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"}>
                     {visibleActiveGroups.map((group) =>
                       group.length === 1 ? (
                         <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
@@ -609,6 +606,7 @@ export default function KitchenBoard() {
                       )
                     )}
                   </div>
+                  </WideCardContext.Provider>
                 </div>
                 {/* Hidden measuring pass — identical grid/cards, zero visual
                     footprint (collapsed wrapper still lays out children). */}

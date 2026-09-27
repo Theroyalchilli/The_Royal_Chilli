@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
-import { toDateInputValue } from "@/lib/hours";
 import PaymentModal from "@/components/pos/PaymentModal";
 import PrintButton from "@/components/pos/PrintButton";
 import type { CartItem } from "@/lib/types";
@@ -49,12 +49,13 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> =
 
 type CategoryFilter = "all" | "dine_in" | "takeaway" | "delivery" | "online" | "pending";
 
+// UK calendar dates, same as the server's date filter (lib/london-date.ts).
 function todayStr() {
-  return toDateInputValue(new Date());
+  return londonDateStr();
 }
 
 function endOfDay(dateStr: string): Date {
-  return new Date(`${dateStr}T23:59:59.999`);
+  return new Date(londonDayRangeUtc(dateStr).end);
 }
 
 // One row, mutually exclusive. "Online" isn't its own order_type in the

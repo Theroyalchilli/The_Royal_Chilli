@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonDayRangeUtc } from "@/lib/london-date";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
@@ -52,9 +53,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (date) {
-      const dayStart = date + "T00:00:00.000Z";
-      const dayEnd = date + "T23:59:59.999Z";
-      query = query.gte("created_at", dayStart).lte("created_at", dayEnd);
+      // A UK calendar day — an order at 00:19 UK time belongs to that date,
+      // even though it's still the previous day in UTC (summer time).
+      const { start, end } = londonDayRangeUtc(date);
+      query = query.gte("created_at", start).lte("created_at", end);
     }
 
     const { data: orders, error } = await query;

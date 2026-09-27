@@ -8,7 +8,7 @@ jest.mock("@/lib/receipt", () => ({ getOrderForReceipt: jest.fn(async () => null
 let zReport: unknown = null;
 jest.mock("@/lib/z-report-db", () => ({ getZReport: jest.fn(async () => zReport) }));
 
-import { buildTicket, encodeCp437, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";
+import { addressLines, buildTicket, encodeCp437, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";
 
 const item = (id: number, name: string, extra: Partial<Item> = {}): Item => ({
   id, item_name: name, quantity: 1, notes: null, status: "pending", modifiers: [], ...extra,
@@ -117,8 +117,30 @@ describe("buildTicket (Z report)", () => {
     expect(lines[i + 1]).toMatch(/^ +£\d+\.\d\d$/);
   });
 
+  it("heads the report with the big name and full address, bands the section headings and makes the key totals tall", async () => {
+    const t = (await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 72, source: null }), 35))!;
+    expect(t[0]).toMatchObject({ text: "THE ROYAL CHILLI", size: "big" });
+    expect(t.map((l) => l.text)).toEqual(expect.arrayContaining(["43 Kingsley Road, Hounslow, London,", "TW3 1PA", "020 8797 3044"]));
+    const heading = t.find((l) => l.text.trim() === "Sales and refunds")!;
+    expect(heading).toMatchObject({ inverse: true });
+    expect(heading.text).toHaveLength(35);
+    expect(t.find((l) => l.text.startsWith("Total net sales"))).toMatchObject({ size: "tall" });
+    expect(t.find((l) => l.text.startsWith("Number of sales"))?.size).toBeUndefined();
+    // The network printer gets StarPRNT reverse on/off around the band.
+    const bytes = Array.from(toStarPrnt([heading]));
+    expect(bytes.join(",")).toContain([0x1b, 0x34].join(","));
+    expect(bytes.join(",")).toContain([0x1b, 0x35].join(","));
+  });
+
   it("prints nothing for a shift that doesn't exist", async () => {
     zReport = null;
     expect(await buildTicket(job({ kind: "zreport", order_id: null, work_period_id: 999, source: null }))).toBeNull();
+  });
+});
+
+describe("addressLines", () => {
+  it("breaks the address after commas to fit the line", () => {
+    expect(addressLines("43 Kingsley Road, Hounslow, London, TW3 1PA", 35)).toEqual(["43 Kingsley Road, Hounslow, London,", "TW3 1PA"]);
+    expect(addressLines("43 Kingsley Road, Hounslow, London, TW3 1PA", 48)).toEqual(["43 Kingsley Road, Hounslow, London, TW3 1PA"]);
   });
 });

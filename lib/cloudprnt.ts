@@ -2,6 +2,7 @@ import { getOrderForPrint } from "@/lib/kot";
 import { getOrderForReceipt } from "@/lib/receipt";
 import { isFullyPaid } from "@/lib/payment-status";
 import { zReportLines } from "@/lib/z-report";
+import { siteContent } from "@/lib/site-content";
 import { getZReport } from "@/lib/z-report-db";
 
 // Renders print_jobs rows (lib/print-queue.ts) into what the Star mC-Print3
@@ -14,8 +15,10 @@ export type TicketLine = {
   text: string;
   align?: "left" | "center";
   bold?: boolean;
-  // "tall" = double height (still 48 columns); "big" = double width + height (24 columns)
+  // "tall" = double height (same columns); "big" = double width + height (half the columns)
   size?: "normal" | "tall" | "big";
+  // White text on a black band (Z report section headings).
+  inverse?: boolean;
 };
 export type Ticket = TicketLine[];
 
@@ -75,17 +78,38 @@ export async function buildTicket(job: PrintJob, width = LINE_WIDTH): Promise<Ti
   return ticket && splitLines(ticket);
 }
 
+// "43 Kingsley Road, Hounslow, London, TW3 1PA" as lines of at most `width`,
+// breaking after commas.
+export function addressLines(address: string, width: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+  for (const part of address.split(",").map((p) => p.trim()).filter(Boolean)) {
+    const next = current ? `${current}, ${part}` : part;
+    if (next.length > width && current) {
+      lines.push(`${current},`);
+      current = part;
+    } else current = next;
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 async function buildZReportTicket(workPeriodId: number, width: number): Promise<Ticket | null> {
   const { row, DIVIDER } = layout(width);
   const report = await getZReport(workPeriodId);
   if (!report) return null;
   const t: Ticket = [];
-  t.push({ text: "THE ROYAL CHILLI", align: "center", bold: true, size: "tall" });
+  t.push({ text: "THE ROYAL CHILLI", align: "center", bold: true, size: "big" });
+  // Full address under the name, split to fit a narrow line.
+  for (const part of addressLines(siteContent.contact.address, width)) t.push({ text: part, align: "center" });
+  t.push({ text: siteContent.contact.phone, align: "center" });
   t.push({ text: DIVIDER });
   for (const l of zReportLines(report)) {
     if (l.kind === "title") t.push({ text: l.text, bold: true, size: "tall" });
-    else if (l.kind === "heading") t.push({ text: l.text, bold: true });
-    else if (l.kind === "row") t.push({ text: row(l.label, l.value), bold: l.bold });
+    // Section headings: a full-width black band, so each section is easy to find.
+    else if (l.kind === "heading") t.push({ text: ` ${l.text}`.padEnd(width), bold: true, inverse: true });
+    // The key figures (Total net sales, Difference) print tall.
+    else if (l.kind === "row") t.push({ text: row(l.label, l.value), bold: l.bold, size: l.bold ? "tall" : undefined });
     else if (l.kind === "text") t.push({ text: l.text });
     else if (l.kind === "divider") t.push({ text: DIVIDER });
     else t.push({ text: "" });
@@ -255,10 +279,12 @@ export function toStarPrnt(ticket: Ticket): Uint8Array {
   for (const l of ticket) {
     out.push(ESC, GS, 0x61, l.align === "center" ? 1 : 0);
     if (l.bold) out.push(ESC, 0x45);
+    if (l.inverse) out.push(ESC, 0x34); // white/black reverse on
     if (l.size === "big") out.push(ESC, 0x69, 1, 1);
     else if (l.size === "tall") out.push(ESC, 0x69, 1, 0);
     out.push(...encodeCp437(l.text), LF);
     if (l.size === "big" || l.size === "tall") out.push(ESC, 0x69, 0, 0);
+    if (l.inverse) out.push(ESC, 0x35); // reverse off
     if (l.bold) out.push(ESC, 0x46);
   }
   out.push(ESC, GS, 0x61, 0);

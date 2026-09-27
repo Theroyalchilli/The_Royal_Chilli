@@ -22,6 +22,8 @@ export const TICKET_CSS = `
   .bold { font-weight: 700; }
   .tall { font-weight: 700; transform: scaleY(1.5); transform-origin: 0 0; margin-bottom: 0.5em; }
   .big { font-size: 6mm; font-weight: 700; }
+  /* White on black band; print-color-adjust so Chrome keeps the background. */
+  .inverse { background: #000; color: #fff; padding: 0.4mm 0; margin: 1mm 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @media print {
     @page { margin: 0; }
     .no-print { display: none; }
@@ -29,7 +31,7 @@ export const TICKET_CSS = `
 `;
 
 export function lineClass(l: Ticket[number]): string {
-  return ["line", l.align === "center" ? "center" : "", l.bold ? "bold" : "", l.size && l.size !== "normal" ? l.size : ""].filter(Boolean).join(" ");
+  return ["line", l.align === "center" ? "center" : "", l.bold ? "bold" : "", l.size && l.size !== "normal" ? l.size : "", l.inverse ? "inverse" : ""].filter(Boolean).join(" ");
 }
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

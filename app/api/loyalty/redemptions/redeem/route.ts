@@ -77,6 +77,9 @@ export async function POST(req: NextRequest) {
           discount_pct: null,
           discount,
           discount_reason: `Loyalty reward: ${reward.name}`,
+          // A voucher is the customer's reward, not a staff discount.
+          discount_given_by_staff_id: null,
+          discount_given_by: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", order_id);

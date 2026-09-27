@@ -129,6 +129,11 @@ export default function PaymentModal({
   const [discountPctInput, setDiscountPctInput] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "pct">("fixed");
   const [discountReasonInput, setDiscountReasonInput] = useState("");
+  // Who's giving a manual discount — the till is one shared login, so staff
+  // pick their name; saved on the order (Order History + here), not the Z report.
+  const [staffNames, setStaffNames] = useState<{ id: number; name: string }[]>([]);
+  const [discountGiverId, setDiscountGiverId] = useState("");
+  const [discountGivenBy, setDiscountGivenBy] = useState<string | null>(null);
   const [localDiscount, setLocalDiscount] = useState(discount);
   const [localTax, setLocalTax] = useState(tax);
   const [localTotal, setLocalTotal] = useState(total);
@@ -191,6 +196,10 @@ export default function PaymentModal({
   const [useManualCard, setUseManualCard] = useState(false);
 
   useEffect(() => {
+    fetch("/api/staff-names").then((r) => r.json()).then((d) => setStaffNames(d.staff || [])).catch(() => setStaffNames([]));
+  }, []);
+
+  useEffect(() => {
     fetch("/api/pos/terminal/config").then((r) => r.json()).then((d) => setReaderEnabled(!!d.enabled)).catch(() => setReaderEnabled(false));
   }, []);
 
@@ -205,6 +214,12 @@ export default function PaymentModal({
       setDiscountPctInput("");
       setDiscountType("fixed");
       setDiscountReasonInput("");
+      setDiscountGiverId("");
+      setDiscountGivenBy(null);
+      // An order may already carry a discount from earlier — show who gave it.
+      if (orderId && discount > 0) {
+        fetch(`/api/orders/${orderId}`).then((r) => r.json()).then((d) => setDiscountGivenBy(d.order?.discount_given_by ?? null)).catch(() => {});
+      }
       setLocalDiscount(discount);
       setLocalTax(tax);
       setLocalTotal(total);
@@ -287,12 +302,14 @@ export default function PaymentModal({
           discount_type: discountType === "pct" ? "percent" : "amount",
           discount_value: raw,
           discount_reason: discountReasonInput || undefined,
+          discount_given_by_staff_id: Number(discountGiverId),
         }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Failed to apply discount"); return; }
       if (data.order) {
         setLocalDiscount(data.order.discount ?? 0);
+        setDiscountGivenBy(data.order.discount_given_by ?? null);
         setLocalTax(data.order.tax ?? localTax);
         setLocalTotal(data.order.total ?? localTotal);
         toast({ variant: "success", title: "Discount applied" });
@@ -320,6 +337,7 @@ export default function PaymentModal({
         setDiscountAmountCents(0);
         setDiscountPctInput("");
         setDiscountReasonInput("");
+        setDiscountGivenBy(null);
       }
     } catch { setError("Failed to remove discount"); }
     finally { setDiscountApplying(false); }
@@ -641,7 +659,8 @@ export default function PaymentModal({
                   )}
                   <button
                     onClick={applyDiscount}
-                    disabled={(discountType === "fixed" ? discountAmountCents === 0 : !discountPctInput) || discountApplying}
+                    disabled={(discountType === "fixed" ? discountAmountCents === 0 : !discountPctInput) || !discountGiverId || discountApplying}
+                    title={!discountGiverId ? "Choose who is giving the discount" : undefined}
                     className="px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-all"
                   >
                     {discountApplying ? "…" : "Apply"}
@@ -653,6 +672,21 @@ export default function PaymentModal({
                     </button>
                   )}
                 </div>
+                <select
+                  value={discountGiverId}
+                  onChange={(e) => setDiscountGiverId(e.target.value)}
+                  className={`w-full bg-elevated border rounded-lg px-3 py-1.5 text-foreground text-xs focus:outline-none focus:border-red-500 ${discountGiverId ? "border-elevated" : "border-amber-400"}`}
+                >
+                  <option value="">Discount given by… (required)</option>
+                  {staffNames.map((st) => (
+                    <option key={st.id} value={st.id}>{st.name}</option>
+                  ))}
+                </select>
+                {localDiscount > 0 && discountGivenBy && (
+                  <div className="text-xs font-semibold text-emerald-700">
+                    ✓ {formatCurrency(localDiscount)} discount given by {discountGivenBy}
+                  </div>
+                )}
                 <input
                   type="text"
                   placeholder="Reason (optional) — e.g. goodwill, complaint, staff meal"

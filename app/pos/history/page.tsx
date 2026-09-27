@@ -16,6 +16,9 @@ interface OrderRow {
   status: string;
   total: number;
   amount_paid: number;
+  discount?: number | null;
+  discount_reason?: string | null;
+  discount_given_by?: string | null;
   pay_later: boolean;
   subtotal: number;
   tax?: number;
@@ -423,6 +426,15 @@ export default function HistoryPage() {
                               </span>
                             </div>
                           ))}
+                          {Number(order.discount || 0) > 0 && (
+                            <div className="flex justify-between gap-2 pt-1.5 text-xs">
+                              <span className="text-muted-foreground">
+                                Discount{order.discount_reason ? ` (${order.discount_reason})` : ""}
+                                {order.discount_given_by && <span className="font-semibold text-foreground"> — given by {order.discount_given_by}</span>}
+                              </span>
+                              <span className="font-semibold text-emerald-700">−{formatCurrency(Number(order.discount))}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between pt-1.5 border-t border-white/5">
                             <span className="text-xs text-muted-foreground">
                               {Number(order.amount_paid) < Number(order.total) && order.status !== "cancelled"

@@ -70,7 +70,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { status, discount_type, discount_value, discount_reason, notes, customer_name, customer_phone, customer_email, marketing_consent } = body;
+    const { status, discount_type, discount_value, discount_reason, discount_given_by_staff_id, notes, customer_name, customer_phone, customer_email, marketing_consent } = body;
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
@@ -119,10 +119,24 @@ export async function PUT(
         return NextResponse.json({ error: "Cannot change the discount on an order that's already fully paid" }, { status: 409 });
       }
 
+      // A manual discount must say who gave it (the till is one shared
+      // login, so staff pick their name) — recorded on the order only.
+      let givenBy: { discount_given_by_staff_id: number | null; discount_given_by: string | null } = { discount_given_by_staff_id: null, discount_given_by: null };
+      if (discount_type !== null) {
+        const { data: giver } = await supabase
+          .from("staff")
+          .select("id, name")
+          .eq("id", Number(discount_given_by_staff_id) || 0)
+          .eq("active", 1)
+          .maybeSingle();
+        if (!giver) return NextResponse.json({ error: "Choose who is giving this discount" }, { status: 400 });
+        givenBy = { discount_given_by_staff_id: giver.id, discount_given_by: giver.name };
+      }
+
       if (discount_type === null) {
         const { error } = await supabase
           .from("orders")
-          .update({ discount_type: null, discount_pct: null, discount: 0, discount_reason: null, updated_at: new Date().toISOString() })
+          .update({ discount_type: null, discount_pct: null, discount: 0, discount_reason: null, ...givenBy, updated_at: new Date().toISOString() })
           .eq("id", id);
         if (error) throw error;
       } else if (discount_type === "percent") {
@@ -131,7 +145,7 @@ export async function PUT(
         }
         const { error } = await supabase
           .from("orders")
-          .update({ discount_type: "percent", discount_pct: discount_value, discount_reason: discount_reason || null, updated_at: new Date().toISOString() })
+          .update({ discount_type: "percent", discount_pct: discount_value, discount_reason: discount_reason || null, ...givenBy, updated_at: new Date().toISOString() })
           .eq("id", id);
         if (error) throw error;
       } else if (discount_type === "amount") {
@@ -140,7 +154,7 @@ export async function PUT(
         }
         const { error } = await supabase
           .from("orders")
-          .update({ discount_type: "amount", discount_pct: null, discount: discount_value, discount_reason: discount_reason || null, updated_at: new Date().toISOString() })
+          .update({ discount_type: "amount", discount_pct: null, discount: discount_value, discount_reason: discount_reason || null, ...givenBy, updated_at: new Date().toISOString() })
           .eq("id", id);
         if (error) throw error;
       } else {

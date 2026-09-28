@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { notifyOrderReady } from "@/lib/order-notifications";
+import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
@@ -183,6 +185,7 @@ export async function PUT(
             .update({ status: "ready", updated_at: new Date().toISOString() })
             .eq("id", orderId)
             .eq("status", "sent_to_kitchen");
+          waitUntil(notifyOrderReady(Number(orderId)));
         }
       } else if (status === "pending") {
         // Un-bumping an item on an order that had already auto-completed

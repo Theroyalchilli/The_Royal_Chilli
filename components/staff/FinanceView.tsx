@@ -200,6 +200,29 @@ function ZReportsTab() {
   );
 }
 
+// One Excel file per month for the accountant (app/api/finance/export):
+// daily trading-day summary, payments, refunds and Z reports.
+function AccountantExportTab() {
+  const [month, setMonth] = useState(() => tradingDayStr().slice(0, 7));
+  return (
+    <div className="rounded-lg border border-border bg-surface px-4 py-4 space-y-3">
+      <p className="text-foreground font-semibold">Monthly accounts export (Excel)</p>
+      <p className="text-muted-foreground text-sm">
+        Sheets: Daily summary (trading days, 5am–5am: sales taken, card/cash/online, tips, refunds, VAT, discounts), Payments, Refunds and Z reports.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <a
+          href={`/api/finance/export?month=${month}`}
+          className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-semibold"
+        >
+          ⬇ Download {month}
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function ExpensesTab() {
   const [expenses, setExpenses] = useState<{ id: number; category: string; description: string; amount: number; expense_date: string; vat_applicable: number }[]>([]);
   const [form, setForm] = useState({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
@@ -323,12 +346,13 @@ function SupplierPaymentsTab() {
 }
 
 export default function FinanceView() {
-  const [tab, setTab] = useState<"pnl" | "vat" | "cash" | "zreports" | "expenses" | "supplier_payments">("pnl");
+  const [tab, setTab] = useState<"pnl" | "vat" | "cash" | "zreports" | "export" | "expenses" | "supplier_payments">("pnl");
   const tabs = [
     { id: "pnl", label: "Profit & Loss" },
     { id: "vat", label: "VAT" },
     { id: "cash", label: "Cash Reconciliation" },
     { id: "zreports", label: "Z Reports" },
+    { id: "export", label: "Accountant export" },
     { id: "expenses", label: "Expenses" },
     { id: "supplier_payments", label: "Supplier Payments" },
   ] as const;
@@ -359,6 +383,7 @@ export default function FinanceView() {
           {tab === "vat" && <VatTab />}
           {tab === "cash" && <CashReconTab />}
           {tab === "zreports" && <ZReportsTab />}
+          {tab === "export" && <AccountantExportTab />}
           {tab === "expenses" && <ExpensesTab />}
           {tab === "supplier_payments" && <SupplierPaymentsTab />}
         </div>

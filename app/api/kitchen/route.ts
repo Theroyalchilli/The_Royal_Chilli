@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
+import { notifyOrderReady } from "@/lib/order-notifications";
 import supabase from "@/lib/supabase";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { getSessionFromRequest } from "@/lib/auth";
@@ -169,6 +171,8 @@ export async function PUT(req: NextRequest) {
     //    finished vs. swept up by "Bump All".
     if (status === "ready") {
       await supabase.from("order_items").update({ status: "ready" }).eq("order_id", orderId).eq("status", "pending");
+      // Website orders: tell the customer (once — lib/order-notifications).
+      waitUntil(notifyOrderReady(Number(orderId)));
     } else if (status === "sent_to_kitchen") {
       await supabase.from("order_items").update({ status: "pending" }).eq("order_id", orderId).eq("status", "ready");
     }

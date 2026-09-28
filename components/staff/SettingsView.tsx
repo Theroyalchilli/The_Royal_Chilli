@@ -366,6 +366,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
   const [uploadingHero, setUploadingHero] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [readerId, setReaderId] = useState("");
+  const [googleReviewUrl, setGoogleReviewUrl] = useState("");
   const [sumupReaderId, setSumupReaderId] = useState("");
   const [tillProvider, setTillProvider] = useState<"sumup" | "stripe" | "none">("none");
   const [regCode, setRegCode] = useState("");
@@ -400,6 +401,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         if (s.hero_content) setHeroContent(s.hero_content);
         if (Array.isArray(s.hero_images)) setHeroImages(s.hero_images);
         if (s.stripe_terminal_reader_id !== undefined) setReaderId(String(s.stripe_terminal_reader_id));
+        if (typeof s.google_review_url === "string") setGoogleReviewUrl(s.google_review_url);
         if (s.sumup_reader_id !== undefined) setSumupReaderId(String(s.sumup_reader_id));
         // Same default as lib/till-reader.ts: before this setting existed, a
         // Stripe reader id alone meant Stripe.
@@ -478,6 +480,7 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
         hero_images: heroImages,
         stripe_terminal_reader_id: readerId.trim(),
         sumup_reader_id: sumupReaderId.trim(),
+        google_review_url: googleReviewUrl.trim(),
         till_card_provider: tillProvider,
         geofence_enabled: geofenceEnabled,
         restaurant_latitude: restaurantLat ? Number(restaurantLat) : null,
@@ -708,6 +711,19 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
               </div>
               {uploadError && <p className="mt-1 text-red-600 text-xs">{uploadError}</p>}
               <p className="mt-1 text-muted-foreground text-xs">JPEG, PNG or WEBP, up to 10MB. New photos are added to the end of the rotation.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Google review link</label>
+              <input
+                type="url" placeholder="https://g.page/r/…/review" value={googleReviewUrl}
+                onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <p className="mt-1 text-muted-foreground text-xs">
+                Used in the &quot;How was your meal?&quot; email sent the day after an order, only to customers who opted in to hear from us.
+                Leave blank to send none. Find it in Google Maps → your restaurant → Reviews → &quot;Ask for reviews&quot;.
+              </p>
             </div>
 
             <div>

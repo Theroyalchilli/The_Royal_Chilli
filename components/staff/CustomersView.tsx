@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import RewardsRules from "@/components/staff/RewardsRules";
 import ClubReport from "@/components/staff/ClubReport";
+import DuplicatesPanel from "@/components/staff/DuplicatesPanel";
 
 type Segment = "NEW" | "FIRST_TIME" | "RETURNING" | "REGULAR" | "LAPSED";
 type Customer = {
@@ -261,6 +262,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
   const [redemptionsDate, setRedemptionsDate] = useState("");
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [modal, setModal] = useState(false);
+  const [dupesOpen, setDupesOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [newReward, setNewReward] = useState({ name: "", points_cost: "", discount_amount: "", min_spend: "", valid_days: "7", is_birthday_reward: false });
   const { toast } = useToast();
@@ -375,6 +377,11 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
           <div className="mt-5">
             <div className="flex flex-wrap gap-2">
               <input placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 min-w-[160px] bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              {isManager && (
+                <button onClick={() => setDupesOpen(true)} className="px-3 py-2 border border-border bg-surface hover:bg-surface-hover text-foreground text-sm font-semibold rounded-lg">
+                  Possible duplicates
+                </button>
+              )}
               <button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
             </div>
             {/* Group counts — tap one to filter the list */}
@@ -541,6 +548,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
       </div>
 
       {modal && <AddCustomerModal onClose={() => setModal(false)} onSaved={loadCustomers} />}
+      {dupesOpen && <DuplicatesPanel onClose={() => setDupesOpen(false)} onMerged={loadCustomers} />}
       {detailId && <CustomerDetailModal customerId={detailId} rewards={rewards} isManager={isManager} onClose={() => setDetailId(null)} onChange={loadCustomers} />}
       </div>
     </>

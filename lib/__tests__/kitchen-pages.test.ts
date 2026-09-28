@@ -32,6 +32,15 @@ describe("paginateCards", () => {
     ]);
   });
 
+  it("lets small tickets next to a too-tall table share a page, not take one each", () => {
+    // Row 1: a huge 3-round table + two small tickets; row 2: two more small ones.
+    const cards = [card(0, 900), card(0, 150), card(0, 180), card(916, 200), card(916, 120)];
+    expect(paginateCards(cards, 500)).toEqual([
+      { indexes: [0], wide: true },
+      { indexes: [1, 2, 3, 4], wide: false },
+    ]);
+  });
+
   it("keeps everything on one page when it fits", () => {
     expect(paginateCards([card(0, 100), card(0, 120)], 500)).toEqual([{ indexes: [0, 1], wide: false }]);
     expect(paginateCards([], 500)).toEqual([]);

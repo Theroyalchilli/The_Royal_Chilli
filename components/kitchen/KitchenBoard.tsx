@@ -120,7 +120,10 @@ function usePaginatedGrid<T>(groups: T[]) {
       containerHeight
     ).map((p) => ({ groups: p.indexes.map((k) => groups[k]), wide: p.wide }));
     setPages(newPages.length > 0 ? newPages : [{ groups, wide: false }]);
-    setPage(0);
+    // Keep the page being shown. The board re-fetches every 10s (same as
+    // ROTATE_MS), and resetting to page 0 on every fetch meant the rotation
+    // never got past page 1 — later pages' orders were never seen.
+    setPage((p) => Math.min(p, Math.max(newPages.length, 1) - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, containerHeight]);
 
@@ -609,9 +612,13 @@ export default function KitchenBoard() {
                   </WideCardContext.Provider>
                 </div>
                 {/* Hidden measuring pass — identical grid/cards, zero visual
-                    footprint (collapsed wrapper still lays out children). */}
+                    footprint (collapsed wrapper still lays out children).
+                    items-start: each card measures at its own height. Grid
+                    rows otherwise stretch every card to the tallest in the
+                    row, so one big 3-round table made its small neighbours
+                    "too tall" too — each got a whole page to itself. */}
                 <div style={{ visibility: "hidden", height: 0, overflow: "hidden", position: "relative" }} aria-hidden="true">
-                  <div ref={activeMeasureRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  <div ref={activeMeasureRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 items-start">
                     {activeGroups.map((group) =>
                       group.length === 1 ? (
                         <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />

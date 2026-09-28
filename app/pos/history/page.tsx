@@ -95,6 +95,9 @@ export default function HistoryPage() {
   const [refundReason, setRefundReason] = useState("");
   const [refundSaving, setRefundSaving] = useState(false);
   const [refundError, setRefundError] = useState("");
+  // Refunds need a manager: shown when the server asks for approval.
+  const [needManagerPin, setNeedManagerPin] = useState(false);
+  const [managerPin, setManagerPin] = useState("");
   const [refundNotice, setRefundNotice] = useState("");
 
   // Pending is the one category that isn't scoped to a single day — it's
@@ -179,6 +182,8 @@ export default function HistoryPage() {
     setRefundReason("");
     setRefundError("");
     setRefundNotice("");
+    setNeedManagerPin(false);
+    setManagerPin("");
   };
 
   const closeRefund = () => {
@@ -187,6 +192,8 @@ export default function HistoryPage() {
     setRefundReason("");
     setRefundError("");
     setRefundNotice("");
+    setNeedManagerPin(false);
+    setManagerPin("");
   };
 
   const submitRefund = async () => {
@@ -201,10 +208,19 @@ export default function HistoryPage() {
       const res = await fetch(`/api/orders/${refundOrder.id}/refund`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: amt, method: refundMethod, reason: refundReason.trim() }),
+        body: JSON.stringify({ amount: amt, method: refundMethod, reason: refundReason.trim(), manager_pin: managerPin || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) { setRefundError(data.error || "Failed to process refund"); return; }
+      if (!res.ok) {
+        if (data.error === "MANAGER_PIN_REQUIRED") {
+          setNeedManagerPin(true);
+          setManagerPin("");
+          setRefundError(data.message);
+          return;
+        }
+        setRefundError(data.error || "Failed to process refund");
+        return;
+      }
       fetchOrders();
       // Stripe only partially covered the requested amount — keep the modal
       // open on its warning so staff see it before closing, instead of the
@@ -532,6 +548,13 @@ export default function HistoryPage() {
                 value={refundReason} onChange={(e) => setRefundReason(e.target.value)}
                 className="w-full bg-surface-hover border border-elevated text-foreground text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-red-500"
               />
+              {needManagerPin && (
+                <input
+                  type="password" inputMode="numeric" maxLength={4} autoFocus placeholder="Manager PIN"
+                  value={managerPin} onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  className="w-full bg-surface-hover border-2 border-amber-400 text-foreground text-center text-lg tracking-[0.5em] rounded-lg px-3 py-2.5 focus:outline-none"
+                />
+              )}
               {refundError && <p className="text-red-600 text-xs text-center">{refundError}</p>}
               {refundNotice && <p className="text-amber-600 text-xs text-center">{refundNotice}</p>}
             </div>

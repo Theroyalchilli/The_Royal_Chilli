@@ -792,6 +792,49 @@ function formFromStaff(s: Staff): InfoForm {
   };
 }
 
+// The staff member's 4-digit till PIN (components/pos/TillLock): staff switch
+// the till to themselves with it; a manager's PIN also approves refunds.
+function TillPinField({ staffId }: { staffId: number }) {
+  const { toast } = useToast();
+  const [pin, setPin] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function send(value: string | null) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/staff-pin", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staff_id: staffId, pin: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return toast({ variant: "destructive", title: "Couldn't save the PIN", description: data.error });
+      toast({ variant: "success", title: value ? "Till PIN set" : "Till PIN removed", description: value ? "Tell them their PIN — it isn't shown again." : undefined });
+      setPin("");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-surface-hover p-3">
+      <span className="text-muted-foreground text-xs font-semibold">Till PIN (4 digits)</span>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <input
+          type="password" inputMode="numeric" maxLength={4} placeholder="••••" value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          className="w-28 bg-background border border-border rounded-lg px-3 py-2 text-foreground text-center tracking-[0.4em]"
+        />
+        <button onClick={() => send(pin)} disabled={saving || pin.length !== 4} className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-bold rounded-lg">
+          Set PIN
+        </button>
+        <button onClick={() => send(null)} disabled={saving} className="px-3 py-2 bg-surface border border-border text-muted-foreground text-xs font-semibold rounded-lg">
+          Remove PIN
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">Used to unlock the till. Each person needs a different PIN; a manager&apos;s PIN also approves refunds.</p>
+    </div>
+  );
+}
+
 function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: Staff) => void }) {
   const [form, setForm] = useState<InfoForm>(formFromStaff(staff));
   const [saving, setSaving] = useState(false);
@@ -847,6 +890,7 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
         <Text label="New password (leave blank to keep)" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="6+ characters" />
         <Select label="Role" value={form.role} onChange={(v) => setForm({ ...form, role: v })} options={ROLES} />
       </div>
+      <TillPinField staffId={staff.id} />
 
       <SectionHeading>Employment &amp; Pay</SectionHeading>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

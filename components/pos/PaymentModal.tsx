@@ -216,6 +216,8 @@ export default function PaymentModal({
       setDiscountReasonInput("");
       setDiscountGiverId("");
       setDiscountGivenBy(null);
+      // Pre-select whoever is signed in at the till (their PIN) as the giver.
+      fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.user?.id) setDiscountGiverId(String(d.user.id)); }).catch(() => {});
       // An order may already carry a discount from earlier — show who gave it.
       if (orderId && discount > 0) {
         fetch(`/api/orders/${orderId}`).then((r) => r.json()).then((d) => setDiscountGivenBy(d.order?.discount_given_by ?? null)).catch(() => {});

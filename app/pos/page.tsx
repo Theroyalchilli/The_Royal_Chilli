@@ -13,6 +13,7 @@ import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import CloseDayReminder from "@/components/pos/CloseDayReminder";
+import { SESSION_CHANGED_EVENT } from "@/components/pos/TillLock";
 import ZReportView from "@/components/pos/ZReportView";
 import type { ZReport } from "@/lib/z-report";
 import type {
@@ -156,6 +157,15 @@ export default function POSPage() {
     loadMenuData();
     loadSession();
     checkTillStatus();
+  }, []);
+
+  // A PIN switch on the till lock (components/pos/TillLock) changes who's
+  // signed in — pick up their name and role without reloading the page.
+  useEffect(() => {
+    const onChange = () => { loadSession(); };
+    window.addEventListener(SESSION_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(SESSION_CHANGED_EVENT, onChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Runs regardless of which tab is active — OnlineOrdersPanel only mounts

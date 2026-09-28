@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
+import { findStaffByPin, isManagerRole } from "@/lib/staff-pin";
 import { refundTransaction, sumupTransactionFromReference } from "@/lib/sumup";
 
 // A refund is just another row in `payments`, with a negative amount — same
@@ -21,7 +22,22 @@ export async function POST(
     }
 
     const { id } = await params;
-    const { amount, method, reason } = await req.json().catch(() => ({}));
+    const { amount, method, reason, manager_pin } = await req.json().catch(() => ({}));
+
+    // Refunds move money back out, so only a manager can make one: either a
+    // manager is signed in at the till, or one approves with their PIN — and
+    // the refund is recorded against that manager.
+    let approverId = session.id;
+    if (!isManagerRole(session.role)) {
+      const manager = manager_pin ? await findStaffByPin(String(manager_pin)) : null;
+      if (!manager || !isManagerRole(manager.role)) {
+        return NextResponse.json(
+          { error: "MANAGER_PIN_REQUIRED", message: manager_pin ? "That isn't a manager's PIN" : "A manager needs to approve refunds — enter a manager PIN" },
+          { status: 403 }
+        );
+      }
+      approverId = manager.id;
+    }
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: "Refund amount is required" }, { status: 400 });
@@ -72,7 +88,7 @@ export async function POST(
       order_id: Number(id),
       method,
       amount: -refundAmount,
-      staff_id: session.id,
+      staff_id: approverId,
       reference: providerRefundIds.length > 0 ? `Refund: ${String(reason).trim()} (${providerRefundIds.join(", ")})` : `Refund: ${String(reason).trim()}`,
     });
     if (insertError) throw insertError;

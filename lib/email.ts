@@ -516,3 +516,46 @@ export async function sendWinBackEmail(
 
   await sendBrevoEmail(to, `A gift from The Royal Chilli — ${data.rewardName}`, shell(body));
 }
+
+// "Your order is ready" — website collection/delivery orders, sent once when
+// the kitchen marks the order ready (lib/order-notifications.ts).
+export async function sendOrderReadyEmail(
+  to: string | null | undefined,
+  data: { customerName: string; orderNumber: string; orderType: string }
+) {
+  if (!to) return;
+  const collection = data.orderType !== "delivery";
+  const body = `
+    <tr><td style="padding:28px 32px 28px;">
+      ${cardLabel(collection ? "Ready to collect" : "On its way soon")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Your order is ready, ${data.customerName.split(" ")[0]}!</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        ${collection
+          ? `Order <strong style="color:${C.ink};">${data.orderNumber}</strong> is ready — come and collect it from 43 Kingsley Road, Hounslow TW3 1PA.`
+          : `Order <strong style="color:${C.ink};">${data.orderNumber}</strong> is ready and will be with you shortly.`}
+      </div>
+    </td></tr>`;
+  await sendBrevoEmail(to, collection ? `Your order ${data.orderNumber} is ready to collect` : `Your order ${data.orderNumber} is on its way soon`, shell(body));
+}
+
+// "How was your meal?" — the day after, to customers who opted in to hear
+// from us (lib/order-notifications.ts, daily cron).
+export async function sendReviewRequestEmail(
+  to: string | null | undefined,
+  data: { customerName: string; reviewUrl: string }
+) {
+  if (!to) return;
+  const body = `
+    <tr><td style="padding:28px 32px 8px;">
+      ${cardLabel("Thank you")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">How was your meal, ${data.customerName.split(" ")[0]}?</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        We'd love to hear what you thought. A quick Google review helps a small, local restaurant more than you'd think.
+      </div>
+    </td></tr>
+    <tr><td align="center" style="padding:12px 32px 28px;">
+      <a href="${data.reviewUrl}" style="display:inline-block; background:${C.chilli}; color:#fff; text-decoration:none; font-family:${SANS}; font-size:15px; font-weight:700; padding:12px 28px; border-radius:8px;">Leave a review</a>
+      <div style="font-family:${SANS}; font-size:11px; color:${C.muted}; margin-top:16px;">You're receiving this because you asked to hear from us. Reply "unsubscribe" and we'll stop.</div>
+    </td></tr>`;
+  await sendBrevoEmail(to, "How was your meal at The Royal Chilli?", shell(body));
+}

@@ -1,3 +1,4 @@
+import { isFullyPaid } from "@/lib/payment-status";
 // Z report (end-of-day) for one till shift (work_periods row). Payment-based,
 // like SumUp's Z report: a sale belongs to the shift the money was TAKEN in,
 // not the shift the order was placed in — so Card + Cash (+ Online) always
@@ -125,6 +126,11 @@ export function computeZReport(input: {
   const counted = period.status === "closed" && period.closing_cash != null ? Number(period.closing_cash) : null;
 
   const ownOrders = orders.filter((o) => o.work_period_id === period.id);
+  // Settled = nothing owed: cancelled, fully paid by money received (an
+  // online-paid order stays "ready" in the kitchen — status alone isn't
+  // enough), or refunded. Only unsettled orders are Pending / block Close Day.
+  const refundedIds = new Set(refunds.map((p) => p.order_id));
+  const settled = (o: ZOrder) => o.status === "cancelled" || isFullyPaid(o) || refundedIds.has(o.id);
   const earlier = new Map<number, number>();
   for (const p of sales) {
     const o = orderById.get(p.order_id);
@@ -164,7 +170,7 @@ export function computeZReport(input: {
 
     other: {
       pending_bills: ownOrders
-        .filter((o) => o.pay_later && o.status !== "paid" && o.status !== "cancelled")
+        .filter((o) => o.pay_later && !settled(o))
         .map((o) => ({ order_number: o.order_number, customer_name: o.customer_name, balance: r2(Number(o.total) - Number(o.amount_paid)) })),
       earlier_bills_paid: [...earlier].map(([id, amount]) => ({
         order_number: orderById.get(id)?.order_number ?? `#${id}`,
@@ -181,7 +187,7 @@ export function computeZReport(input: {
         period.status === "closed"
           ? []
           : ownOrders
-              .filter((o) => o.status !== "paid" && o.status !== "cancelled" && !o.pay_later)
+              .filter((o) => !o.pay_later && !settled(o))
               .map((o) => ({ order_number: o.order_number, balance: r2(Number(o.total) - Number(o.amount_paid)) })),
     },
   };

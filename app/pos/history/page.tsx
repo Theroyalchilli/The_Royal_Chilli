@@ -379,7 +379,7 @@ export default function HistoryPage() {
                             🌐 Online
                           </span>
                         )}
-                        {order.pay_later && (
+                        {order.pay_later && order.status !== "cancelled" && (payState(order) === "unpaid" || payState(order) === "part_paid") && (
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-amber-500/15 border-amber-500/40 text-amber-700">
                             📌 Pay Later
                           </span>

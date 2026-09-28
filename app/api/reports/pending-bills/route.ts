@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         staff:staff!orders_staff_id_fkey(name)
       `)
       .eq("pay_later", true)
-      .not("status", "eq", "paid")
+      .eq("is_paid", false)
       .not("status", "eq", "cancelled")
       .order("created_at", { ascending: true });
 

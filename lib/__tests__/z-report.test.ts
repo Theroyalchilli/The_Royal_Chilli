@@ -102,6 +102,23 @@ describe("computeZReport", () => {
     expect(open.cash.counted).toBeNull();
     expect(computeZReport(input).other.unresolved).toEqual([]);
   });
+
+  it("never blocks Close Day on an online-paid order still in the kitchen, or a refunded one", () => {
+    const r = computeZReport({
+      ...templateShift(),
+      period: period({ status: "open", closed_at: null }),
+      payments: [
+        { order_id: 5, method: "card_online", amount: 3.45, tip_amount: 0 },
+        { order_id: 5, method: "card_online", amount: -3.45, tip_amount: 0 },
+      ],
+      orders: [
+        order(4, { status: "ready", total: 10, amount_paid: 10 }),
+        order(5, { status: "ready", total: 3.45, amount_paid: 0, pay_later: true }),
+      ],
+    });
+    expect(r.other.unresolved).toEqual([]);
+    expect(r.other.pending_bills).toEqual([]);
+  });
 });
 
 describe("zReportLines", () => {

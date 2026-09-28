@@ -83,14 +83,27 @@ export async function PUT(req: NextRequest) {
   // explicitly Pay Later before the day can close — no leaving one just
   // sitting there unpaid and unaccounted for. Checked server-side, not just
   // in the UI, since this is the one thing Close Day must never skip.
-  const { data: unresolved, error: unresolvedError } = await supabase
+  // "Paid" is by money received (is_paid, migration 063) — an online-paid
+  // order can still be "ready" in the kitchen — and a refunded order owes
+  // nothing either (same rule as lib/z-report.ts).
+  const { data: unpaid, error: unresolvedError } = await supabase
     .from("orders")
-    .select("order_number")
+    .select("id, order_number")
     .eq("work_period_id", period.id)
-    .not("status", "eq", "paid")
+    .eq("is_paid", false)
     .not("status", "eq", "cancelled")
     .eq("pay_later", false);
   if (unresolvedError) return NextResponse.json({ error: unresolvedError.message }, { status: 500 });
+  let unresolved = unpaid || [];
+  if (unresolved.length > 0) {
+    const { data: refundRows } = await supabase
+      .from("payments")
+      .select("order_id")
+      .in("order_id", unresolved.map((o) => o.id))
+      .lt("amount", 0);
+    const refunded = new Set((refundRows || []).map((p) => p.order_id));
+    unresolved = unresolved.filter((o) => !refunded.has(o.id));
+  }
   if ((unresolved || []).length > 0) {
     return NextResponse.json(
       {

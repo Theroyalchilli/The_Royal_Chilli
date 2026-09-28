@@ -244,6 +244,19 @@ export function rewardAllowsOrderType(reward: RewardTerms, orderType: string): b
 const ORDER_TYPE_LABEL: Record<string, string> = { dine_in: "dine-in", takeaway: "collection", delivery: "delivery" };
 export const orderTypesLabel = (types: string[]) => types.map((t) => ORDER_TYPE_LABEL[t] ?? t).join(" / ");
 
+/**
+ * Rewards that are only ever given automatically — the welcome voucher on
+ * joining and the Bring a Friend £5 — can't be issued by hand, by staff or
+ * by the customer; they cost 0 points, so a button for them would hand out
+ * free vouchers. Returns an error message for those, else null.
+ */
+export async function manualIssueBlocked(rewardId: number): Promise<string | null> {
+  const { data } = await supabase.from("loyalty_rewards").select("is_welcome_reward, is_referral_reward").eq("id", rewardId).maybeSingle();
+  if (data?.is_welcome_reward) return "The welcome voucher is given automatically when someone joins";
+  if (data?.is_referral_reward) return "Bring a Friend vouchers are given automatically when a friend joins with a member's link";
+  return null;
+}
+
 // ---------- Bring a Friend ----------
 
 /** A member's shareable code, e.g. "RC7KX2QM" — unambiguous characters only. */

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
-import { issueRedemption } from "@/lib/loyalty";
+import { issueRedemption, manualIssueBlocked } from "@/lib/loyalty";
 
 // Issue a redemption: debit points now, hand the customer a code to bring
 // back (same visit or a later one). Two steps — issue, then redeem at POS —
@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "customer_id and reward_id are required" }, { status: 400 });
     }
 
+    const blocked = await manualIssueBlocked(Number(reward_id));
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 400 });
     const result = await issueRedemption(Number(customer_id), Number(reward_id), session.id);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
-import { issueRedemption } from "@/lib/loyalty";
+import { issueRedemption, manualIssueBlocked } from "@/lib/loyalty";
 
 // Self-service version of the same issueRedemption staff already use from
 // Staff Hub — points are debited immediately (not held), same as any other
@@ -29,6 +29,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You already have an active voucher — cancel it first to redeem a different reward" }, { status: 409 });
     }
 
+    const blocked = await manualIssueBlocked(Number(reward_id));
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 400 });
     const result = await issueRedemption(session.id, Number(reward_id), null);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 

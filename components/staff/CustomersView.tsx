@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import RewardsRules from "@/components/staff/RewardsRules";
 
 type Segment = "NEW" | "ACTIVE" | "LOYAL" | "VIP" | "AT_RISK" | "INACTIVE";
 type Customer = {
@@ -240,7 +241,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
 }
 
 export default function CustomersView({ isManager }: { isManager: boolean }) {
-  const [tab, setTab] = useState<"customers" | "rewards" | "tiers" | "redemptions">("customers");
+  const [tab, setTab] = useState<"customers" | "rewards" | "rules" | "tiers" | "redemptions">("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState<Segment | "all">("all");
@@ -342,6 +343,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
             <button onClick={() => setTab("customers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "customers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Customers</button>
             <button onClick={() => setTab("rewards")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rewards" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Catalog</button>
+            <button onClick={() => setTab("rules")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rules" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Rules</button>
             <button onClick={() => setTab("tiers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "tiers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Tiers</button>
             <button onClick={() => setTab("redemptions")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "redemptions" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Redemptions</button>
           </div>
@@ -438,6 +440,8 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
             </div>
           </div>
         )}
+
+        {tab === "rules" && <RewardsRules canEdit={isManager} />}
 
         {tab === "tiers" && (
           <div className="mt-5">

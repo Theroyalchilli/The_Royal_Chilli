@@ -98,6 +98,8 @@ function MoneyCentsInput({
   );
 }
 
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th"}`;
+
 export default function PaymentModal({
   open,
   onClose,
@@ -154,6 +156,8 @@ export default function PaymentModal({
     customerName: string; currentBalance: number; willEarn: number; tierName: string | null;
     cashCredit: { cap: number; step: number; convertedValue: number; eligible: boolean; options: number[]; redeemAmount: number } | null;
     doubleDay: string | null;
+    visitNumber: number;
+    visitBonus: number;
     /** points/vouchers can be spent on this bill (dine-in only) */
     canSpend: boolean;
   } | null>(null);
@@ -275,6 +279,8 @@ export default function PaymentModal({
           tierName: d.tier_name,
           cashCredit: d.cash_credit ?? null,
           doubleDay: d.double_day ?? null,
+          visitNumber: d.visit_number ?? 0,
+          visitBonus: d.visit_bonus ?? 0,
           canSpend: d.can_spend !== false,
         });
       })
@@ -813,6 +819,7 @@ export default function PaymentModal({
                     {loyaltyPreview.willEarn > 0 && (
                       <span className="text-rose-700 text-[11px] font-bold flex-shrink-0 ml-2">
                         +{loyaltyPreview.willEarn} this visit{loyaltyPreview.doubleDay ? ` (2× ${loyaltyPreview.doubleDay})` : ""}
+                        {loyaltyPreview.visitBonus > 0 && ` incl. ${ordinal(loyaltyPreview.visitNumber)}-visit bonus`}
                       </span>
                     )}
                   </div>

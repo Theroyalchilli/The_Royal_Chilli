@@ -12,6 +12,7 @@ import {
   unlockReferralVoucher,
 } from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
+import { awardVisitBonus } from "@/lib/visits";
 
 // Every column except password_hash — use this instead of select("*") on
 // customers anywhere the result reaches an HTTP response, staff or public.
@@ -314,6 +315,9 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
       expires_at: expiresAt,
     });
   }
+
+  // 2nd / 3rd / every-5th visit bonus (lib/visits.ts)
+  await awardVisitBonus(customerId, orderId);
 
   // Tier upgrade/downgrade check, now including this order's spend.
   const newSpend = priorSpend + orderTotal;

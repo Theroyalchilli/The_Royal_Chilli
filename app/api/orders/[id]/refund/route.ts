@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { findStaffByPin, isManagerRole } from "@/lib/staff-pin";
 import { refundTransaction, sumupTransactionFromReference } from "@/lib/sumup";
 import { ORDER_EARN_REASONS } from "@/lib/loyalty";
+import { reverseVisitRewardsForFullRefund } from "@/lib/visits";
 
 // A refund is just another row in `payments`, with a negative amount — same
 // pattern as a normal payment, so the existing trigger that keeps
@@ -98,6 +99,13 @@ export async function POST(
 
     if (order.customer_id) {
       await reverseLoyaltyPointsForRefund(Number(id), order.customer_id, refundAmount, Number(order.total));
+      // Refunded in full: the visit didn't really happen — take back its visit
+      // bonus and re-lock a Bring a Friend voucher it unlocked (if unused).
+      const { data: refundRows } = await supabase.from("payments").select("amount").eq("order_id", id).lt("amount", 0);
+      const refundedTotal = (refundRows ?? []).reduce((s, p) => s - Number(p.amount), 0);
+      if (refundedTotal >= Number(order.total) - 0.01) {
+        await reverseVisitRewardsForFullRefund(Number(id), order.customer_id);
+      }
     }
 
     const { data: refreshed } = await supabase.from("orders").select("total, amount_paid").eq("id", id).single();

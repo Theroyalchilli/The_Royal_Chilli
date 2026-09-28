@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { estimatePurchasePoints } from "@/lib/customers";
 import { getCashCreditInfo } from "@/lib/loyalty";
+import { upcomingVisitBonus } from "@/lib/visits";
 
 // Read-only preview for the payment screen: how many points this order
 // would earn right now, plus the customer's current balance — both real
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
 
   const estimate = await estimatePurchasePoints(customerId, amount);
   const cashCredit = await getCashCreditInfo(customer.loyalty_points);
+  const visitBonus = await upcomingVisitBonus(customerId);
   // Points and vouchers are dine-in only (Rewards Club)
   let canSpend = true;
   if (orderId) {
@@ -34,7 +36,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     customer_name: customer.name,
     current_balance: customer.loyalty_points,
-    will_earn: estimate.total,
+    will_earn: estimate.total + visitBonus.points,
+    visit_number: visitBonus.visit,
+    visit_bonus: visitBonus.points,
     tier_name: estimate.tierName,
     double_day: estimate.doubleDay,
     can_spend: canSpend,

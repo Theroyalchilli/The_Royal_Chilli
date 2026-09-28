@@ -7,6 +7,7 @@ import { siteContent } from "@/lib/site-content";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { readCart, writeCart, makeLineId, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
 import { isRestaurantOpen, nextValidScheduleSlot } from "@/lib/hours";
+import type { BusyState } from "@/lib/busy-mode";
 import ModifierPickerModal from "./ModifierPickerModal";
 import ParticleButton from "@/components/kokonutui/particle-button";
 import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav, useIsNarrow } from "./CategoryNav";
@@ -18,6 +19,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   const [pickerFor, setPickerFor] = useState<MenuItem | null>(null);
   const [orderType, setOrderType] = useState<OrderType>("takeaway");
   const [openNow, setOpenNow] = useState(true);
+  const [busy, setBusy] = useState<BusyState | null>(null);
   const { activeCategory, sectionRefs, navRefs, navScrollerRef, jumpTo } = useCategoryNav(categories);
 
   // Baskets saved before collection/delivery pricing lack the two base
@@ -35,6 +37,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   useEffect(() => {
     setOrderType(readOrderType());
     setOpenNow(isRestaurantOpen());
+    fetch("/api/busy-mode", { cache: "no-store" }).then((r) => r.json()).then(setBusy).catch(() => {});
   }, []);
 
   function selectOrderType(type: OrderType) {
@@ -184,6 +187,21 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
       <div className="mx-auto max-w-4xl px-4 pt-16 pb-6">
         <div className="text-center">
           <h1 className="text-xs uppercase tracking-[0.3em] text-primary">Order Online</h1>
+          {openNow && busy?.paused && busy.pausedUntil && (
+            <div className="mx-auto mt-4 max-w-md rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
+              <p className="font-semibold">⏸ We&apos;re very busy right now</p>
+              <p className="mt-1 text-sm">
+                Online ordering is paused until{" "}
+                <strong>{new Date(busy.pausedUntil).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" })}</strong>
+                . You can still order for that time or later at checkout.
+              </p>
+            </div>
+          )}
+          {openNow && busy && !busy.paused && busy.extraMinutes > 0 && (
+            <div className="mx-auto mt-4 max-w-md rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+              ⏱ Busy tonight — please allow about <strong>{busy.extraMinutes} minutes extra</strong>.
+            </div>
+          )}
           {openNow ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-green-500" />

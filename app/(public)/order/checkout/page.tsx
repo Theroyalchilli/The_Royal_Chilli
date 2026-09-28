@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { formatCurrency, isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType, cartTotal } from "@/lib/cart";
 import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue } from "@/lib/hours";
+import type { BusyState } from "@/lib/busy-mode";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 
@@ -19,6 +20,8 @@ const STRIPE_ENABLED = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
 function defaultScheduleDate() {
   return toDateInputValue(nextValidScheduleSlot(new Date()));
 }
+const busyTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+
 // The earliest time an order can be scheduled for, for the closed notice.
 function earliestSlotLabel() {
   return nextValidScheduleSlot(new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
@@ -43,6 +46,9 @@ export default function CheckoutPage() {
   const [checkingZone, setCheckingZone] = useState(false);
   const [notes, setNotes] = useState("");
   const [openNow, setOpenNow] = useState(true);
+  // Busy mode set at the till (lib/busy-mode.ts): ASAP paused, or extra prep time.
+  const [busy, setBusy] = useState<BusyState | null>(null);
+  const acceptingAsap = openNow && !busy?.paused;
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate());
   // Never pre-filled: the customer picks the time themselves, so a
@@ -64,6 +70,13 @@ export default function CheckoutPage() {
     const open = isRestaurantOpen();
     setOpenNow(open);
     if (!open) setIsScheduled(true);
+    fetch("/api/busy-mode", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((b: BusyState) => {
+        setBusy(b);
+        if (b.paused) setIsScheduled(true);
+      })
+      .catch(() => {});
   }, []);
 
   // Cart starts empty and only populates a moment after mount, so the page's
@@ -94,7 +107,14 @@ export default function CheckoutPage() {
   // Re-derived whenever the picked date changes, since Friday's opening
   // time differs from every other day's (and "today" also excludes any
   // slot too soon to prepare).
-  const scheduleSlots = getScheduleSlotOptions(new Date(`${scheduleDate}T00:00:00`));
+  // While busy, hide slots before the pause ends / inside the longer prep time.
+  const earliestBusy = Math.max(
+    busy?.pausedUntil ? new Date(busy.pausedUntil).getTime() : 0,
+    busy?.extraMinutes ? Date.now() + (20 + busy.extraMinutes) * 60_000 : 0
+  );
+  const scheduleSlots = getScheduleSlotOptions(new Date(`${scheduleDate}T00:00:00`)).filter(
+    (slot) => new Date(`${slot.value}:00`).getTime() >= earliestBusy
+  );
 
   // Keep the selected time inside the current date's valid slots — e.g.
   // switching from a day open 9am to Friday (opens 11am) could otherwise
@@ -131,7 +151,9 @@ export default function CheckoutPage() {
     if (orderType === "delivery" && zoneCheck?.deliverable && subtotal < MIN_DELIVERY_ORDER) {
       return setError(`Minimum order for delivery is £${MIN_DELIVERY_ORDER.toFixed(2)}.`);
     }
-    if (!isScheduled && !openNow) return setError("We're closed right now — please schedule your order for later.");
+    if (!isScheduled && !acceptingAsap) {
+      return setError(openNow ? "We're very busy right now — please schedule your order for later." : "We're closed right now — please schedule your order for later.");
+    }
 
     let scheduledFor: string | undefined;
     if (isScheduled) {
@@ -259,7 +281,7 @@ export default function CheckoutPage() {
 
       <div className="mt-6 flex gap-3">
         {([false, true] as const).map((scheduled) => {
-          const disabled = !scheduled && !openNow;
+          const disabled = !scheduled && !acceptingAsap;
           return (
             <button
               key={String(scheduled)}
@@ -269,7 +291,7 @@ export default function CheckoutPage() {
                 isScheduled === scheduled ? "border-primary bg-primary text-primary-foreground" : "border-border"
               }`}
             >
-              {scheduled ? "Schedule for later" : openNow ? "ASAP" : "ASAP (closed)"}
+              {scheduled ? "Schedule for later" : !openNow ? "ASAP (closed)" : busy?.paused ? "ASAP (paused)" : "ASAP"}
             </button>
           );
         })}
@@ -280,6 +302,19 @@ export default function CheckoutPage() {
           <p className="mt-1 text-sm">
             You can still order for later — the earliest is <strong>{earliestSlotLabel()}</strong>. Choose your date and time below.
           </p>
+        </div>
+      )}
+      {openNow && busy?.paused && busy.pausedUntil && (
+        <div className="mt-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
+          <p className="font-semibold">⏸ We&apos;re very busy right now.</p>
+          <p className="mt-1 text-sm">
+            Online ordering is paused until <strong>{busyTime(busy.pausedUntil)}</strong> — you can schedule your order for then or later below.
+          </p>
+        </div>
+      )}
+      {busy && !busy.paused && busy.extraMinutes > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          ⏱ We&apos;re busy tonight — please allow about <strong>{busy.extraMinutes} minutes extra</strong> for your order.
         </div>
       )}
       {isScheduled && (

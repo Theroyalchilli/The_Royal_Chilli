@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
 import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
 import TillLock from "@/components/pos/TillLock";
+import BusyModeControl from "@/components/pos/BusyModeControl";
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -23,6 +24,7 @@ export default async function PosLayout({
       {children}
       <NewOrderAlerts />
       <TillLock />
+      <BusyModeControl />
       <Toaster />
     </div>
   );

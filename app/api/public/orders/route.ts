@@ -7,6 +7,7 @@ import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen } from "@/lib/hours";
+import { busyOrderError, busyState, type BusyMode } from "@/lib/busy-mode";
 import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { sendOrderConfirmationEmail } from "@/lib/email";
@@ -53,6 +54,11 @@ export async function POST(req: NextRequest) {
     } else if (!isRestaurantOpen()) {
       return NextResponse.json({ error: "We're closed right now — please schedule your order for later." }, { status: 400 });
     }
+
+    // Busy mode set at the till: online ordering paused, or extra prep time.
+    const { data: busyRow } = await supabase.from("app_settings").select("value").eq("key", "busy_mode").maybeSingle();
+    const busyError = busyOrderError(busyState(busyRow?.value as BusyMode | null), scheduled_for || null);
+    if (busyError) return NextResponse.json({ error: busyError }, { status: 409 });
 
     let deliverable = false;
     if (order_type === "delivery") {

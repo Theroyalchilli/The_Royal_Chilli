@@ -1,6 +1,6 @@
 // Ticket rendering for the CloudPRNT printer: which items a kitchen ticket
 // lists, and the StarPRNT / plain-text encodings the printer receives.
-type Item = { id: number; item_name: string; quantity: number; notes: string | null; status: string; modifiers: string[] };
+type Item = { id: number; item_name: string; quantity: number; notes: string | null; status: string; modifiers: string[]; allergens?: string[] };
 let printData: { order: Record<string, unknown>; items: Item[] } | null;
 
 jest.mock("@/lib/kot", () => ({ getOrderForPrint: jest.fn(async () => printData) }));
@@ -24,6 +24,13 @@ const job = (extra: Partial<PrintJob> = {}): PrintJob => ({ id: 1, order_id: 5, 
 const texts = (t: { text: string }[] | null) => (t ?? []).map((l) => l.text);
 
 describe("buildTicket (kitchen)", () => {
+  it("prints a dish's allergens under it, and nothing extra for dishes without", async () => {
+    printData = { order: baseOrder, items: [item(1, "Korma", { allergens: ["nuts", "milk"] }), item(2, "Plain Rice", { allergens: [] })] };
+    const lines = texts(await buildTicket(job()));
+    expect(lines).toContain("   ALLERGENS: NUTS, MILK");
+    expect(lines.filter((l) => l.includes("ALLERGENS"))).toHaveLength(1);
+  });
+
   it("lists only the round's items and flags it as an add-on", async () => {
     printData = { order: baseOrder, items: [item(1, "Samosa"), item(2, "Chicken Tikka"), item(3, "Garlic Naan")] };
     const lines = texts(await buildTicket(job({ item_ids: [2, 3] })));

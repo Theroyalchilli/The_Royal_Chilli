@@ -10,7 +10,7 @@ export async function getOrderForPrint(orderId: number) {
 
   const { data: items } = await supabase
     .from("order_items")
-    .select("id, item_name, quantity, notes, status")
+    .select("id, item_name, quantity, notes, status, menu_items(allergens)")
     .eq("order_id", orderId)
     .neq("status", "cancelled")
     .order("created_at");
@@ -29,6 +29,11 @@ export async function getOrderForPrint(orderId: number) {
 
   return {
     order: { ...orderRest, table_number: table?.table_number ?? null },
-    items: (items || []).map((i) => ({ ...i, modifiers: modsByItem.get(i.id) || [] })),
+    items: (items || []).map(({ menu_items: menuItem, ...i }) => ({
+      ...i,
+      modifiers: modsByItem.get(i.id) || [],
+      // From the dish itself, so the kitchen sees them on every ticket.
+      allergens: ((menuItem as unknown as { allergens: string[] | null } | null)?.allergens ?? []).filter(Boolean),
+    })),
   };
 }

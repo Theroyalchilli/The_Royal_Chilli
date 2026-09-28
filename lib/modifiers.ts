@@ -1,5 +1,6 @@
 import supabase from "@/lib/supabase";
 import { basePriceFor, type PriceType } from "@/lib/menu";
+import { isSoldOut } from "@/lib/sold-out";
 
 export type SelectedModifier = { id: number; name: string; price_delta: number };
 
@@ -24,11 +25,12 @@ export async function resolveItemWithModifiers(
 ): Promise<ResolvedItem> {
   const { data: menuItem } = await supabase
     .from("menu_items")
-    .select("id, name, price, online_price")
+    .select("id, name, price, online_price, sold_out_until")
     .eq("id", menuItemId)
     .eq("active", 1)
     .single();
   if (!menuItem) throw new Error(`Menu item ${menuItemId} is no longer available`);
+  if (isSoldOut(menuItem)) throw new Error(`Sorry, ${menuItem.name} is sold out today`);
 
   const basePrice = basePriceFor(menuItem, priceType);
 

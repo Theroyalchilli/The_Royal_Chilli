@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import type { MenuCategory, MenuItem, CartItem, ModifierOption } from "@/lib/types";
+import { isSoldOut } from "@/lib/sold-out";
 import ModifierPickerModal from "./ModifierPickerModal";
 
 type OrderType = "dine_in" | "takeaway" | "delivery" | "online";
@@ -42,6 +43,26 @@ const categoryIcons: Record<string, string> = {
 export default function MenuPanel({ categories, items, onAddItem, layout = "vertical", orderType, disableAdd, onBlockedAdd }: Props) {
   const [activeCat, setActiveCat] = useState<number>(0);
   const [pickerItem, setPickerItem] = useState<MenuItem | null>(null);
+  // "Sold out" mode: tapping a dish marks it sold out (until 5am) or back on,
+  // instead of adding it. Changes made here show at once; the rest arrive
+  // with the next menu load.
+  const [soldOutMode, setSoldOutMode] = useState(false);
+  const [soldOutOverrides, setSoldOutOverrides] = useState<Record<number, string | null>>({});
+  const soldOut = (item: MenuItem) =>
+    isSoldOut({ sold_out_until: item.id in soldOutOverrides ? soldOutOverrides[item.id] : item.sold_out_until });
+
+  const toggleSoldOut = async (item: MenuItem) => {
+    const next = !soldOut(item);
+    const res = await fetch(`/api/menu-items/${item.id}/sold-out`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sold_out: next }),
+    }).catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      setSoldOutOverrides((o) => ({ ...o, [item.id]: data.item.sold_out_until }));
+    }
+  };
 
   useEffect(() => {
     if (categories.length > 0 && activeCat === 0) {
@@ -67,6 +88,11 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
     orderType === "delivery" && item.online_price != null ? Number(item.online_price) : Number(item.price);
 
   const handleAdd = (item: MenuItem) => {
+    if (soldOutMode) {
+      toggleSoldOut(item);
+      return;
+    }
+    if (soldOut(item)) return;
     if (disableAdd) {
       onBlockedAdd?.();
       return;
@@ -150,6 +176,13 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
             <span className="text-base">{categoryIcons[activeCategory.name] ?? "🍽️"}</span>
             <span className="font-bold text-sm" style={{ color: activeCategory.color }}>{activeCategory.name}</span>
             <span className="text-xs text-muted-foreground">{filteredItems.length} items</span>
+            <button
+              onClick={() => setSoldOutMode((m) => !m)}
+              className={`ml-auto rounded-lg px-2.5 py-1 text-[11px] font-bold ${soldOutMode ? "bg-amber-500 text-white" : "bg-surface-hover text-muted-foreground border border-border"}`}
+              title="Tap dishes to mark them sold out (until 5am) or back on"
+            >
+              {soldOutMode ? "✓ Done" : "🚫 Sold out"}
+            </button>
           </div>
         )}
 
@@ -165,8 +198,9 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
                 <button
                   key={item.id}
                   onClick={() => handleAdd(item)}
-                  className="pos-btn no-select group bg-surface hover:bg-surface-hover active:scale-95 border border-border hover:border-elevated-hover rounded-xl p-3 text-left transition-all flex flex-col gap-1.5 min-h-[80px]"
+                  className={`pos-btn no-select group bg-surface hover:bg-surface-hover active:scale-95 border border-border hover:border-elevated-hover rounded-xl p-3 text-left transition-all flex flex-col gap-1.5 min-h-[80px] ${soldOut(item) ? "opacity-40" : ""} ${soldOutMode ? "ring-2 ring-amber-400" : ""}`}
                 >
+                  {soldOut(item) && <span className="text-[10px] font-black text-red-600">SOLD OUT</span>}
                   <div className="flex items-start justify-between gap-1.5 flex-1">
                     <span className="text-foreground text-[13px] font-semibold leading-snug flex-1">
                       {item.name}
@@ -239,6 +273,13 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
               {activeCategory.name}
             </h2>
             <span className="text-xs text-muted-foreground ml-1">{filteredItems.length} items</span>
+            <button
+              onClick={() => setSoldOutMode((m) => !m)}
+              className={`ml-auto rounded-lg px-2.5 py-1 text-[11px] font-bold ${soldOutMode ? "bg-amber-500 text-white" : "bg-surface-hover text-muted-foreground border border-border"}`}
+              title="Tap dishes to mark them sold out (until 5am) or back on"
+            >
+              {soldOutMode ? "✓ Done" : "🚫 Sold out"}
+            </button>
           </div>
         )}
 
@@ -253,8 +294,9 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
                 <button
                   key={item.id}
                   onClick={() => handleAdd(item)}
-                  className="pos-btn no-select group bg-surface hover:bg-surface-hover active:scale-95 border border-border hover:border-elevated-hover rounded-xl p-3 text-left transition-all flex flex-col gap-1.5 min-h-[88px]"
+                  className={`pos-btn no-select group bg-surface hover:bg-surface-hover active:scale-95 border border-border hover:border-elevated-hover rounded-xl p-3 text-left transition-all flex flex-col gap-1.5 min-h-[88px] ${soldOut(item) ? "opacity-40" : ""} ${soldOutMode ? "ring-2 ring-amber-400" : ""}`}
                 >
+                  {soldOut(item) && <span className="text-[10px] font-black text-red-600">SOLD OUT</span>}
                   <div className="flex items-start justify-between gap-1.5 flex-1">
                     <span className="text-foreground text-[13px] font-semibold leading-snug flex-1">
                       {item.name}

@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { isSoldOut } from "@/lib/sold-out";
 
 export type MenuItemModifierOption = {
   id: number;
@@ -71,7 +72,7 @@ export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuC
   const availabilityCol = channel === "online" ? "online_available" : "pos_available";
   const { data: items, error: itemErr } = await supabase
     .from("menu_items")
-    .select("id, category_id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g")
+    .select("id, category_id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g, sold_out_until")
     .eq("active", 1)
     .eq(availabilityCol, 1)
     .order("display_order");
@@ -110,7 +111,8 @@ export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuC
     .map((c) => ({
       ...c,
       items: (items || [])
-        .filter((i) => i.category_id === c.id)
+        // Dishes marked sold out at the till are left off (website, table QR).
+        .filter((i) => i.category_id === c.id && !isSoldOut(i))
         .map(({ id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g }) => ({
           id, name, description,
           price: basePriceFor({ price, online_price }, "collection"),

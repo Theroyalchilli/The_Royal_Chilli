@@ -52,6 +52,11 @@ describe("resolveItemWithModifiers", () => {
     expect(delivery.unitPrice).toBe(12);
   });
 
+  it("refuses a dish marked sold out at the till", async () => {
+    menuItemRow = { ...menuItemRow, sold_out_until: new Date(Date.now() + 3600_000).toISOString() };
+    await expect(resolveItemWithModifiers(42, [])).rejects.toThrow("sold out");
+  });
+
   it("charges delivery the till price when no delivery price is set", async () => {
     menuItemRow = { ...menuItemRow, online_price: null };
     expect((await resolveItemWithModifiers(42, [], "delivery")).unitPrice).toBe(10);

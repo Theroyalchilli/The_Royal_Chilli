@@ -139,6 +139,7 @@ export interface MenuItem {
   description: string | null;
   price: number; // collection / till price
   online_price?: number | null; // delivery price (null = same as price) — see PriceType in lib/menu.ts
+  sold_out_until?: string | null; // marked sold out at the till until then (lib/sold-out.ts)
   is_veg: number;
   active: number;
   display_order: number;

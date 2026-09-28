@@ -156,6 +156,8 @@ async function buildKitchenTicket(job: PrintJob, orderId: number, width: number)
     t.push({ text: `${item.quantity}x ${item.item_name}`, bold: true, size: "tall" });
     if (item.modifiers.length > 0) t.push({ text: `   - ${item.modifiers.join(", ")}` });
     if (item.notes) t.push({ text: `   *** ${item.notes.toUpperCase()} ***`, bold: true });
+    // Only when the dish has allergens — no space used otherwise.
+    if (item.allergens?.length) t.push({ text: `   ALLERGENS: ${item.allergens.join(", ").toUpperCase()}`, bold: true });
   }
   t.push({ text: DIVIDER });
 

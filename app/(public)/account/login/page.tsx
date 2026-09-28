@@ -137,6 +137,12 @@ function AuthForm() {
           >
             {saving ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
           </button>
+          {mode === "signup" && (
+            <p className="mt-2 text-center text-[11px] text-primary-foreground/60">
+              By creating an account you join our Rewards Club and agree to its{" "}
+              <Link href="/rewards-terms" className="underline">terms</Link>.
+            </p>
+          )}
 
           {mode === "login" && (
             <p className="mt-3 text-center text-xs text-primary-foreground/70">

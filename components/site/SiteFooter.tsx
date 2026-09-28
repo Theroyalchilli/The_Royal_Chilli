@@ -151,6 +151,10 @@ export default function SiteFooter({ hours }: { hours: { day: string; time: stri
             Terms &amp; Conditions
           </Link>
           <span>·</span>
+          <Link href="/rewards-terms" className="hover:text-[#3a0f0c]">
+            Rewards Club Terms
+          </Link>
+          <span>·</span>
           <Link href="/login" className="hover:text-[#3a0f0c]">
             Staff Login
           </Link>

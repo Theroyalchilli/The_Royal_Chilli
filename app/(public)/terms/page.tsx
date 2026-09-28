@@ -48,7 +48,7 @@ const sections: { heading: string; body: string[] }[] = [
   {
     heading: "Loyalty programme",
     body: [
-      "Loyalty points have no cash value, are non-transferable, and can be redeemed for rewards as described in your account. We may amend or end the loyalty programme at any time; any points already earned will still be honoured for a reasonable period after any such change is announced.",
+      "Our Rewards Club has its own terms, at theroyalchilli.com/rewards-terms — how points are earned and used, vouchers, Bring a Friend and emails. In short: points have no cash value, are non-transferable, and are used when you dine in. We may amend or end the Rewards Club at any time; points already earned will still be honoured for a reasonable period after any such change is announced.",
     ],
   },
   {

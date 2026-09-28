@@ -327,6 +327,9 @@ function LoyaltyInner() {
               <li>⏳ Points expire 12 months after you earn them</li>
             </ul>
           </div>
+          <p className="-mt-4 mb-6 px-0.5 text-xs text-muted-foreground">
+            Full details in our <a href="/rewards-terms" className="underline">Rewards Club terms</a>.
+          </p>
           <div className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Redeem rewards</div>
           <p className="mb-3 px-0.5 text-[13.5px] text-muted-foreground">Simple steps to redeem your points at checkout.</p>
           <div className="rounded-2xl border border-border bg-surface shadow-sm">

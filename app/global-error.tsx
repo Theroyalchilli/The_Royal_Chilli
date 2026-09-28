@@ -21,14 +21,18 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
           {reloading ? (
             <p style={{ fontSize: 14, color: "#7C716A" }}>Updating to the latest version…</p>
           ) : (
-            <div style={{ maxWidth: 360 }}>
-              <div style={{ fontSize: 40 }}>🌶️</div>
-              <h1 style={{ fontFamily: "Georgia, serif", fontSize: 24, margin: "12px 0 8px" }}>Sorry — something went wrong</h1>
-              <p style={{ fontSize: 14, color: "#7C716A", margin: 0 }}>Please try again. If it keeps happening, call us on 020 8797 3044.</p>
+            <div style={{ maxWidth: 380 }}>
+              <h1 style={{ fontFamily: "Georgia, serif", fontSize: 26, margin: "0 0 10px" }}>Oops! We&apos;ve hit a little hiccup. 🌶️</h1>
+              <p style={{ fontSize: 15, color: "#7C716A", margin: 0 }}>Something went wrong while loading this page.</p>
+              <p style={{ fontSize: 15, fontWeight: 700, margin: "4px 0 0" }}>Don&apos;t worry — the kitchen is still open!</p>
+              <p style={{ fontSize: 14, color: "#7C716A", margin: "12px 0 0" }}>Please try again, or head back to The Royal Chilli homepage and continue exploring our menu.</p>
               <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-                <button onClick={() => window.location.reload()} style={{ ...btn, background: "#E34234", color: "#fff", border: "none" }}>Reload page</button>
-                <button onClick={() => (window.location.href = "/")} style={{ ...btn, background: "transparent", color: "#201B18", border: "1px solid #EFE4C9" }}>Go to home</button>
+                <button onClick={() => window.location.reload()} style={{ ...btn, background: "#E34234", color: "#fff", border: "none" }}>Try Again</button>
+                <button onClick={() => (window.location.href = "/")} style={{ ...btn, background: "transparent", color: "#201B18", border: "1px solid #EFE4C9" }}>Back to Home</button>
               </div>
+              <p style={{ fontSize: 12, color: "#7C716A", marginTop: 24 }}>If the problem keeps happening, please try refreshing the page or come back in a moment.</p>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: 18, margin: "20px 0 0" }}>The Royal Chilli</p>
+              <p style={{ fontSize: 12, color: "#7C716A", margin: 0 }}>Authentic Flavours. Memorable Experiences.</p>
               {error.digest && <p style={{ fontSize: 11, color: "#7C716A", marginTop: 16 }}>Error ref: {error.digest}</p>}
             </div>
           )}

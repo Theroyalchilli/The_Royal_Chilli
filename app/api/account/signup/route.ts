@@ -5,7 +5,7 @@ import { isValidEmail } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password, marketingConsent } = await req.json();
+    const { name, email, password, marketingConsent, referralCode } = await req.json();
 
     if (!name?.trim() || !email?.trim() || !password) {
       return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
-    const result = await signupCustomer(name, email, password, !!marketingConsent);
+    const result = await signupCustomer(name, email, password, !!marketingConsent, typeof referralCode === "string" ? referralCode : null);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }

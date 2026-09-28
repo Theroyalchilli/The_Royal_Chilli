@@ -244,6 +244,95 @@ export function rewardAllowsOrderType(reward: RewardTerms, orderType: string): b
 const ORDER_TYPE_LABEL: Record<string, string> = { dine_in: "dine-in", takeaway: "collection", delivery: "delivery" };
 export const orderTypesLabel = (types: string[]) => types.map((t) => ORDER_TYPE_LABEL[t] ?? t).join(" / ");
 
+// ---------- Bring a Friend ----------
+
+/** A member's shareable code, e.g. "RC7KX2QM" — unambiguous characters only. */
+export async function generateReferralCode(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = `RC${generateRedemptionCode(6)}`;
+    const { data } = await supabase.from("customers").select("id").eq("referral_code", code).maybeSingle();
+    if (!data) return code;
+  }
+  throw new Error("Could not generate a unique referral code");
+}
+
+/** The member whose referral code this is (codes are matched case-insensitively). */
+export async function findReferrer(code: string | null | undefined): Promise<number | null> {
+  const clean = String(code ?? "").trim().toUpperCase();
+  if (!clean) return null;
+  const { data } = await supabase.from("customers").select("id").eq("referral_code", clean).maybeSingle();
+  return data?.id ?? null;
+}
+
+/**
+ * A friend just signed up with `referrerId`'s link: give the referrer a £5
+ * dine-in voucher, LOCKED until the friend's first paid visit (see
+ * unlockReferralVoucher). Capped at loyalty_referral_max_per_year. Never
+ * fails the friend's sign-up.
+ */
+export async function issueReferralVoucher(referrerId: number, friendId: number): Promise<void> {
+  try {
+    if (referrerId === friendId) return;
+    const { data: reward } = await supabase
+      .from("loyalty_rewards")
+      .select("id")
+      .eq("is_referral_reward", true)
+      .eq("active", 1)
+      .limit(1)
+      .maybeSingle();
+    if (!reward) return;
+
+    const maxPerYear = await getLoyaltySetting("loyalty_referral_max_per_year", 10);
+    const yearAgo = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString();
+    const { count } = await supabase
+      .from("loyalty_redemptions")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", referrerId)
+      .eq("reward_id", reward.id)
+      .gte("issued_at", yearAgo)
+      .neq("status", "cancelled");
+    if ((count ?? 0) >= maxPerYear) return;
+
+    // Locked vouchers need an expiry for the NOT NULL column; the real 30
+    // days start at unlock. A friend who never visits within a year → gone.
+    await supabase.from("loyalty_redemptions").insert({
+      code: await generateUniqueRedemptionCode(),
+      customer_id: referrerId,
+      reward_id: reward.id,
+      points_spent: 0,
+      status: "locked",
+      referred_customer_id: friendId,
+      expires_at: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+    });
+  } catch (err) {
+    console.error(`Referral voucher not issued (referrer ${referrerId}, friend ${friendId}):`, err);
+  }
+}
+
+/**
+ * The friend's first qualifying visit: unlock the referrer's £5 voucher —
+ * usable from now, for the reward's valid_days (30). Returns the referrer's
+ * id when a voucher was unlocked, else null.
+ */
+export async function unlockReferralVoucher(friendId: number): Promise<number | null> {
+  const { data: locked } = await supabase
+    .from("loyalty_redemptions")
+    .select("id, customer_id, reward:loyalty_rewards(valid_days)")
+    .eq("referred_customer_id", friendId)
+    .eq("status", "locked")
+    .limit(1)
+    .maybeSingle();
+  if (!locked) return null;
+  const days = Number((locked.reward as unknown as { valid_days?: number } | null)?.valid_days || 30);
+  const { data: updated } = await supabase
+    .from("loyalty_redemptions")
+    .update({ status: "issued", issued_at: new Date().toISOString(), expires_at: new Date(Date.now() + days * 24 * 3600 * 1000).toISOString() })
+    .eq("id", locked.id)
+    .eq("status", "locked")
+    .select("id");
+  return updated && updated.length > 0 ? locked.customer_id : null;
+}
+
 // ---------- welcome voucher ----------
 
 /** Start of the next trading day (5am UK) — a voucher issued tonight can't be used on tonight's bill. */

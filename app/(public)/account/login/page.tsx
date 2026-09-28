@@ -7,7 +7,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 function AuthForm() {
   const router = useRouter();
-  const initialMode = useSearchParams().get("mode") === "signup" ? "signup" : "login";
+  const params = useSearchParams();
+  // Bring a Friend (?ref=) and "claim your points" (?next=/claim…) arrive here
+  const referralCode = (params.get("ref") || "").trim();
+  const next = params.get("next") || "";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "";
+  const initialMode = params.get("mode") === "signup" || referralCode ? "signup" : "login";
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -31,7 +36,7 @@ function AuthForm() {
       const res = await fetch(`/api/account/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "signup" ? { name, email, password, marketingConsent } : { email, password }),
+        body: JSON.stringify(mode === "signup" ? { name, email, password, marketingConsent, referralCode: referralCode || undefined } : { email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -39,7 +44,7 @@ function AuthForm() {
         return;
       }
       // A new account lands on Loyalty, where its welcome voucher is waiting.
-      router.push(mode === "signup" ? "/account/loyalty" : "/account");
+      router.push(safeNext || (mode === "signup" ? "/account/loyalty" : "/account"));
       router.refresh();
     } finally {
       setSaving(false);
@@ -56,6 +61,9 @@ function AuthForm() {
           </span>
           <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-3xl">My Account</h1>
           <p className="mt-1 text-sm text-primary-foreground/70">Order, earn points and book a table — all in one place.</p>
+          {mode === "signup" && referralCode && (
+            <p className="mt-2 rounded-lg bg-amber-300/15 px-3 py-2 text-sm font-semibold text-amber-100">🎉 A friend invited you to our Rewards Club</p>
+          )}
           {mode === "signup" && (
             <p className="mt-2 text-sm font-semibold text-amber-200">Sign up for 200 points and 20% off your next dine-in visit (up to £20). Earn 10 points per £1 — double Tue–Thu.</p>
           )}

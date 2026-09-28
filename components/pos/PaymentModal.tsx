@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import type { CartItem } from "@/lib/types";
 import PrintButton from "@/components/pos/PrintButton";
+import MemberPanel from "@/components/pos/MemberPanel";
 
 interface Props {
   open: boolean;
@@ -18,6 +19,8 @@ interface Props {
   orderId: number | null;
   orderNumber: string;
   customerId?: number | null;
+  /** a member was put on the bill from the payment screen */
+  onCustomerLinked?: (customerId: number) => void;
   extraOrderIds: number[];
   items: CartItem[];
   subtotal: number;
@@ -100,7 +103,8 @@ export default function PaymentModal({
   onClose,
   orderId,
   orderNumber,
-  customerId,
+  customerId: customerIdProp,
+  onCustomerLinked,
   extraOrderIds,
   items,
   subtotal,
@@ -110,6 +114,10 @@ export default function PaymentModal({
   amountPaid = 0,
   onPaymentComplete,
 }: Props) {
+  // A member added from this screen (🎁 panel) until the parent catches up.
+  const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
+  useEffect(() => { setLinkedCustomerId(null); }, [open, orderId]);
+  const customerId = customerIdProp ?? linkedCustomerId;
   const [step, setStep] = useState<PayStep>("method");
   const [method, setMethod] = useState<"cash" | "card" | null>(null);
   // Cash Received is entered like a cash register: each keypress appends a
@@ -785,6 +793,20 @@ export default function PaymentModal({
                   <span className="text-red-600 text-xl">{formatCurrency(localTotal)}</span>
                 </div>
                 <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)}</div>
+                {!customerId && orderId && (
+                  <MemberPanel
+                    orderIds={[orderId, ...extraOrderIds]}
+                    onLinked={(m, joined) => {
+                      setLinkedCustomerId(m.id);
+                      onCustomerLinked?.(m.id);
+                      toast({
+                        variant: "success",
+                        title: joined ? `${m.name} joined the Rewards Club` : `${m.name} added to this bill`,
+                        description: joined ? "200 points now · 20% off their next dine-in visit" : `${m.loyalty_points} points`,
+                      });
+                    }}
+                  />
+                )}
                 {loyaltyPreview && (
                   <div className="flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 mt-1">
                     <span className="text-rose-800 text-[11px] font-medium truncate">🎁 {loyaltyPreview.customerName} · {loyaltyPreview.currentBalance} pts{loyaltyPreview.tierName ? ` · ${loyaltyPreview.tierName}` : ""}</span>

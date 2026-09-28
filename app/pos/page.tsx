@@ -1461,6 +1461,7 @@ export default function POSPage() {
         orderId={currentOrderId}
         orderNumber={currentOrderNumber}
         customerId={currentCustomerId}
+        onCustomerLinked={setCurrentCustomerId}
         extraOrderIds={allOrderIds.filter(id => id !== currentOrderId)}
         items={cartItems}
         subtotal={subtotal}

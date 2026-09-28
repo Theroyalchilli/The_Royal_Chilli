@@ -1,7 +1,16 @@
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
-import { doublePointsDay, getPointsExpiryTimestamp, issueSignupPoints, issueWelcomeVoucher } from "@/lib/loyalty";
+import {
+  doublePointsDay,
+  findReferrer,
+  generateReferralCode,
+  getPointsExpiryTimestamp,
+  issueReferralVoucher,
+  issueSignupPoints,
+  issueWelcomeVoucher,
+  unlockReferralVoucher,
+} from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
 
 // Every column except password_hash — use this instead of select("*") on
@@ -19,12 +28,13 @@ export async function signupCustomer(
   name: string,
   email: string,
   password: string,
-  marketingConsent = false
+  marketingConsent = false,
+  referralCode?: string | null,
 ): Promise<{ ok: true; customer: Customer } | { ok: false; error: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const { data: existing } = await supabase
     .from("customers")
-    .select("id, name, password_hash")
+    .select("id, name, password_hash, referral_code")
     .ilike("email", cleanEmail)
     .maybeSingle();
 
@@ -39,25 +49,40 @@ export async function signupCustomer(
     // one (not the "Guest" placeholder findOrCreateCustomerByPhone uses).
     const { data, error } = await supabase
       .from("customers")
-      .update({ password_hash, name: existing.name && existing.name !== "Guest" ? existing.name : name.trim(), marketing_consent: marketingConsent })
+      .update({
+        password_hash,
+        name: existing.name && existing.name !== "Guest" ? existing.name : name.trim(),
+        marketing_consent: marketingConsent,
+        ...(existing.referral_code ? {} : { referral_code: await generateReferralCode() }),
+      })
       .eq("id", existing.id)
       .select(CUSTOMER_SAFE_FIELDS)
       .single();
     if (error) return { ok: false, error: "Failed to create account" };
-    // Rewards Club welcome: sign-up points + the 20% dine-in voucher (next visit).
+    // Rewards Club welcome: sign-up points + the 20% dine-in voucher (next
+    // visit). Not a *new* customer, so no Bring a Friend reward for anyone.
     await issueSignupPoints(existing.id);
     await issueWelcomeVoucher(existing.id);
     return { ok: true, customer: data as Customer };
   }
 
+  const referrerId = await findReferrer(referralCode);
   const { data, error } = await supabase
     .from("customers")
-    .insert({ name: name.trim(), email: cleanEmail, password_hash, marketing_consent: marketingConsent })
+    .insert({
+      name: name.trim(),
+      email: cleanEmail,
+      password_hash,
+      marketing_consent: marketingConsent,
+      referral_code: await generateReferralCode(),
+      referred_by_customer_id: referrerId,
+    })
     .select(CUSTOMER_SAFE_FIELDS)
     .single();
   if (error) return { ok: false, error: "Failed to create account" };
   await issueSignupPoints(data.id);
   await issueWelcomeVoucher(data.id);
+  if (referrerId) await issueReferralVoucher(referrerId, data.id);
   return { ok: true, customer: data as Customer };
 }
 
@@ -125,6 +150,50 @@ export async function findOrCreateCustomerByPhone(
   return created.id;
 }
 
+/**
+ * Joining the Rewards Club at the till: find the customer by phone (or make
+ * them), and give the full welcome — sign-up points + the 20% voucher for
+ * their next visit — if they haven't had it yet. (A guest row made silently
+ * from an earlier order hasn't: joining is what earns it.)
+ */
+export async function joinMemberAtTill(input: {
+  name: string;
+  phone: string;
+  email?: string | null;
+  marketingConsent?: boolean;
+}): Promise<{ ok: true; customerId: number; alreadyMember: boolean } | { ok: false; error: string }> {
+  const phone = input.phone.trim();
+  const email = input.email?.trim().toLowerCase() || null;
+  if (!phone) return { ok: false, error: "Phone number is required" };
+
+  if (email) {
+    const { data: byEmail } = await supabase.from("customers").select("id, phone").ilike("email", email).maybeSingle();
+    if (byEmail && byEmail.phone && byEmail.phone !== phone) {
+      return { ok: false, error: "That email already belongs to another member — search for them instead" };
+    }
+  }
+
+  const customerId = await findOrCreateCustomerByPhone(phone, input.name || "Guest", email, input.marketingConsent === true);
+  if (!customerId) return { ok: false, error: "Couldn't create the member" };
+
+  const { data: c } = await supabase.from("customers").select("name, referral_code").eq("id", customerId).single();
+  const updates: Record<string, unknown> = {};
+  if (!c?.referral_code) updates.referral_code = await generateReferralCode();
+  if (input.name.trim() && (!c?.name || c.name === "Guest")) updates.name = input.name.trim();
+  if (Object.keys(updates).length) await supabase.from("customers").update(updates).eq("id", customerId);
+
+  const { data: had } = await supabase
+    .from("loyalty_transactions")
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("reason", "welcome_bonus")
+    .limit(1);
+  const alreadyMember = !!(had && had.length);
+  await issueSignupPoints(customerId);
+  await issueWelcomeVoucher(customerId);
+  return { ok: true, customerId, alreadyMember };
+}
+
 async function getSetting(key: string, fallback: number): Promise<number> {
   const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
   const n = Number(data?.value ?? fallback);
@@ -182,7 +251,9 @@ export async function estimatePurchasePoints(
 // worked example (bonus reflects the tier already held, not the one just
 // reached). Recorded as two separate ledger lines (base, then bonus) rather
 // than one blended total, so the ledger stays self-explanatory.
-export async function awardPurchasePoints(customerId: number, orderTotal: number, orderId: number) {
+// `paidAt` is when the bill was paid — decides Tue–Thu doubling (defaults to
+// now; a receipt claimed days later passes the original payment time).
+export async function awardPurchasePoints(customerId: number, orderTotal: number, orderId: number, paidAt: Date = new Date()) {
   // Idempotency: never award twice for the same order, even if this were
   // ever called more than once (e.g. a retried request).
   const { data: existing } = await supabase
@@ -233,7 +304,7 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
   }
   // Quiet-day doubling (Tue–Thu): the base earn again, as its own ledger line
   // so the customer's history reads "Midweek 2×".
-  if (await doublePointsDay()) {
+  if (await doublePointsDay(paidAt)) {
     await supabase.from("loyalty_transactions").insert({
       customer_id: customerId,
       points_delta: basePoints,
@@ -259,10 +330,10 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
   await checkReferralCompletion(customerId, orderTotal);
 }
 
-// A referral is only rewarded once the referred customer completes a real
-// qualifying purchase — not at registration (registration alone is too easy
-// to abuse and doesn't prove the referral drove real business). Fires at
-// most once per referred customer: guarded by customers.referral_completed_at.
+// Bring a Friend: the referrer's £5 voucher unlocks once the referred
+// customer completes a real qualifying purchase (min spend setting, £20) —
+// not at registration, which is too easy to abuse. Fires at most once per
+// referred customer: guarded by customers.referral_completed_at.
 async function checkReferralCompletion(customerId: number, orderTotal: number) {
   const { data: customer } = await supabase
     .from("customers")
@@ -275,22 +346,14 @@ async function checkReferralCompletion(customerId: number, orderTotal: number) {
   const minSpend = await getSetting("loyalty_referral_min_spend", 20);
   if (orderTotal < minSpend) return;
 
-  const refereePoints = await getSetting("loyalty_referral_referee_points", 500);
-  const referrerPoints = await getSetting("loyalty_referral_referrer_points", 1000);
-  const expiresAt = await getPointsExpiryTimestamp();
-
-  // Mark completed first (guards against a second concurrent purchase racing
-  // the same reward) — if either insert below fails, the referral simply
-  // doesn't get rewarded rather than risking a double-award.
-  const { error: markErr } = await supabase
+  // Mark completed first so a second concurrent purchase can't race it.
+  const { data: marked } = await supabase
     .from("customers")
     .update({ referral_completed_at: new Date().toISOString() })
     .eq("id", customerId)
-    .is("referral_completed_at", null);
-  if (markErr) return;
+    .is("referral_completed_at", null)
+    .select("id");
+  if (!marked || marked.length === 0) return;
 
-  await supabase.from("loyalty_transactions").insert([
-    { customer_id: customerId, points_delta: refereePoints, reason: "referral_bonus", reference_type: "customer", reference_id: customer.referred_by_customer_id, expires_at: expiresAt },
-    { customer_id: customer.referred_by_customer_id, points_delta: referrerPoints, reason: "referral_bonus", reference_type: "customer", reference_id: customerId, expires_at: expiresAt },
-  ]);
+  await unlockReferralVoucher(customerId);
 }

@@ -14,7 +14,15 @@ type Redemption = {
   valid_from?: string | null;
   reward: { name: string; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
 };
-type LoyaltyData = { points: number; rewards: Reward[]; activeRedemption: Redemption | null; welcomeVoucher: Redemption | null };
+type ReferralVoucher = { id: number; status: "locked" | "issued"; code: string | null; expires_at: string | null; friend: string };
+type LoyaltyData = {
+  points: number;
+  rewards: Reward[];
+  activeRedemption: Redemption | null;
+  welcomeVoucher: Redemption | null;
+  referralCode: string | null;
+  referralVouchers: ReferralVoucher[];
+};
 
 const spacedCode = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
 const expiryLabel = (iso: string) =>
@@ -140,6 +148,77 @@ function VoucherPanel({ redemption, onCancel, busy }: { redemption: Redemption |
   );
 }
 
+// Bring a Friend: the member's share link, and what each side gets.
+function BringAFriend({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = typeof window !== "undefined" ? `${window.location.origin}/join?ref=${code}` : `/join?ref=${code}`;
+  const message = `Join me at The Royal Chilli's Rewards Club — you'll get 200 points and 20% off your first dine-in visit: ${link}`;
+
+  async function share() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "The Royal Chilli Rewards Club", text: message });
+        return;
+      } catch {
+        /* cancelled — fall through to copy */
+      }
+    }
+    await navigator.clipboard?.writeText(link).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  return (
+    <div className="mt-3.5 rounded-2xl border border-border bg-surface px-4 py-4 shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Bring a Friend</div>
+      <div className="mt-1 font-semibold">Give 20% off, get £5 off</div>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        Your friend gets 200 points and 20% off their first dine-in visit. You get a £5 dine-in voucher as soon as they visit.
+      </p>
+      <div className="mt-3 rounded-lg bg-muted px-3 py-2 text-center font-mono text-sm tracking-wider">{code}</div>
+      <div className="mt-2 flex gap-2">
+        <button onClick={share} className="flex-1 rounded-lg bg-primary py-2.5 text-xs font-semibold text-primary-foreground">
+          {copied ? "Link copied ✓" : "Share my link"}
+        </button>
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent(message)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-center text-xs font-semibold text-white"
+        >
+          WhatsApp
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function ReferralVouchers({ vouchers }: { vouchers: ReferralVoucher[] }) {
+  if (vouchers.length === 0) return null;
+  return (
+    <div className="mt-3.5 rounded-2xl border border-border bg-surface shadow-sm">
+      {vouchers.map((v) => (
+        <div key={v.id} className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-b-0">
+          <div>
+            <div className="font-semibold">£5 off · dine-in</div>
+            <div className="text-xs text-muted-foreground">Thanks for bringing {v.friend}</div>
+            {v.status === "issued" && v.expires_at && <div className="text-xs text-amber-600">Expires {expiryLabel(v.expires_at)}</div>}
+          </div>
+          {v.status === "locked" ? (
+            <div className="text-right text-xs text-muted-foreground">
+              🔒 Unlocks when
+              <br />
+              {v.friend} visits
+            </div>
+          ) : (
+            <div className="rounded-lg bg-primary px-3 py-2 font-mono text-sm tracking-wider text-primary-foreground">{spacedCode(v.code ?? "")}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LoyaltyInner() {
   const router = useRouter();
   const initialTab = useSearchParams().get("tab") === "voucher" ? "voucher" : "rewards";
@@ -197,6 +276,7 @@ function LoyaltyInner() {
       <h1 className="font-[family-name:var(--font-playfair)] text-2xl">Loyalty</h1>
 
       {data.welcomeVoucher && <WelcomeVoucher voucher={data.welcomeVoucher} />}
+      <ReferralVouchers vouchers={data.referralVouchers ?? []} />
 
       <div className="mt-3.5 rounded-2xl border border-border bg-surface shadow-sm">
         <Donut points={data.points} nextReward={nextReward} />
@@ -215,6 +295,7 @@ function LoyaltyInner() {
 
       {tab === "rewards" && (
         <>
+          {data.referralCode && <BringAFriend code={data.referralCode} />}
           <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Redeem your points</div>
           <div className="rounded-2xl border border-border bg-surface shadow-sm">
             {data.rewards.length === 0 ? (

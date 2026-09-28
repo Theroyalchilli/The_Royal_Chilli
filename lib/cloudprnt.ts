@@ -5,6 +5,8 @@ import { roundNumberFor } from "@/lib/kitchen-rounds";
 import { zReportLines } from "@/lib/z-report";
 import { siteContent } from "@/lib/site-content";
 import { getZReport } from "@/lib/z-report-db";
+import QRCode from "qrcode";
+import { claimUrl, paidAtFor, pointsForBill } from "@/lib/claim";
 
 // Renders print_jobs rows (lib/print-queue.ts) into what the Star mC-Print3
 // prints. A ticket is built once as styled lines, then encoded either as
@@ -21,6 +23,10 @@ export type TicketLine = {
   // Extra-thick strokes (Z report section headings). The browser draws it
   // heavier; the printer's own font has no heavier weight, so it's bold there.
   thick?: boolean;
+  // A QR code of this text (printed centred; `text` is the URL itself).
+  // `qrSvg` is the same code pre-drawn for browser printing.
+  qr?: boolean;
+  qrSvg?: string;
 };
 export type Ticket = TicketLine[];
 
@@ -242,6 +248,22 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
   if (refunded > 0.009) t.push({ text: row("Total Refunded", money(refunded)), bold: true });
   if (balanceDue > 0.01) t.push({ text: row("Balance Due", money(balanceDue)), bold: true });
   t.push({ text: DIVIDER });
+
+  // No member on a paid dine-in bill: invite them to claim its points.
+  if (order.order_type === "dine_in" && !order.customer_id && state === "paid") {
+    const points = await pointsForBill(Number(order.total), await paidAtFor(orderId));
+    if (points > 0) {
+      const url = claimUrl(orderId);
+      t.push({ text: "JOIN OUR REWARDS CLUB", align: "center", bold: true });
+      t.push({ text: `Scan to claim ${points} points`, align: "center", bold: true });
+      t.push({ text: "for this visit", align: "center" });
+      t.push({ text: url, align: "center", qr: true, qrSvg: await QRCode.toString(url, { type: "svg", margin: 0, errorCorrectionLevel: "M" }).catch(() => undefined) });
+      t.push({ text: "+200 bonus points & 20% off", align: "center" });
+      t.push({ text: "your next dine-in visit", align: "center" });
+      t.push({ text: "Claim within 7 days", align: "center" });
+      t.push({ text: DIVIDER });
+    }
+  }
   t.push({ text: "Thank you for dining with us.", align: "center" });
   t.push({ text: `Printed ${londonTime(new Date().toISOString(), true)}`, align: "center" });
   return t;
@@ -290,6 +312,16 @@ export function toStarPrnt(ticket: Ticket): Uint8Array {
   ];
   for (const l of ticket) {
     out.push(ESC, GS, 0x61, l.align === "center" ? 1 : 0);
+    if (l.qr) {
+      // StarPRNT QR: model 2, error correction M, cell size 6, data, print
+      const data = encodeCp437(l.text);
+      out.push(ESC, GS, 0x79, 0x53, 0x30, 2);
+      out.push(ESC, GS, 0x79, 0x53, 0x31, 1);
+      out.push(ESC, GS, 0x79, 0x53, 0x32, 6);
+      out.push(ESC, GS, 0x79, 0x44, 0x31, 0, data.length & 0xff, (data.length >> 8) & 0xff, ...data);
+      out.push(ESC, GS, 0x79, 0x50, LF);
+      continue;
+    }
     if (l.bold) out.push(ESC, 0x45);
     if (l.size === "big") out.push(ESC, 0x69, 1, 1);
     else if (l.size === "tall") out.push(ESC, 0x69, 1, 0);

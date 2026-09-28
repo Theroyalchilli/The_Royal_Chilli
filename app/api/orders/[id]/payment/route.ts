@@ -79,7 +79,7 @@ export async function POST(
     // payment row for each (previously they were marked paid with no payment history at all,
     // which would silently undercount cash/card totals in reporting).
     if (Array.isArray(extraOrderIds) && extraOrderIds.length > 0) {
-      const { data: extraOrders } = await supabase.from("orders").select("id, total, amount_paid").in("id", extraOrderIds);
+      const { data: extraOrders } = await supabase.from("orders").select("id, total, amount_paid, customer_id").in("id", extraOrderIds);
       for (const extra of extraOrders || []) {
         const extraRemaining = Math.round((Number(extra.total) - Number(extra.amount_paid)) * 100) / 100;
         if (extraRemaining <= 0.01) continue;
@@ -89,6 +89,8 @@ export async function POST(
         });
         await supabase.from("orders").update({ status: "paid", updated_at: new Date().toISOString() }).eq("id", extra.id);
         depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e));
+        // a member linked to the table earns on every round, not just the first
+        if (extra.customer_id) await awardPurchasePoints(extra.customer_id, Number(extra.total), extra.id);
         waitUntil(sendOrderPaymentReceipt(extra.id));
       }
     }

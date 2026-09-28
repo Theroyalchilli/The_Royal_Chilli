@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (error || !redemption) return NextResponse.json({ error: "INVALID_CODE", message: "No reward found with that code" }, { status: 404 });
 
+  if (redemption.status === "locked") {
+    return NextResponse.json({ error: "LOCKED", message: "This Bring a Friend voucher unlocks after their friend's first visit" }, { status: 400 });
+  }
   if (redemption.status === "redeemed") {
     return NextResponse.json({ error: "ALREADY_REDEEMED", message: "This code has already been used" }, { status: 400 });
   }

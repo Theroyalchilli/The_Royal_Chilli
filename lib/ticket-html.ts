@@ -24,6 +24,8 @@ export const TICKET_CSS = `
   .big { font-size: 6mm; font-weight: 700; }
   /* Extra-thick: the same letters drawn with heavier strokes. */
   .thick { text-shadow: 0.25px 0 0 #000, 0.5px 0 0 #000, -0.25px 0 0 #000, 0 0.25px 0 #000; }
+  .qr { display: flex; justify-content: center; margin: 2mm 0; }
+  .qr svg { width: 38mm; height: 38mm; }
   @media print {
     @page { margin: 0; }
     .no-print { display: none; }
@@ -38,6 +40,10 @@ const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 
 // A complete printable page, for printing from a hidden iframe.
 export function ticketHtml(ticket: Ticket): string {
-  const body = ticket.map((l) => `<div class="${lineClass(l)}">${escapeHtml(l.text) || " "}</div>`).join("");
+  // A QR line prints its pre-drawn SVG (generated server-side by the qrcode
+  // package, never from user input); without one, its text (the URL).
+  const body = ticket
+    .map((l) => (l.qr && l.qrSvg ? `<div class="qr">${l.qrSvg}</div>` : `<div class="${lineClass(l)}">${escapeHtml(l.text) || " "}</div>`))
+    .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><style>${TICKET_CSS}</style></head><body><div class="ticket">${body}</div></body></html>`;
 }

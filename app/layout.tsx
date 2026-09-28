@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Poppins, Playfair_Display, Cinzel, Work_Sans, Space_Grotesk } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
 import "./globals.css";
+import { SITE_URL } from "@/lib/site-url";
 
 const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-poppins" });
 
@@ -35,7 +36,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app"),
+  metadataBase: new URL(SITE_URL),
   title: "The Royal Chilli - POS System",
   description: "Point of Sale system for The Royal Chilli, Hounslow",
   manifest: "/manifest.json",

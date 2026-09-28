@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/lib/site-url";
 // Transactional email via Brevo (https://developers.brevo.com/reference/sendtransacemail).
 // Same pattern as lib/stripe.ts: allowed to be unconfigured until BREVO_API_KEY
 // is set, so the rest of the ordering/reservation flow never depends on email
@@ -10,7 +11,7 @@ const RESTAURANT = {
   address: "43 Kingsley Road, Hounslow, London, TW3 1PA",
   phone: "020 8797 3044",
   mapUrl: "https://www.google.com/maps?cid=3983787686224519813",
-  logoUrl: "https://royal-chilli-pos.vercel.app/logo.png",
+  logoUrl: `${SITE_URL}/logo.png`,
 };
 
 // Colors/fonts match the live site's own theme (app/globals.css, layout.tsx)

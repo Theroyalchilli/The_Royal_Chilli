@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { SITE_URL } from "@/lib/site-url";
 
 // Deliberately allowed to be null: online payment isn't required for the
 // rest of the app to function, and STRIPE_SECRET_KEY won't be set until the
@@ -11,7 +12,7 @@ export const stripe = process.env.STRIPE_SECRET_KEY
 export const stripeConfigured = !!stripe;
 
 export function siteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
+  return SITE_URL;
 }
 
 // Single fixed premises — used when registering a Stripe Terminal reader,

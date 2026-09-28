@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
 import { londonDateStr } from "@/lib/london-date";
+import { SITE_URL } from "@/lib/site-url";
 
 // Daily sweep of employee_documents.expiry_date — any document with an
 // expiry (right-to-work, visa/BRP, certificate, contract review, etc, not
@@ -12,7 +13,6 @@ import { londonDateStr } from "@/lib/london-date";
 // so this needs no new UI: the employee sees a generic heads-up next time
 // they open the attendance app, managers/HR see the specific one — both
 // already have a working notification bell there, Staff Hub doesn't.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
 
 const THRESHOLDS = [
   { days: 60, column: "reminder_60_sent" as const },

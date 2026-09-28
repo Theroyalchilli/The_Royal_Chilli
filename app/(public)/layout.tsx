@@ -7,6 +7,7 @@ import PromoBanner from "@/components/site/PromoBanner";
 import { buildRestaurantSchema } from "@/lib/schema";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 import supabase from "@/lib/supabase";
+import { SITE_URL } from "@/lib/site-url";
 
 // Every page under this layout reads staff-editable content (opening hours,
 // hero text, promotions, etc.) straight from Supabase with no revalidate
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 const jost = Jost({ subsets: ["latin"], weight: ["300", "400", "500", "600"], variable: "--font-jost" });
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
+  const siteUrl = SITE_URL;
   const openingHours = await getOpeningHours();
   const schema = buildRestaurantSchema(siteUrl, openingHours);
   const hoursSummary = summarizeOpeningHours(openingHours);

@@ -10,6 +10,7 @@ import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import { getLoyaltySetting, ORDER_EARN_REASONS } from "@/lib/loyalty";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
 import { getVisitBonusRules, visitBonusFor } from "@/lib/visits";
+import { SITE_URL } from "@/lib/site-url";
 
 // Rewards Club emails (phase 4). Welcome and "your £5 is unlocked" are about
 // the customer's own account, so they go to everyone with an email. The
@@ -17,7 +18,6 @@ import { getVisitBonusRules, visitBonusFor } from "@/lib/visits";
 // "email me offers" (customers.marketing_consent), each with an unsubscribe
 // link. Every send is best-effort — it never fails whatever triggered it.
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
 const ACCOUNT_URL = `${SITE_URL}/account/loyalty`;
 export const NUDGE_AFTER_DAYS = 10;
 

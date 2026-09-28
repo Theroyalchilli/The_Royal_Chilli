@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import supabase from "@/lib/supabase";
 import { doublePointsDay, getLoyaltySetting } from "@/lib/loyalty";
+import { SITE_URL } from "@/lib/site-url";
 
 // "Claim your points" QR on dine-in receipts that had no member on them: the
 // guest scans it, signs up or logs in, and the bill's points land in their
@@ -11,7 +12,6 @@ import { doublePointsDay, getLoyaltySetting } from "@/lib/loyalty";
 export const CLAIM_WINDOW_DAYS = 7;
 
 const SECRET = process.env.JWT_SECRET || "royal-chilli-pos-fallback-secret-key-2024";
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
 
 export function claimKey(orderId: number): string {
   return createHmac("sha256", SECRET).update(`claim:${orderId}`).digest("base64url").slice(0, 12);

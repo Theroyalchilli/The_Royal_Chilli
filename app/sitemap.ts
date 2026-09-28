@@ -1,8 +1,7 @@
 import type { MetadataRoute } from "next";
-
-// NEXT_PUBLIC_SITE_URL should be set to the real production domain once one
-// is chosen — falls back to the default Vercel URL so this still works before that.
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://royal-chilli-pos.vercel.app";
+import { SITE_URL } from "@/lib/site-url";
+// The live domain (lib/site-url.ts).
+const BASE_URL = SITE_URL;
 
 // Only the customer-facing, search-indexable pages. /order/checkout, /table/*,
 // and everything under /pos, /staff, /login are transactional or private —

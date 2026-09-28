@@ -85,7 +85,15 @@ export async function mergeCustomers(
     .eq("customer_id", keepId)
     .eq("reason", "welcome_bonus")
     .order("id");
-  const extra = (welcomes ?? []).slice(1).reduce((s, w) => s + Number(w.points_delta), 0);
+  // minus what earlier merges already took back — merging 3 records into one
+  // must not take the same extra welcome back twice
+  const { data: takenBack } = await supabase
+    .from("loyalty_transactions")
+    .select("points_delta")
+    .eq("customer_id", keepId)
+    .eq("reference_type", "merge_duplicate_welcome");
+  const alreadyTaken = -(takenBack ?? []).reduce((s, t) => s + Number(t.points_delta), 0);
+  const extra = (welcomes ?? []).slice(1).reduce((s, w) => s + Number(w.points_delta), 0) - alreadyTaken;
   if (extra > 0) {
     await supabase.from("loyalty_transactions").insert({
       customer_id: keepId,

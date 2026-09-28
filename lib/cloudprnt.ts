@@ -66,9 +66,45 @@ function rowAt(width: number, left: string, right: string): string {
   return left + " ".repeat(width - left.length - right.length) + right;
 }
 
-// A line holding "\n" (a wrapped row) becomes separate lines, same style.
-function splitLines(ticket: Ticket): Ticket {
-  return ticket.flatMap((l) => (l.text.includes("\n") ? l.text.split("\n").map((text) => ({ ...l, text })) : [l]));
+// Fit `text` into lines of at most `width`, breaking between words (never
+// mid-word unless one word is longer than the line). Continuation lines keep
+// the original indent, so "   ** no onions please…" stays lined up.
+export function wrapWords(text: string, width: number): string[] {
+  if (text.length <= width || width < 8) return [text];
+  const indent = text.match(/^\s*/)![0];
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let cur = indent;
+  for (const w of words) {
+    const room = width - cur.length - (cur.trim() ? 1 : 0);
+    if (w.length <= room) {
+      cur = cur.trim() ? `${cur} ${w}` : `${cur}${w}`;
+      continue;
+    }
+    if (cur.trim()) lines.push(cur);
+    let rest = w;
+    while (indent.length + rest.length > width) {
+      // a single word longer than the line — split it, nothing else fits
+      lines.push(indent + rest.slice(0, width - indent.length));
+      rest = rest.slice(width - indent.length);
+    }
+    cur = indent + rest;
+  }
+  if (cur.trim()) lines.push(cur);
+  return lines;
+}
+
+// A line holding "\n" (a wrapped row) becomes separate lines, same style, and
+// anything still too long wraps between words. "big" text is double width,
+// so it gets half the columns. QR lines are left alone.
+function splitLines(ticket: Ticket, width: number): Ticket {
+  return ticket.flatMap((l) =>
+    l.qr
+      ? [l]
+      : l.text
+          .split("\n")
+          .flatMap((text) => wrapWords(text, l.size === "big" ? Math.floor(width / 2) : width).map((t) => ({ ...l, text: t }))),
+  );
 }
 
 // Each builder lays out for a given line width: the printer's own 48, or
@@ -83,7 +119,7 @@ export async function buildTicket(job: PrintJob, width = LINE_WIDTH): Promise<Ti
   let ticket: Ticket | null = null;
   if (job.kind === "zreport") ticket = job.work_period_id ? await buildZReportTicket(job.work_period_id, width) : null;
   else if (job.order_id) ticket = job.kind === "receipt" ? await buildReceipt(job.order_id, width) : await buildKitchenTicket(job, job.order_id, width);
-  return ticket && splitLines(ticket);
+  return ticket && splitLines(ticket, width);
 }
 
 // "43 Kingsley Road, Hounslow, London, TW3 1PA" as lines of at most `width`,

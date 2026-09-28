@@ -156,3 +156,22 @@ describe("addressLines", () => {
     expect(addressLines("43 Kingsley Road, Hounslow, London, TW3 1PA", 48)).toEqual(["43 Kingsley Road, Hounslow, London, TW3 1PA"]);
   });
 });
+
+describe("long lines wrap between words", () => {
+  it("never splits a word when it can break at a space", async () => {
+    const { wrapWords } = await import("@/lib/cloudprnt");
+    expect(wrapWords("Discount (Loyalty reward: Welcome 20% off (dine-in))", 35)).toEqual([
+      "Discount (Loyalty reward: Welcome",
+      "20% off (dine-in))",
+    ]);
+    expect(wrapWords("Address: 12 High Street, Hounslow, TW3 1HE", 35)).toEqual(["Address: 12 High Street, Hounslow,", "TW3 1HE"]);
+  });
+  it("keeps the indent on continuation lines, and short lines alone", async () => {
+    const { wrapWords } = await import("@/lib/cloudprnt");
+    expect(wrapWords("   ** no onions, extra chilli and lemon on the side", 35)).toEqual([
+      "   ** no onions, extra chilli and",
+      "   lemon on the side",
+    ]);
+    expect(wrapWords("1x Garlic Naan", 35)).toEqual(["1x Garlic Naan"]);
+  });
+});

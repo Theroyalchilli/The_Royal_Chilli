@@ -5,10 +5,9 @@ import { canViewCrm } from "@/lib/permissions";
 import { recalcTotals } from "@/lib/order-totals";
 import { getCashCreditInfo } from "@/lib/loyalty";
 
-// One-tap "use my points" at the till — no code, no Staff Hub trip. Only
-// ever offered in fixed £-cap chunks (see getCashCreditInfo): a balance
-// worth less than the cap isn't redeemable yet, and only one chunk applies
-// per transaction even if the balance is worth more. Same discount
+// One-tap "use my points" at the till — no code, no Staff Hub trip. Offered
+// in £ steps up to the per-visit cap (see getCashCreditInfo: £5 or £10);
+// body `amount` picks one, default the largest. Dine-in bills only. Same discount
 // mechanism as a code redemption or a manager discount — replaces rather
 // than stacks with any existing discount on the order.
 export async function POST(req: NextRequest) {
@@ -17,17 +16,20 @@ export async function POST(req: NextRequest) {
     if (!session || !canViewCrm(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { customer_id, order_id } = await req.json();
+    const { customer_id, order_id, amount } = await req.json();
     if (!customer_id || !order_id) return NextResponse.json({ error: "customer_id and order_id are required" }, { status: 400 });
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, status, is_paid")
+      .select("id, status, is_paid, order_type")
       .eq("id", order_id)
       .single();
     if (orderErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     if (order.is_paid || order.status === "cancelled") {
       return NextResponse.json({ error: "This order can no longer be changed" }, { status: 409 });
+    }
+    if (order.order_type !== "dine_in") {
+      return NextResponse.json({ error: "Points can only be used on dine-in bills" }, { status: 400 });
     }
 
     // Guard against double-tapping the button (or a retried request) — never
@@ -48,14 +50,19 @@ export async function POST(req: NextRequest) {
     const cashCredit = await getCashCreditInfo(customer.loyalty_points);
     if (!cashCredit.eligible) {
       return NextResponse.json(
-        { error: `Not enough points yet — needs £${(cashCredit.cap - cashCredit.convertedValue).toFixed(2)} more` },
+        { error: `Not enough points yet — needs £${(cashCredit.step - cashCredit.convertedValue).toFixed(2)} more` },
         { status: 400 }
       );
     }
+    const useAmount = amount == null ? cashCredit.redeemAmount : Number(amount);
+    if (!cashCredit.options.includes(useAmount)) {
+      return NextResponse.json({ error: `Can use ${cashCredit.options.map((o) => `£${o}`).join(" or ")} of points on this visit` }, { status: 400 });
+    }
+    const usePoints = Math.round(useAmount * cashCredit.rate);
 
     const { error: ledgerErr } = await supabase.from("loyalty_transactions").insert({
       customer_id,
-      points_delta: -cashCredit.redeemPoints,
+      points_delta: -usePoints,
       reason: "redeemed_reward",
       reference_type: "cash_credit",
       reference_id: order_id,
@@ -68,14 +75,14 @@ export async function POST(req: NextRequest) {
       .update({
         discount_type: "amount",
         discount_pct: null,
-        discount: cashCredit.redeemAmount,
+        discount: useAmount,
         discount_reason: "Loyalty credit",
         updated_at: new Date().toISOString(),
       })
       .eq("id", order_id);
     const bill = await recalcTotals(String(order_id));
 
-    return NextResponse.json({ success: true, amount: cashCredit.redeemAmount, points_spent: cashCredit.redeemPoints, bill });
+    return NextResponse.json({ success: true, amount: useAmount, points_spent: usePoints, bill });
   } catch (error) {
     console.error("Cash-credit redeem error:", error);
     return NextResponse.json({ error: "Failed to apply loyalty credit" }, { status: 500 });

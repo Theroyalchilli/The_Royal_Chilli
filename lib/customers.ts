@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
-import { getPointsExpiryTimestamp, issueWelcomeVoucher } from "@/lib/loyalty";
+import { doublePointsDay, getPointsExpiryTimestamp, issueSignupPoints, issueWelcomeVoucher } from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
 
 // Every column except password_hash — use this instead of select("*") on
@@ -44,7 +44,8 @@ export async function signupCustomer(
       .select(CUSTOMER_SAFE_FIELDS)
       .single();
     if (error) return { ok: false, error: "Failed to create account" };
-    // Signing up earns the welcome voucher (20% off a dine-in visit), not points.
+    // Rewards Club welcome: sign-up points + the 20% dine-in voucher (next visit).
+    await issueSignupPoints(existing.id);
     await issueWelcomeVoucher(existing.id);
     return { ok: true, customer: data as Customer };
   }
@@ -55,6 +56,7 @@ export async function signupCustomer(
     .select(CUSTOMER_SAFE_FIELDS)
     .single();
   if (error) return { ok: false, error: "Failed to create account" };
+  await issueSignupPoints(data.id);
   await issueWelcomeVoucher(data.id);
   return { ok: true, customer: data as Customer };
 }
@@ -140,7 +142,10 @@ async function getPointsRate(): Promise<number> {
 // this order right now — same rate/tier logic, just never writes anything.
 // Used to show staff a live "+N points" figure during payment, so it can
 // never disagree with what actually posts once the payment completes.
-export async function estimatePurchasePoints(customerId: number, orderTotal: number): Promise<{ base: number; bonus: number; total: number; tierName: string | null; multiplier: number }> {
+export async function estimatePurchasePoints(
+  customerId: number,
+  orderTotal: number,
+): Promise<{ base: number; bonus: number; midweek: number; doubleDay: string | null; total: number; tierName: string | null; multiplier: number }> {
   const rate = await getPointsRate();
   const base = Math.floor(orderTotal * rate);
 
@@ -155,8 +160,19 @@ export async function estimatePurchasePoints(customerId: number, orderTotal: num
   const tier = tierForSpend(tiers, lifetimeSpend);
   const multiplier = tier?.points_multiplier ?? 1;
   const bonus = multiplier > 1 ? Math.floor(base * (multiplier - 1)) : 0;
+  const doubleDay = await doublePointsDay();
+  const midweek = doubleDay ? base : 0;
 
-  return { base, bonus, total: base + bonus, tierName: tier?.name ?? null, multiplier };
+  return {
+    base,
+    bonus,
+    midweek,
+    doubleDay,
+    total: base + bonus + midweek,
+    // tiers only matter while they multiply anything (Rewards Club: they don't)
+    tierName: multiplier > 1 ? (tier?.name ?? null) : null,
+    multiplier,
+  };
 }
 
 // Base earn + tier-multiplier bonus, awarded once a payment fully settles an
@@ -210,6 +226,18 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
       customer_id: customerId,
       points_delta: bonusPoints,
       reason: "tier_bonus",
+      reference_type: "order",
+      reference_id: orderId,
+      expires_at: expiresAt,
+    });
+  }
+  // Quiet-day doubling (Tue–Thu): the base earn again, as its own ledger line
+  // so the customer's history reads "Midweek 2×".
+  if (await doublePointsDay()) {
+    await supabase.from("loyalty_transactions").insert({
+      customer_id: customerId,
+      points_delta: basePoints,
+      reason: "midweek_bonus",
       reference_type: "order",
       reference_id: orderId,
       expires_at: expiresAt,

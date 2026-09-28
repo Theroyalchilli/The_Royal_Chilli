@@ -11,6 +11,7 @@ type Redemption = {
   points_spent: number;
   issued_at: string;
   expires_at: string;
+  valid_from?: string | null;
   reward: { name: string; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
 };
 type LoyaltyData = { points: number; rewards: Reward[]; activeRedemption: Redemption | null; welcomeVoucher: Redemption | null };
@@ -34,6 +35,12 @@ function WelcomeVoucher({ voucher }: { voucher: Redemption }) {
         {spacedCode(voucher.code)}
       </div>
       <div className="text-xs text-muted-foreground">Show this code to staff when you pay for a dine-in meal.</div>
+      {voucher.valid_from && new Date(voucher.valid_from) > new Date() && (
+        <div className="mt-1 text-xs text-muted-foreground">
+          For your next visit — use it from{" "}
+          {new Date(voucher.valid_from).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+        </div>
+      )}
       <div className="mt-1 text-xs text-amber-600">Expires {expiryLabel(voucher.expires_at)}</div>
     </div>
   );
@@ -229,7 +236,17 @@ function LoyaltyInner() {
 
       {tab === "how" && (
         <>
-          <div className="mb-1 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Redeem rewards</div>
+          <div className="mb-1 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Earn points</div>
+          <div className="mb-6 rounded-2xl border border-border bg-surface px-4 py-4 text-[13.5px] shadow-sm">
+            <ul className="space-y-1.5">
+              <li>🍛 <b>10 points for every £1</b> you spend — dine-in, collection or delivery</li>
+              <li>⭐ <b>Double points Tuesday to Thursday</b></li>
+              <li>🎁 <b>100 points = £1 off</b> — use up to £10 of points per visit</li>
+              <li>🍽️ Points and vouchers can be used when you <b>dine in</b></li>
+              <li>⏳ Points expire 12 months after you earn them</li>
+            </ul>
+          </div>
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Redeem rewards</div>
           <p className="mb-3 px-0.5 text-[13.5px] text-muted-foreground">Simple steps to redeem your points at checkout.</p>
           <div className="rounded-2xl border border-border bg-surface shadow-sm">
             {[

@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const customerId = Number(searchParams.get("customer_id"));
   const amount = Number(searchParams.get("amount"));
+  const orderId = Number(searchParams.get("order_id")) || null;
   if (!customerId || isNaN(amount)) {
     return NextResponse.json({ error: "customer_id and amount are required" }, { status: 400 });
   }
@@ -23,12 +24,20 @@ export async function GET(req: NextRequest) {
 
   const estimate = await estimatePurchasePoints(customerId, amount);
   const cashCredit = await getCashCreditInfo(customer.loyalty_points);
+  // Points and vouchers are dine-in only (Rewards Club)
+  let canSpend = true;
+  if (orderId) {
+    const { data: order } = await supabase.from("orders").select("order_type").eq("id", orderId).maybeSingle();
+    canSpend = order?.order_type === "dine_in";
+  }
 
   return NextResponse.json({
     customer_name: customer.name,
     current_balance: customer.loyalty_points,
     will_earn: estimate.total,
     tier_name: estimate.tierName,
+    double_day: estimate.doubleDay,
+    can_spend: canSpend,
     cash_credit: cashCredit,
   });
 }

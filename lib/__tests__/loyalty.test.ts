@@ -1,4 +1,4 @@
-const settingValues: Record<string, string> = {};
+const settingValues: Record<string, unknown> = {};
 
 jest.mock("../supabase", () => ({
   __esModule: true,
@@ -13,7 +13,17 @@ jest.mock("../supabase", () => ({
   },
 }));
 
-import { generateRedemptionCode, getCashCreditInfo, orderTypesLabel, rewardAllowsOrderType, rewardDiscount } from "@/lib/loyalty";
+import {
+  doublePointsDay,
+  generateRedemptionCode,
+  getCashCreditInfo,
+  isoWeekday,
+  nextTradingDayStart,
+  notYetValidMessage,
+  orderTypesLabel,
+  rewardAllowsOrderType,
+  rewardDiscount,
+} from "@/lib/loyalty";
 
 describe("generateRedemptionCode", () => {
   it("avoids visually ambiguous characters (0/O, 1/I/L)", () => {
@@ -37,48 +47,98 @@ describe("generateRedemptionCode", () => {
 describe("getCashCreditInfo", () => {
   beforeEach(() => {
     settingValues.loyalty_conversion_points_per_pound = "100";
-    settingValues.loyalty_max_redeem_per_visit = "5";
+    settingValues.loyalty_max_redeem_per_visit = "10";
+    settingValues.loyalty_redeem_step = "5";
   });
 
-  it("is not eligible below the cap, and reports zero redeemable", async () => {
+  it("is not eligible below the first £5 step", async () => {
     const info = await getCashCreditInfo(499); // £4.99 worth
     expect(info.convertedValue).toBeCloseTo(4.99, 2);
     expect(info.eligible).toBe(false);
+    expect(info.options).toEqual([]);
     expect(info.redeemAmount).toBe(0);
     expect(info.redeemPoints).toBe(0);
   });
 
-  it("is eligible right at the cap", async () => {
-    const info = await getCashCreditInfo(500); // exactly £5
+  it("offers £5 once there's £5 of points", async () => {
+    const info = await getCashCreditInfo(750); // £7.50 worth
     expect(info.eligible).toBe(true);
+    expect(info.options).toEqual([5]);
     expect(info.redeemAmount).toBe(5);
     expect(info.redeemPoints).toBe(500);
   });
 
-  it("caps redemption at one chunk even with a much larger balance", async () => {
-    const info = await getCashCreditInfo(1250); // £12.50 worth
-    expect(info.convertedValue).toBeCloseTo(12.5, 2);
-    expect(info.eligible).toBe(true);
-    expect(info.redeemAmount).toBe(5); // still only one £5 chunk
-    expect(info.redeemPoints).toBe(500);
+  it("offers £5 or £10, never more than the £10 per-visit cap", async () => {
+    const info = await getCashCreditInfo(4200); // £42 worth
+    expect(info.options).toEqual([5, 10]);
+    expect(info.redeemAmount).toBe(10);
+    expect(info.redeemPoints).toBe(1000);
   });
 
-  it("respects a configured rate and cap other than the defaults", async () => {
-    settingValues.loyalty_conversion_points_per_pound = "200";
-    settingValues.loyalty_max_redeem_per_visit = "10";
-    const info = await getCashCreditInfo(2000); // 2000/200 = £10
-    expect(info.eligible).toBe(true);
-    expect(info.redeemAmount).toBe(10);
-    expect(info.redeemPoints).toBe(2000);
+  it("with no step set, the cap is the only amount (old behaviour)", async () => {
+    settingValues.loyalty_max_redeem_per_visit = "5";
+    delete settingValues.loyalty_redeem_step;
+    const info = await getCashCreditInfo(1250);
+    expect(info.options).toEqual([5]);
+    expect(info.redeemAmount).toBe(5);
   });
 
   it("falls back to sensible defaults when settings are missing", async () => {
     delete settingValues.loyalty_conversion_points_per_pound;
     delete settingValues.loyalty_max_redeem_per_visit;
+    delete settingValues.loyalty_redeem_step;
     const info = await getCashCreditInfo(500);
     expect(info.rate).toBe(100);
     expect(info.cap).toBe(5);
     expect(info.eligible).toBe(true);
+  });
+});
+
+describe("double points days", () => {
+  beforeEach(() => {
+    settingValues.loyalty_double_points_days = [2, 3, 4];
+  });
+  // 2026-10-07 is a Wednesday. BST = UTC+1.
+  const uk = (day: number, hour: number) => new Date(Date.UTC(2026, 9, day, hour - 1));
+
+  it("knows its weekdays", () => {
+    expect(isoWeekday("2026-10-05")).toBe(1); // Mon
+    expect(isoWeekday("2026-10-07")).toBe(3); // Wed
+    expect(isoWeekday("2026-10-11")).toBe(7); // Sun
+  });
+
+  it("Tue–Thu are double, Mon and Fri aren't", async () => {
+    expect(await doublePointsDay(uk(5, 19))).toBeNull(); // Mon evening
+    expect(await doublePointsDay(uk(6, 19))).toBe("Tuesday");
+    expect(await doublePointsDay(uk(7, 13))).toBe("Wednesday");
+    expect(await doublePointsDay(uk(8, 21))).toBe("Thursday");
+    expect(await doublePointsDay(uk(9, 19))).toBeNull(); // Fri
+  });
+
+  it("goes by trading day: Thursday night after midnight still counts, Monday night doesn't", async () => {
+    expect(await doublePointsDay(uk(9, 0.5))).toBe("Thursday"); // Fri 00:30 = Thu trading day
+    expect(await doublePointsDay(uk(6, 0.5))).toBeNull(); // Tue 00:30 = Mon trading day
+  });
+
+  it("no setting → never double", async () => {
+    delete settingValues.loyalty_double_points_days;
+    expect(await doublePointsDay(uk(7, 13))).toBeNull();
+  });
+});
+
+describe("welcome voucher is for the next visit", () => {
+  it("starts at 5am UK the next trading day", () => {
+    // joined Wed 7 Oct 20:00 BST → valid from Thu 8 Oct 05:00 BST (04:00 UTC)
+    expect(nextTradingDayStart(new Date("2026-10-07T19:00:00Z")).toISOString()).toBe("2026-10-08T04:00:00.000Z");
+    // joined Thu 00:30 (still Wednesday's trading day) → same Thursday 05:00
+    expect(nextTradingDayStart(new Date("2026-10-07T23:30:00Z")).toISOString()).toBe("2026-10-08T04:00:00.000Z");
+  });
+
+  it("the till explains a voucher that isn't valid yet", () => {
+    const now = new Date("2026-10-07T19:00:00Z");
+    expect(notYetValidMessage("2026-10-08T04:00:00Z", now)).toMatch(/next visit.*Thu 8 Oct/);
+    expect(notYetValidMessage("2026-10-07T04:00:00Z", now)).toBeNull();
+    expect(notYetValidMessage(null, now)).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
 import { findStaffByPin, isManagerRole } from "@/lib/staff-pin";
 import { refundTransaction, sumupTransactionFromReference } from "@/lib/sumup";
+import { ORDER_EARN_REASONS } from "@/lib/loyalty";
 
 // A refund is just another row in `payments`, with a negative amount — same
 // pattern as a normal payment, so the existing trigger that keeps
@@ -212,7 +213,7 @@ async function refundCard(
 
 // Reverses the proportional share of points this order originally earned —
 // a £10 refund on a £100 order reverses 10% of the points that order's
-// earned_purchase/tier_bonus rows awarded. Tracks cumulative reversals
+// earning rows (ORDER_EARN_REASONS) awarded. Tracks cumulative reversals
 // against the order (via prior refund_reversal rows) so several partial
 // refunds on the same order can never over-reverse it, and caps at the
 // customer's current balance so it can never go negative. Never touches or
@@ -225,7 +226,7 @@ async function reverseLoyaltyPointsForRefund(orderId: number, customerId: number
     .select("points_delta")
     .eq("reference_type", "order")
     .eq("reference_id", orderId)
-    .in("reason", ["earned_purchase", "tier_bonus"]);
+    .in("reason", ORDER_EARN_REASONS);
   const originalEarned = (earnRows || []).reduce((s, r) => s + Number(r.points_delta), 0);
   if (originalEarned <= 0) return;
 

@@ -2,6 +2,7 @@ import supabase from "@/lib/supabase";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 import { amountHeld } from "@/lib/payment-status";
 import { sendPaymentReceiptEmail, sendOrderCancellationEmail } from "@/lib/email";
+import { ORDER_EARN_REASONS } from "@/lib/loyalty";
 
 // Cancelling an order and freeing its table are always done together — a
 // cancelled order shouldn't leave the table stuck "occupied", and a table
@@ -115,7 +116,7 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
         .select("points_delta")
         .eq("reference_type", "order")
         .eq("reference_id", orderId)
-        .in("reason", ["earned_purchase", "tier_bonus"]);
+        .in("reason", ORDER_EARN_REASONS);
       const pointsEarned = (earnRows || []).reduce((s, r) => s + Number(r.points_delta), 0);
       if (pointsEarned > 0) {
         loyalty = { pointsEarned, newBalance: linkedCustomer.loyalty_points };

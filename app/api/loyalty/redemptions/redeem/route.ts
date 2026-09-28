@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
-import { orderTypesLabel, rewardAllowsOrderType, rewardDiscount, type RewardTerms } from "@/lib/loyalty";
+import { notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDiscount, type RewardTerms } from "@/lib/loyalty";
 
 // Applies an issued redemption to a specific order at the till — any staff
 // member can (the "Loyalty Reward Code" box in the payment screen); codes
@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
     if (redemption.status === "cancelled") {
       return NextResponse.json({ error: "CANCELLED", message: "This code was cancelled" }, { status: 400 });
     }
+    const notYet = notYetValidMessage(redemption.valid_from);
+    if (notYet) return NextResponse.json({ error: "NOT_YET_VALID", message: notYet }, { status: 400 });
     if (redemption.status === "expired" || new Date(redemption.expires_at) < new Date()) {
       if (redemption.status !== "expired") await supabase.from("loyalty_redemptions").update({ status: "expired" }).eq("id", redemption.id);
       return NextResponse.json({ error: "REWARD_EXPIRED", message: "This code has expired" }, { status: 400 });

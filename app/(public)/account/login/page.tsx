@@ -57,7 +57,7 @@ function AuthForm() {
           <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-3xl">My Account</h1>
           <p className="mt-1 text-sm text-primary-foreground/70">Order, earn points and book a table — all in one place.</p>
           {mode === "signup" && (
-            <p className="mt-2 text-sm font-semibold text-amber-200">Sign up and get 20% off your first dine-in visit (up to £20).</p>
+            <p className="mt-2 text-sm font-semibold text-amber-200">Sign up for 200 points and 20% off your next dine-in visit (up to £20). Earn 10 points per £1 — double Tue–Thu.</p>
           )}
         </div>
 

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const { data: issued } = await supabase
     .from("loyalty_redemptions")
-    .select("id, code, status, points_spent, issued_at, expires_at, reward:loyalty_rewards(name, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward)")
+    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, reward:loyalty_rewards(name, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward)")
     .eq("customer_id", session.id)
     .eq("status", "issued")
     .order("issued_at", { ascending: false });

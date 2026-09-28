@@ -5,7 +5,7 @@ import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 // Point types that actually "expire" — a manual adjustment is a deliberate
 // correction, not points a customer earned and might forget about, so it's
 // left out of the sweep.
-const EXPIRABLE_REASONS = ["earned_purchase", "tier_bonus", "birthday_bonus", "referral_bonus"];
+const EXPIRABLE_REASONS = ["earned_purchase", "tier_bonus", "midweek_bonus", "visit_bonus", "welcome_bonus", "birthday_bonus", "referral_bonus"];
 
 // Daily job: sweep any earn transaction past its expires_at into a
 // POINTS_EXPIRED reversal. Never deletes the original row — expiry_swept

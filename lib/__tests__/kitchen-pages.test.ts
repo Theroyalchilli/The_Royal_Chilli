@@ -1,48 +1,24 @@
-// Kitchen Display paging, from measured card positions (px).
-import { paginateCards } from "@/lib/kitchen-pages";
+// Kitchen Display: how many boxes fit per screen on each device, and paging.
+import { boxesPerScreen, boxWidth, screenCount, screenOf } from "@/lib/kitchen-pages";
 
-const card = (top: number, height: number) => ({ top, height });
-
-describe("paginateCards", () => {
-  it("fits whole rows on a page and moves the next row to a new page", () => {
-    // Two rows of two cards, 300px each + gap, in a 500px screen.
-    const cards = [card(0, 300), card(0, 250), card(316, 300), card(316, 200)];
-    expect(paginateCards(cards, 500)).toEqual([
-      { indexes: [0, 1], wide: false },
-      { indexes: [2, 3], wide: false },
-    ]);
+describe("kitchen screens", () => {
+  it("fits boxes to the device width", () => {
+    expect(boxesPerScreen(375)).toBe(1); // phone
+    expect(boxesPerScreen(800)).toBe(2); // tablet upright
+    expect(boxesPerScreen(1180)).toBe(4); // tablet sideways / small laptop
+    expect(boxesPerScreen(1260)).toBe(4); // laptop
+    expect(boxesPerScreen(1900)).toBe(6); // full-HD screen
+    expect(boxesPerScreen(100)).toBe(1); // never zero
   });
 
-  it("measures later pages from their own top (was: one row per page after page 1)", () => {
-    // Four short rows (200px), a 500px screen holds two per page.
-    const cards = [card(0, 200), card(216, 200), card(432, 200), card(648, 200)];
-    expect(paginateCards(cards, 500)).toEqual([
-      { indexes: [0, 1], wide: false },
-      { indexes: [2, 3], wide: false },
-    ]);
+  it("splits the width into equal slots, so one order doesn't stretch across", () => {
+    expect(boxWidth(1260, 4)).toBe(306);
+    expect(boxWidth(800, 2)).toBe(394);
   });
 
-  it("gives an order taller than the screen its own wide page instead of cutting it off", () => {
-    const cards = [card(0, 200), card(216, 1400), card(216, 300), card(1632, 200)];
-    expect(paginateCards(cards, 500)).toEqual([
-      { indexes: [0], wide: false },
-      { indexes: [1], wide: true },
-      { indexes: [2], wide: false },
-      { indexes: [3], wide: false },
-    ]);
-  });
-
-  it("lets small tickets next to a too-tall table share a page, not take one each", () => {
-    // Row 1: a huge 3-round table + two small tickets; row 2: two more small ones.
-    const cards = [card(0, 900), card(0, 150), card(0, 180), card(916, 200), card(916, 120)];
-    expect(paginateCards(cards, 500)).toEqual([
-      { indexes: [0], wide: true },
-      { indexes: [1, 2, 3, 4], wide: false },
-    ]);
-  });
-
-  it("keeps everything on one page when it fits", () => {
-    expect(paginateCards([card(0, 100), card(0, 120)], 500)).toEqual([{ indexes: [0, 1], wide: false }]);
-    expect(paginateCards([], 500)).toEqual([]);
+  it("pages boxes across screens", () => {
+    expect(screenCount(0, 4)).toBe(1);
+    expect(screenCount(9, 4)).toBe(3);
+    expect([screenOf(0, 4), screenOf(3, 4), screenOf(4, 4), screenOf(8, 4)]).toEqual([0, 0, 1, 2]);
   });
 });

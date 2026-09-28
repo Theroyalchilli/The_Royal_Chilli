@@ -4,7 +4,7 @@ import { notifyOrderReady } from "@/lib/order-notifications";
 import supabase from "@/lib/supabase";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { getSessionFromRequest } from "@/lib/auth";
-import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
+import { openTableOrders, roundNumbers } from "@/lib/kitchen-rounds";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,25 +51,11 @@ export async function GET(req: NextRequest) {
       .eq("status", "cancelled")
       .gte("updated_at", twoMinAgo);
 
-    // "Modified" ticket: this table already had an earlier order today, so
-    // this ticket represents items added mid-visit, not a fresh table.
-    // "Today" = this trading day, 5am–5am UK — a table still eating after
-    // midnight is the same visit, not a fresh table.
-    const tradingStart = tradingRangeUtc(tradingDayStr()).start;
-    const { data: todaysTableOrders } = await supabase
-      .from("orders")
-      .select("table_id, created_at")
-      .not("table_id", "is", null)
-      .neq("status", "cancelled")
-      .gte("created_at", tradingStart)
-      .order("created_at", { ascending: true });
-
-    const firstOrderTimeByTable = new Map<number, string>();
-    for (const o of todaysTableOrders || []) {
-      if (o.table_id != null && !firstOrderTimeByTable.has(o.table_id)) {
-        firstOrderTimeByTable.set(o.table_id, o.created_at);
-      }
-    }
+    // Round numbers per table visit (lib/kitchen-rounds.ts): the table's
+    // first ticket is Round 1, the next Round 2… — same numbers as the
+    // printed ticket.
+    const tableIds = [...new Set((orders ?? []).map((o) => o.table_id).filter((t): t is number => t != null))];
+    const roundById = roundNumbers(await openTableOrders(tableIds));
 
     // Fetch items for each order (active + just-cancelled, so the cancelled
     // alert card can still show what was in it)
@@ -112,13 +98,14 @@ export async function GET(req: NextRequest) {
         table_id: number | null;
         created_at: string;
       };
-      const firstOrderTime = rest.table_id != null ? firstOrderTimeByTable.get(rest.table_id) : undefined;
+      const round = roundById.get(rest.id) ?? null;
       return {
         ...rest,
         table_number: rt?.table_number ?? null,
         staff_name: s?.name ?? null,
         items: itemsByOrder[rest.id] ?? [],
-        is_modification: !!firstOrderTime && new Date(rest.created_at) > new Date(firstOrderTime),
+        round,
+        is_modification: (round ?? 1) > 1,
         just_cancelled: false,
       };
     });

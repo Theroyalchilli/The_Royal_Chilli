@@ -1,6 +1,7 @@
 import { getOrderForPrint } from "@/lib/kot";
 import { getOrderForReceipt } from "@/lib/receipt";
 import { paymentState } from "@/lib/payment-status";
+import { roundNumberFor } from "@/lib/kitchen-rounds";
 import { zReportLines } from "@/lib/z-report";
 import { siteContent } from "@/lib/site-content";
 import { getZReport } from "@/lib/z-report-db";
@@ -140,6 +141,10 @@ async function buildKitchenTicket(job: PrintJob, orderId: number, width: number)
     t.push({ text: order.order_type === "delivery" ? "DELIVERY" : "COLLECTION", align: "center", bold: true, size: "big" });
   }
   if (isAddOn) t.push({ text: "+ ADDITIONAL ITEMS +", align: "center", bold: true, size: "tall" });
+  // A table's 2nd, 3rd… till round: same table, only the new items (the
+  // Kitchen Display adds them to that table's box as the next round).
+  const round = !isAddOn && order.order_type === "dine_in" && order.table_id ? await roundNumberFor({ id: orderId, table_id: Number(order.table_id) }).catch(() => null) : null;
+  if (round && round > 1) t.push({ text: `ROUND ${round} - ADDED ITEMS`, align: "center", bold: true, size: "tall" });
   if (order.scheduled_for) {
     t.push({ text: `FOR ${londonTime(order.scheduled_for)}`, align: "center", bold: true, size: "big" });
     t.push({ text: londonTime(order.scheduled_for, true), align: "center" });

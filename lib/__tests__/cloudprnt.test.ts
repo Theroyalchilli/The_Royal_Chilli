@@ -7,6 +7,8 @@ jest.mock("@/lib/kot", () => ({ getOrderForPrint: jest.fn(async () => printData)
 jest.mock("@/lib/receipt", () => ({ getOrderForReceipt: jest.fn(async () => null) }));
 let zReport: unknown = null;
 jest.mock("@/lib/z-report-db", () => ({ getZReport: jest.fn(async () => zReport) }));
+let tableRound: number | null = null;
+jest.mock("@/lib/kitchen-rounds", () => ({ roundNumberFor: jest.fn(async () => tableRound) }));
 
 import { addressLines, buildTicket, encodeCp437, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";
 
@@ -29,6 +31,15 @@ describe("buildTicket (kitchen)", () => {
     const lines = texts(await buildTicket(job()));
     expect(lines).toContain("   ALLERGENS: NUTS, MILK");
     expect(lines.filter((l) => l.includes("ALLERGENS"))).toHaveLength(1);
+  });
+
+  it("marks a table's later till round, but not its first", async () => {
+    printData = { order: { ...baseOrder, table_id: 3 }, items: [item(1, "Gulab Jamun")] };
+    tableRound = 3;
+    expect(texts(await buildTicket(job({ source: "till" })))).toContain("ROUND 3 - ADDED ITEMS");
+    tableRound = 1;
+    expect(texts(await buildTicket(job({ source: "till" }))).some((l) => l.startsWith("ROUND"))).toBe(false);
+    tableRound = null;
   });
 
   it("lists only the round's items and flags it as an add-on", async () => {

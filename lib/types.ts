@@ -198,6 +198,8 @@ export interface Order {
   staff_name?: string;
   // Kitchen-display-only flags (set by /api/kitchen)
   is_modification?: boolean;
+  // Round number within the table's current visit (lib/kitchen-rounds.ts).
+  round?: number | null;
   just_cancelled?: boolean;
 }
 

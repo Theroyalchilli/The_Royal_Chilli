@@ -1,55 +1,57 @@
 "use client";
 
-import { createContext, useState, useEffect, useCallback, useContext, useRef, useLayoutEffect, useMemo } from "react";
-import { paginateCards } from "@/lib/kitchen-pages";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
+import { boxesPerScreen, boxWidth, BOX_GAP, screenCount, screenOf } from "@/lib/kitchen-pages";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import PrintButton from "@/components/pos/PrintButton";
+
+// Kitchen Display. Each table or order is one box, side by side, oldest on
+// the left, only as tall as its items need — a long one scrolls inside its
+// own box. A table's later rounds (each till "Send to Kitchen") join its box
+// as Round 2, Round 3… with their own timers. How many boxes fit per screen
+// depends on the device (lib/kitchen-pages.ts); the rest are on further
+// screens the kitchen moves through by hand with Prev / Next, and a 🔔 says
+// when a new order lands on a screen they're not looking at.
 
 interface OrderWithItems extends Order {
   items: OrderItem[];
 }
 
-function getAgeMinutes(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+const getAgeMinutes = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+
+function timerClass(minutes: number): string {
+  if (minutes >= 20) return "bg-red-600 text-white";
+  if (minutes >= 10) return "bg-orange-100 text-orange-700";
+  return "bg-yellow-100 text-yellow-800";
 }
 
-const orderTypeIcon: Record<string, string> = {
-  dine_in: "🍽️",
-  takeaway: "🥡",
-  delivery: "🛵",
-};
-
-function getOrderCardClass(order: OrderWithItems): string {
-  if (order.just_cancelled) return "border-red-600 bg-red-200 animate-pulse";
-  if (order.status === "ready") return "border-green-500 bg-green-100";
-  if (order.is_modification) return "border-orange-500 bg-orange-100";
-  const age = getAgeMinutes(order.created_at);
-  if (age >= 20) return "border-red-500 bg-red-100 animate-pulse";
-  if (age >= 10) return "border-red-500 bg-red-100";
-  return "border-yellow-500 bg-yellow-100 kitchen-new";
+function boxClass(group: OrderWithItems[]): string {
+  const first = group[0];
+  if (first.just_cancelled) return "border-red-600 bg-red-50 animate-pulse";
+  const age = getAgeMinutes(first.created_at);
+  if (age >= 20) return "border-red-600";
+  if (age >= 10) return "border-red-400";
+  if (group.some((o) => (o.round ?? 1) > 1)) return "border-orange-500";
+  return "border-yellow-500 kitchen-new";
 }
 
-function getTimerColor(order: OrderWithItems): string {
-  if (order.status === "ready") return "text-green-600";
-  const age = getAgeMinutes(order.created_at);
-  if (age >= 20) return "text-red-600";
-  if (age >= 10) return "text-red-600";
-  return "text-yellow-600";
+function headClass(group: OrderWithItems[]): string {
+  const first = group[0];
+  if (first.just_cancelled) return "bg-red-200";
+  const age = getAgeMinutes(first.created_at);
+  if (age >= 10) return "bg-red-50";
+  if (group.some((o) => (o.round ?? 1) > 1)) return "bg-orange-50";
+  return "bg-yellow-50";
 }
 
 function orderHasChanges(order: OrderWithItems): boolean {
   return order.items.some((i) => i.status === "cancelled" || (i.original_quantity != null && i.quantity < i.original_quantity));
 }
 
-// Every "Send to Kitchen" click is its own order row, so a table that sends
-// two rounds (starters, then mains) produces two separate rows that would
-// otherwise land wherever their timestamps happen to sort — scattered across
-// a busy board instead of read together. Groups consecutive-by-table rows
-// into one card, keyed on the table's FIRST round so the group still sorts
-// into the board at that round's (oldest, most urgent) position. Cancelled
-// alerts and anything without a table (takeaway/delivery) always stand alone.
+// One box per table (all its rounds) or per takeaway/delivery order, in the
+// order its first ticket arrived. Cancelled alerts stand alone, first.
 function groupByTable(list: OrderWithItems[]): OrderWithItems[][] {
   const groups: OrderWithItems[][] = [];
   const indexByTable = new Map<number, number>();
@@ -67,83 +69,25 @@ function groupByTable(list: OrderWithItems[]): OrderWithItems[][] {
   return groups;
 }
 
-const ROTATE_MS = 10_000;
-
-// Fits as many whole rows of the Active grid as actually measure within the
-// available height, then pages the rest — instead of a hardcoded "N per
-// screen" that would silently start requiring scroll again the day a card
-// gets taller (a 3rd round, more items, long notes). A hidden copy of the
-// same grid (zero visual footprint — visibility:hidden + height:0, but
-// children still lay out and measure normally) is what gets measured; the
-// visible grid only ever renders the current page. Multiple pages rotate on
-// a timer so nothing needs touching the screen.
-// A page of the Active grid. `wide` = a single order too tall for the screen
-// even on its own: it's shown full width with its items in columns
-// (WideCardContext), instead of having its bottom cut off.
-type GridPage<T> = { groups: T[]; wide: boolean };
-
-const WideCardContext = createContext(false);
-
-function usePaginatedGrid<T>(groups: T[]) {
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState(0);
-  const [pages, setPages] = useState<GridPage<T>[]>([{ groups, wide: false }]);
-  const [page, setPage] = useState(0);
-
-  // A callback ref, not useRef + a mount-only effect — the grid doesn't
-  // exist in the DOM yet while `loading` is true (a completely different
-  // branch renders), so an effect with `[]` deps reading containerRef.current
-  // at that point finds null and never gets another chance to attach: the
-  // observer silently never exists for the page's whole lifetime. A callback
-  // ref fires whenever React actually attaches the node, however late.
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  const containerRef = useCallback((el: HTMLDivElement | null) => {
-    resizeObserverRef.current?.disconnect();
-    resizeObserverRef.current = null;
-    if (el) {
-      const ro = new ResizeObserver((entries) => setContainerHeight(entries[0].contentRect.height));
-      ro.observe(el);
-      resizeObserverRef.current = ro;
-    }
-  }, []);
-
-  useLayoutEffect(() => {
-    const measureEl = measureRef.current;
-    if (!measureEl || containerHeight === 0 || groups.length === 0) {
-      setPages([{ groups, wide: false }]);
-      setPage(0);
-      return;
-    }
-    const cardEls = Array.from(measureEl.children) as HTMLElement[];
-    const newPages = paginateCards(
-      cardEls.map((el) => ({ top: el.offsetTop, height: el.offsetHeight })),
-      containerHeight
-    ).map((p) => ({ groups: p.indexes.map((k) => groups[k]), wide: p.wide }));
-    setPages(newPages.length > 0 ? newPages : [{ groups, wide: false }]);
-    // Keep the page being shown. The board re-fetches every 10s (same as
-    // ROTATE_MS), and resetting to page 0 on every fetch meant the rotation
-    // never got past page 1 — later pages' orders were never seen.
-    setPage((p) => Math.min(p, Math.max(newPages.length, 1) - 1));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, containerHeight]);
-
-  useEffect(() => {
-    if (pages.length <= 1) return;
-    const id = setInterval(() => setPage((p) => (p + 1) % pages.length), ROTATE_MS);
-    return () => clearInterval(id);
-  }, [pages.length]);
-
-  const current = pages[page] ?? { groups: [], wide: false };
-  return { containerRef, measureRef, page, pageCount: pages.length, visible: current.groups, wide: current.wide };
+function boxTitle(order: OrderWithItems): string {
+  if (order.order_type === "dine_in") return order.table_number ? `Table ${order.table_number}` : "Dine in";
+  const who = order.customer_name || order.order_number;
+  return order.order_type === "delivery" ? `🛵 ${who}` : `🥡 ${who}`;
 }
 
-// One order's header + items + notes + actions — no outer card border, so it
-// can be reused standalone (KitchenOrderCard) or stacked as one round inside
-// a TableGroupCard.
-// One item row — tappable to bump it individually while the order is still
-// active. Locked once the order itself is "ready" (whole-order bump/recall
-// takes over at that point) so a stray tap can't desync item state from the
-// order state that Recall relies on being able to fully undo.
+function boxSubtitle(group: OrderWithItems[]): string {
+  const first = group[0];
+  const parts: string[] = [];
+  if (first.order_type === "dine_in") parts.push("Dine in");
+  else parts.push(`${first.order_type === "delivery" ? "Delivery" : "Collection"} · ${first.order_number}`);
+  if (first.order_type !== "dine_in" && !first.staff_id) parts.push("Online");
+  if (first.staff_name) parts.push(first.staff_name);
+  if (group.length > 1) parts.push(`${group.length} rounds`);
+  return parts.join(" · ");
+}
+
+// One dish — tap to mark it done (tap again to undo) while its round is
+// still cooking. The last dish of a round done completes that round.
 function ItemRow({
   item,
   orderId,
@@ -170,236 +114,142 @@ function ItemRow({
   return (
     <div
       onClick={handleClick}
-      className={`flex items-start gap-2 rounded px-1 -mx-1 py-0.5 ${cancelled ? "opacity-50" : ""} ${flash ? "bump-flash" : ""} ${canBump && !cancelled ? "cursor-pointer active:scale-[0.98] transition-transform" : ""}`}
+      className={`flex items-start gap-2.5 rounded-lg px-1.5 -mx-1.5 py-1.5 border-b border-border/60 last:border-b-0 ${cancelled ? "opacity-50" : ""} ${flash ? "bump-flash" : ""} ${canBump && !cancelled ? "cursor-pointer active:scale-[0.98] transition-transform" : ""}`}
     >
-      <span className={`flex-shrink-0 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${
-        cancelled
-          ? "bg-red-900 text-red-600 line-through"
-          : bumped
-          ? "bg-green-600 text-white"
-          : item.status === "preparing"
-          ? "bg-red-600 text-white"
-          : "bg-elevated text-foreground"
+      <span className={`flex-shrink-0 text-sm font-black w-7 h-7 rounded-full flex items-center justify-center ${
+        cancelled ? "bg-red-100 text-red-600 line-through" : bumped ? "bg-green-600 text-white" : "bg-elevated text-foreground"
       }`}>
-        {cancelled ? item.quantity : bumped ? "✓" : item.quantity}
+        {bumped && !cancelled ? "✓" : item.quantity}
       </span>
-
-      <div className="flex-1">
-        <div className={`text-sm font-medium leading-tight ${cancelled ? "line-through text-red-600" : bumped ? "line-through text-green-600" : "text-foreground"}`}>
+      <div className="flex-1 min-w-0">
+        <div className={`text-base lg:text-lg font-semibold leading-snug ${cancelled ? "line-through text-red-600" : bumped ? "line-through text-green-700" : "text-foreground"}`}>
           {item.item_name}
         </div>
-
-        {item.modifiers && item.modifiers.length > 0 && (
-          <div className="text-red-600 text-xs">{item.modifiers.join(", ")}</div>
-        )}
-
-        {cancelled && (
-          <span className="text-[10px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
-            ✕ VOIDED BY CASHIER
-          </span>
-        )}
-
+        {item.modifiers && item.modifiers.length > 0 && <div className="text-red-600 text-xs font-semibold">{item.modifiers.join(", ")}</div>}
+        {cancelled && <span className="text-[10px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded">✕ VOIDED BY CASHIER</span>}
         {qtyReduced && (
-          <span className="text-[10px] font-black text-yellow-600 bg-yellow-100 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-black text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded">
             ↓ QTY: {item.original_quantity} → {item.quantity}
           </span>
         )}
-
-        {item.notes && (
-          <div className="text-yellow-600 text-xs italic mt-0.5">⚠ {item.notes}</div>
-        )}
+        {item.notes && <div className="text-amber-700 text-xs font-semibold italic mt-0.5">⚠ {item.notes}</div>}
       </div>
     </div>
   );
 }
 
-function OrderTicketBody({
+// One round inside a box: its label (Round 2 · ADDED · ⏱ timer · 🖨) when
+// the table has more than one, then its dishes and note.
+function RoundSection({
   order,
-  tick,
-  onMarkReady,
+  showLabel,
   onBumpItem,
 }: {
   order: OrderWithItems;
-  tick: number;
-  onMarkReady: (orderId: number) => void;
+  showLabel: boolean;
   onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
-  const canBumpItems = order.status === "sent_to_kitchen" && !order.just_cancelled;
-  const wide = useContext(WideCardContext);
+  const canBump = order.status === "sent_to_kitchen" && !order.just_cancelled;
+  const age = getAgeMinutes(order.created_at);
+  const round = order.round ?? 1;
   return (
-    <>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="text-foreground font-bold text-lg">{order.order_number}</div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-base">{orderTypeIcon[order.order_type]}</span>
-            <span className="text-foreground text-sm font-medium capitalize">{order.order_type.replace("_", " ")}</span>
-            {order.table_number && (
-              <span className="bg-elevated text-foreground text-xs px-1.5 py-0.5 rounded">{order.table_number}</span>
-            )}
-          </div>
-          {order.customer_name && (
-            <div className="text-muted-foreground text-xs mt-1">
-              {order.customer_name}
-              {order.customer_phone && ` • ${order.customer_phone}`}
-            </div>
-          )}
-          {order.scheduled_for && (
-            <div className="text-purple-700 text-xs font-bold mt-1">
-              ⏰ Scheduled {new Date(order.scheduled_for).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
-            </div>
-          )}
+    <div className="pt-2 [&+&]:mt-2 [&+&]:border-t-2 [&+&]:border-dashed [&+&]:border-border">
+      {showLabel && (
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="flex items-center gap-1.5 text-[11px] font-black tracking-wide uppercase text-muted-foreground">
+            Round {round}
+            {round > 1 && <span className="rounded bg-orange-500 px-1.5 py-0.5 text-[10px] text-white">Added</span>}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className={`rounded-md px-1.5 py-0.5 text-xs font-black ${timerClass(age)}`}>⏱ {age} min</span>
+            <PrintButton orderId={order.id} kind="kot" label="🖨" className="pos-btn no-select rounded-md bg-elevated px-1.5 py-0.5 text-xs" />
+          </span>
         </div>
-        <div className="text-right">
-          <div
-            className={`text-xs font-bold px-2 py-1 rounded-full ${
-              order.just_cancelled
-                ? "bg-red-700 text-white"
-                : order.status === "ready"
-                ? "bg-green-600/30 text-green-600"
-                : order.is_modification
-                ? "bg-orange-600/30 text-orange-700"
-                : "bg-yellow-600/30 text-yellow-600"
-            }`}
-          >
-            {order.just_cancelled ? "❌ CANCELLED" : order.status === "ready" ? "READY" : order.is_modification ? "🔁 ADDED ITEMS" : "NEW"}
-          </div>
-          {!order.just_cancelled && (
-            <div className={`text-xs font-bold mt-1 ${getTimerColor(order)}`}>
-              {/* tick included to trigger re-render every 60s */}
-              {tick >= 0 && getAgeMinutes(order.created_at)}m ago
-            </div>
-          )}
-        </div>
-      </div>
-
+      )}
       {!order.just_cancelled && orderHasChanges(order) && (
-        <div className="mb-2 -mt-1 text-[10px] font-black text-red-700 bg-red-100 border border-red-300 rounded px-2 py-1 inline-block">
-          ⚠ ITEMS CHANGED SINCE SENT
+        <div className="mb-1 text-[10px] font-black text-red-700 bg-red-100 border border-red-300 rounded px-2 py-0.5 inline-block">⚠ ITEMS CHANGED SINCE SENT</div>
+      )}
+      {order.scheduled_for && (
+        <div className="text-purple-700 text-xs font-bold mb-1">
+          ⏰ For {new Date(order.scheduled_for).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "numeric", minute: "2-digit" })}
         </div>
       )}
-
-      <div className={`border-t border-border pt-3 ${wide ? "columns-2 xl:columns-3 gap-6 [&>*]:break-inside-avoid [&>*]:mb-1.5" : "space-y-1.5"}`}>
+      <div>
         {order.items.map((item) => (
-          <ItemRow key={item.id} item={item} orderId={order.id} canBump={canBumpItems} onBumpItem={onBumpItem} />
+          <ItemRow key={item.id} item={item} orderId={order.id} canBump={canBump} onBumpItem={onBumpItem} />
         ))}
       </div>
-      {canBumpItems && order.items.some((i) => i.status !== "cancelled") && (
-        <div className="mt-1.5 text-[10px] text-muted-foreground">Tap an item to bump it</div>
-      )}
-
-      {order.notes && (
-        <div className="mt-2 bg-yellow-100 border border-yellow-300 rounded-lg px-2 py-1.5 text-yellow-700 text-xs">
-          📝 {order.notes}
-        </div>
-      )}
-
-      {order.just_cancelled ? (
-        <div className="mt-3 bg-red-700 rounded-lg px-3 py-2 text-center">
-          <p className="text-white text-xs font-bold">Stop prep — guest cancelled</p>
-        </div>
-      ) : (
-        <div className="mt-3 space-y-2">
-          <PrintButton
-            orderId={order.id}
-            kind="kot"
-            label="🖨️ Print KOT"
-            className="pos-btn no-select w-full py-2 bg-elevated hover:bg-elevated-hover border border-elevated text-foreground font-semibold rounded-lg text-xs transition-colors"
-          />
-          {order.status === "sent_to_kitchen" && (
-            <button
-              onClick={() => onMarkReady(order.id)}
-              className="pos-btn no-select w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-sm transition-colors"
-            >
-              ⚡ Bump All
-            </button>
-          )}
-          {order.status === "ready" && (
-            <div className="bg-green-100 border border-green-300/50 rounded-lg px-3 py-2 text-center">
-              <p className="text-green-700 text-xs font-semibold">✓ Food is Ready</p>
-              <p className="text-muted-foreground text-[10px] mt-0.5">Cashier collects payment at POS</p>
-            </div>
-          )}
-        </div>
-      )}
-    </>
-  );
-}
-
-// Standalone card — a takeaway/delivery order, or a dine-in table with only
-// one round so far.
-function KitchenOrderCard({
-  order,
-  tick,
-  onMarkReady,
-  onBumpItem,
-}: {
-  order: OrderWithItems;
-  tick: number;
-  onMarkReady: (orderId: number) => void;
-  onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
-}) {
-  return (
-    <div className={`rounded-xl border-2 p-4 transition-all ${getOrderCardClass(order)}`}>
-      <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} onBumpItem={onBumpItem} />
+      {order.notes && <div className="mt-1.5 bg-yellow-100 border border-yellow-300 rounded-lg px-2 py-1 text-yellow-800 text-xs">📝 {order.notes}</div>}
     </div>
   );
 }
 
-// A table with more than one round sent to the kitchen today — all rounds
-// stack inside one card instead of scattering across the board by timestamp,
-// so staff read a table's whole order together. Bordered by the oldest
-// round's urgency (both sections are already status-uniform — see
-// activeOrders/readyOrders — so every round in a group shares a status).
-function TableGroupCard({
-  orders,
-  tick,
-  onMarkReady,
+// A table (every round still cooking) or one takeaway/delivery order.
+function OrderBox({
+  group,
+  width,
+  onBumpAll,
   onBumpItem,
 }: {
-  orders: OrderWithItems[];
-  tick: number;
-  onMarkReady: (orderId: number) => void;
+  group: OrderWithItems[];
+  width: number;
+  onBumpAll: (orderIds: number[]) => void;
   onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
-  const oldest = orders[0];
-  const wide = useContext(WideCardContext);
+  const first = group[0];
+  const age = getAgeMinutes(first.created_at);
+  const labelled = group.length > 1 || (first.round ?? 1) > 1;
   return (
-    <div className={`rounded-xl border-2 p-4 transition-all ${getOrderCardClass(oldest)}`}>
-      <div className="text-foreground font-bold text-lg mb-1">
-        {oldest.table_number ? `Table ${oldest.table_number}` : "Table"}
-        <span className="text-muted-foreground text-xs font-medium ml-2">{orders.length} rounds</span>
+    <div
+      style={{ width, flex: `0 0 ${width}px` }}
+      className={`max-h-full flex flex-col rounded-xl border-[3px] bg-surface overflow-hidden ${boxClass(group)}`}
+    >
+      <div className={`flex-shrink-0 px-3 py-2 border-b border-border ${headClass(group)}`}>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xl lg:text-2xl font-black text-foreground leading-tight truncate">{boxTitle(first)}</span>
+          {!first.just_cancelled && (
+            <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-xs font-black ${timerClass(age)}`}>⏱ {age}m</span>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground mt-0.5 truncate">{boxSubtitle(group)}</div>
+        {first.just_cancelled && <div className="mt-1 text-xs font-black text-red-700">❌ CANCELLED — stop prep</div>}
       </div>
-      <div className={wide ? "grid grid-cols-2 xl:grid-cols-3 gap-4" : "space-y-3 divide-y divide-border"}>
-        {orders.map((order, i) => (
-          <div key={order.id} className={wide ? "" : i > 0 ? "pt-3" : ""}>
-            <div className="text-[10px] font-black tracking-wide text-muted-foreground uppercase mb-1.5">Round {i + 1}</div>
-            <OrderTicketBody order={order} tick={tick} onMarkReady={onMarkReady} onBumpItem={onBumpItem} />
-          </div>
+
+      <div className="flex-shrink min-h-0 overflow-y-auto overscroll-contain px-3 pb-2">
+        {group.map((order) => (
+          <RoundSection key={order.id} order={order} showLabel={labelled} onBumpItem={onBumpItem} />
         ))}
       </div>
+
+      {!first.just_cancelled && (
+        <div className="flex-shrink-0 flex gap-2 border-t border-border p-2">
+          {!labelled && (
+            <PrintButton orderId={first.id} kind="kot" label="🖨" className="pos-btn no-select rounded-lg bg-elevated px-3 py-2.5 text-sm" />
+          )}
+          <button
+            onClick={() => onBumpAll(group.map((o) => o.id))}
+            className="pos-btn no-select flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-500"
+          >
+            ⚡ Bump All
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// Ready orders are done — kitchen's part is finished, they're just waiting on
-// the cashier — so they get a compact chip instead of a full card, leaving
-// the Active grid (still-cooking tables) the room it needs to avoid paging.
+// Ready orders are the cashier's now, so they're a compact chip, not a box.
 function ReadyChip({ group, onRecall }: { group: OrderWithItems[]; onRecall: (orderIds: number[]) => void }) {
   const rep = group[0];
-  const label = rep.table_number
-    ? `${rep.table_number}${group.length > 1 ? ` · ${group.length} ready` : ""}`
-    : rep.order_number;
+  const label = rep.table_number ? `${rep.table_number}${group.length > 1 ? ` · ${group.length} ready` : ""}` : rep.order_number;
   return (
     <div className="flex items-center gap-1.5 bg-green-100 border border-green-300 rounded-full px-3 py-1.5 flex-shrink-0">
       <span className="text-green-600 text-sm">✓</span>
       <span className="text-foreground text-sm font-bold">{label}</span>
-      {!rep.table_number && (
-        <span className="text-muted-foreground text-xs capitalize">{rep.order_type.replace("_", " ")}</span>
-      )}
+      {!rep.table_number && <span className="text-muted-foreground text-xs capitalize">{rep.order_type.replace("_", " ")}</span>}
       <button
         onClick={() => onRecall(group.map((o) => o.id))}
-        title="Bumped by mistake? Send back to Active."
+        title="Bumped by mistake? Send back to the kitchen."
         className="pos-btn no-select ml-1 text-green-700 hover:text-green-900 text-xs font-bold border border-green-300 rounded-full px-2 py-0.5 bg-white/50 hover:bg-white transition-colors"
       >
         ↺ Recall
@@ -412,15 +262,24 @@ export default function KitchenBoard() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
+  const [boardWidth, setBoardWidth] = useState(0);
+  const [screen, setScreen] = useState(0);
+  // Screens (0-based) that got a new order the kitchen hasn't looked at yet.
+  const [bellScreens, setBellScreens] = useState<number[]>([]);
+  const seenIds = useRef<Set<number> | null>(null);
+  // True after the first successful load — the bell only counts orders that
+  // arrive after that, never the ones already there when the screen opened.
+  const [loadedOnce, setLoadedOnce] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch("/api/kitchen", { cache: "no-store" });
+      if (!res.ok) return;
       const data = await res.json();
-      const newOrders: OrderWithItems[] = data.orders || [];
-      setOrders(newOrders);
+      setOrders(data.orders || []);
       setLastRefresh(new Date());
+      setLoadedOnce(true);
     } catch (err) {
       console.error("Failed to fetch kitchen orders", err);
     } finally {
@@ -434,10 +293,23 @@ export default function KitchenBoard() {
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
-  // Tick every 60s to force re-render of time displays without refetching
+  // Re-render every 30s so the timers move without refetching.
   useEffect(() => {
-    const tickInterval = setInterval(() => setTick((t) => t + 1), 60000);
-    return () => clearInterval(tickInterval);
+    const t = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // The board's width decides how many boxes fit (a callback ref, since the
+  // board only mounts once loading is done).
+  const observer = useRef<ResizeObserver | null>(null);
+  const boardRef = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (el) {
+      const ro = new ResizeObserver((entries) => setBoardWidth(entries[0].contentRect.width));
+      ro.observe(el);
+      observer.current = ro;
+    }
   }, []);
 
   const handleStatusUpdate = async (orderId: number, status: string) => {
@@ -447,10 +319,19 @@ export default function KitchenBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, status }),
       });
-      fetchOrders();
     } catch (err) {
       console.error("Failed to update order status", err);
     }
+  };
+
+  const handleBumpAll = async (orderIds: number[]) => {
+    await Promise.all(orderIds.map((id) => handleStatusUpdate(id, "ready")));
+    fetchOrders();
+  };
+
+  const handleRecall = async (orderIds: number[]) => {
+    await Promise.all(orderIds.map((id) => handleStatusUpdate(id, "sent_to_kitchen")));
+    fetchOrders();
   };
 
   const handleBumpItem = async (orderId: number, itemId: number, status: "ready" | "pending") => {
@@ -466,175 +347,134 @@ export default function KitchenBoard() {
     }
   };
 
-  // A ready group may be several rounds (TableGroupCard) bumped together —
-  // recall reopens all of them so the table's whole ticket comes back as one
-  // unit, not just the round that happened to be first in the group.
-  const handleRecall = async (orderIds: number[]) => {
-    try {
-      await Promise.all(orderIds.map((id) => handleStatusUpdate(id, "sent_to_kitchen")));
-    } catch (err) {
-      console.error("Failed to recall order", err);
-    }
-  };
-
-  // Split so the board can show unstarted work separately from work that's
-  // done but not yet paid for (see the Orders section below).
-  // Memoized on `orders` (not recomputed on every tick/page-rotation render)
-  // — groupByTable/filter build new arrays each call, and an unstable
-  // reference here fed straight into usePaginatedGrid's effect deps, which
-  // retriggered its setState every render: an infinite update loop (React
-  // error #185) that took the whole page down in production.
-  const activeOrders = useMemo(() => orders.filter((o) => o.status !== "ready"), [orders]);
-  const readyOrders = useMemo(() => orders.filter((o) => o.status === "ready"), [orders]);
+  // Memoized on `orders` so the derived arrays keep a stable identity
+  // between the 30s timer re-renders.
+  const activeOrders = useMemo(
+    () => [...orders.filter((o) => o.just_cancelled), ...orders.filter((o) => !o.just_cancelled && o.status !== "ready")],
+    [orders]
+  );
+  const readyOrders = useMemo(() => orders.filter((o) => o.status === "ready" && !o.just_cancelled), [orders]);
   const activeGroups = useMemo(() => groupByTable(activeOrders), [activeOrders]);
   const readyGroups = useMemo(() => groupByTable(readyOrders), [readyOrders]);
-  const { containerRef: activeGridRef, measureRef: activeMeasureRef, page: activePage, pageCount: activePageCount, visible: visibleActiveGroups, wide: activeWide } = usePaginatedGrid(activeGroups);
+
+  const perScreen = boardWidth > 0 ? boxesPerScreen(boardWidth) : 1;
+  const width = boardWidth > 0 ? boxWidth(boardWidth, perScreen) : 280;
+  const screens = screenCount(activeGroups.length, perScreen);
+  const current = Math.min(screen, screens - 1);
+  const visible = activeGroups.slice(current * perScreen, current * perScreen + perScreen);
+  const moreAfter = Math.max(0, activeGroups.length - (current + 1) * perScreen);
+
+  // 🔔 A new ticket (a new table/order, or another round) that lands on a
+  // screen other than the one being looked at. Staff stay where they are.
+  useEffect(() => {
+    const ids = new Set(activeOrders.map((o) => o.id));
+    if (seenIds.current === null) {
+      if (loadedOnce) seenIds.current = ids;
+      return;
+    }
+    const fresh: number[] = [];
+    activeGroups.forEach((g, i) => {
+      if (g.some((o) => !seenIds.current!.has(o.id))) fresh.push(screenOf(i, perScreen));
+    });
+    seenIds.current = ids;
+    const others = fresh.filter((s) => s !== current);
+    if (others.length) setBellScreens((b) => [...new Set([...b, ...others])].sort((x, y) => x - y));
+  }, [activeOrders, activeGroups, perScreen, current, loadedOnce]);
+
+  // Looking at a screen clears its bell; bells for screens that no longer exist go.
+  useEffect(() => {
+    setBellScreens((b) => (b.some((s) => s === current || s >= screens) ? b.filter((s) => s !== current && s < screens) : b));
+  }, [current, screens]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground text-xl animate-pulse">
-          Loading kitchen orders...
-        </div>
+        <div className="text-muted-foreground text-xl animate-pulse">Loading kitchen orders...</div>
       </div>
     );
   }
 
+  const pagerBtn = "pos-btn no-select rounded-xl border-2 border-foreground bg-surface px-3 sm:px-4 py-2 text-sm sm:text-base font-black text-foreground disabled:opacity-25";
+
   return (
-    <>
     <div className="h-full flex flex-col">
-      {/* Header — title on top, Back button underneath it */}
-      <div className="bg-surface border-b border-border px-3 sm:px-6 py-2.5 sm:py-3 flex-shrink-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className="text-xl sm:text-2xl">🍳</span>
-          <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl leading-tight tracking-[-0.02em]">Kitchen Display</h1>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-yellow-500 inline-block" />
-            <span className="text-yellow-600 text-xs sm:text-sm font-medium">
-              New: {orders.filter((o) => o.status === "sent_to_kitchen").length}
+      {/* Header */}
+      <div className="bg-surface border-b border-border px-3 sm:px-5 py-2 flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Link href="/pos" className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border">
+              ← Back
+            </Link>
+            <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl tracking-[-0.02em]">
+              🍳 Kitchen Display
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            <span className="text-yellow-600 text-xs sm:text-sm font-medium">● New: {orders.filter((o) => o.status === "sent_to_kitchen").length}</span>
+            <span className="text-green-600 text-xs sm:text-sm font-medium">● Ready: {readyOrders.length}</span>
+            {orders.some((o) => o.just_cancelled) && (
+              <span className="text-red-600 text-xs sm:text-sm font-bold animate-pulse">● Cancelled: {orders.filter((o) => o.just_cancelled).length}</span>
+            )}
+            <span className="text-muted-foreground text-[10px] sm:text-xs hidden lg:inline">
+              Updated {lastRefresh.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
+            <button onClick={fetchOrders} className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border">
+              ↻ Refresh
+            </button>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-green-500 inline-block" />
-            <span className="text-green-600 text-xs sm:text-sm font-medium">
-              Ready: {orders.filter((o) => o.status === "ready").length}
-            </span>
-          </div>
-          {orders.some((o) => o.just_cancelled) && (
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-600 inline-block animate-pulse" />
-              <span className="text-red-600 text-xs sm:text-sm font-bold">
-                Cancelled: {orders.filter((o) => o.just_cancelled).length}
-              </span>
-            </div>
-          )}
-          <div className="text-muted-foreground text-[10px] sm:text-xs hidden lg:block">
-            Refreshes every 10s • Last:{" "}
-            {lastRefresh.toLocaleTimeString("en-GB", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}
-          </div>
-          <button
-            onClick={fetchOrders}
-            className="px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors"
-          >
-            ↻ Refresh
-          </button>
         </div>
-      </div>
-      <Link href="/pos"
-        className="mt-2 inline-block px-2.5 sm:px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border transition-colors">
-        ← Back
-      </Link>
       </div>
 
       <TableRequestsBanner />
 
-      {/* Orders — Ready is a compact strip (kitchen's work there is already
-          done, just waiting on the cashier), so Active gets the room it
-          needs to fit without scrolling. Active pages/auto-rotates instead
-          of scrolling once there's more than fits on screen. */}
-      <div className="flex-1 overflow-hidden p-2.5 sm:p-4 flex flex-col gap-3 sm:gap-4">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
-            <span className="text-6xl">✅</span>
-            <p className="text-xl font-semibold">All caught up!</p>
-            <p className="text-sm">No pending kitchen orders</p>
-          </div>
-        ) : (
-          <>
-            {readyGroups.length > 0 && (
-              <div className="flex-shrink-0">
-                <h2 className="text-foreground font-bold text-sm mb-2 flex items-center gap-1.5">
-                  ✅ Ready for Pickup <span className="text-muted-foreground font-normal">({readyOrders.length})</span>
-                </h2>
-                <div className="flex flex-wrap gap-2">
-                  {readyGroups.map((group) => (
-                    <ReadyChip key={group[0].id} group={group} onRecall={handleRecall} />
-                  ))}
-                </div>
+      <div className="flex-1 min-h-0 p-2.5 sm:p-3 flex flex-col gap-2.5">
+        {/* Ready strip + screen controls */}
+        <div className="flex-shrink-0 flex flex-wrap items-center gap-2">
+          {readyGroups.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <span className="text-sm font-bold text-foreground">✅ Ready</span>
+              {readyGroups.map((group) => (
+                <ReadyChip key={group[0].id} group={group} onRecall={handleRecall} />
+              ))}
+            </div>
+          )}
+          {screens > 1 && (
+            <div className="ml-auto flex items-center gap-2">
+              {bellScreens.length > 0 && (
+                <button
+                  onClick={() => setScreen(bellScreens[0])}
+                  className="pos-btn no-select animate-pulse rounded-xl bg-amber-500 px-3 py-2 text-sm font-black text-white"
+                >
+                  🔔 New order on screen {bellScreens.map((s) => s + 1).join(", ")}
+                </button>
+              )}
+              <button className={pagerBtn} disabled={current === 0} onClick={() => setScreen(current - 1)}>◀ Prev</button>
+              <div className="text-center leading-tight min-w-[84px]">
+                <div className="text-sm sm:text-base font-black text-foreground">Screen {current + 1} of {screens}</div>
+                {moreAfter > 0 && <div className="text-[11px] font-bold text-red-600">+{moreAfter} more →</div>}
               </div>
-            )}
+              <button className={pagerBtn} disabled={current >= screens - 1} onClick={() => setScreen(current + 1)}>Next ▶</button>
+            </div>
+          )}
+        </div>
 
-            {activeGroups.length > 0 && (
-              <section className="flex-1 min-h-0 flex flex-col">
-                <h2 className="text-foreground font-bold text-sm mb-2.5 flex-shrink-0 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    🔥 Active <span className="text-muted-foreground font-normal">({activeOrders.length})</span>
-                  </span>
-                  {activePageCount > 1 && (
-                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-normal">
-                      Page {activePage + 1} of {activePageCount}
-                      <span className="flex gap-1">
-                        {Array.from({ length: activePageCount }).map((_, i) => (
-                          <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === activePage ? "bg-foreground" : "bg-elevated"}`} />
-                        ))}
-                      </span>
-                    </span>
-                  )}
-                </h2>
-                <div ref={activeGridRef} className="flex-1 min-h-0 overflow-hidden">
-                  <WideCardContext.Provider value={activeWide}>
-                  <div className={activeWide ? "grid grid-cols-1" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"}>
-                    {visibleActiveGroups.map((group) =>
-                      group.length === 1 ? (
-                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
-                      ) : (
-                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
-                      )
-                    )}
-                  </div>
-                  </WideCardContext.Provider>
-                </div>
-                {/* Hidden measuring pass — identical grid/cards, zero visual
-                    footprint (collapsed wrapper still lays out children).
-                    items-start: each card measures at its own height. Grid
-                    rows otherwise stretch every card to the tallest in the
-                    row, so one big 3-round table made its small neighbours
-                    "too tall" too — each got a whole page to itself. */}
-                <div style={{ visibility: "hidden", height: 0, overflow: "hidden", position: "relative" }} aria-hidden="true">
-                  <div ref={activeMeasureRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 items-start">
-                    {activeGroups.map((group) =>
-                      group.length === 1 ? (
-                        <KitchenOrderCard key={group[0].id} order={group[0]} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
-                      ) : (
-                        <TableGroupCard key={group[0].id} orders={group} tick={tick} onMarkReady={(id) => handleStatusUpdate(id, "ready")} onBumpItem={handleBumpItem} />
-                      )
-                    )}
-                  </div>
-                </div>
-              </section>
-            )}
-          </>
-        )}
+        {/* The boxes */}
+        <div ref={boardRef} className="flex-1 min-h-0">
+          {activeGroups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+              <span className="text-6xl">✅</span>
+              <p className="text-xl font-semibold">All caught up!</p>
+              <p className="text-sm">No orders cooking</p>
+            </div>
+          ) : (
+            <div className="flex h-full items-start" style={{ gap: BOX_GAP }}>
+              {visible.map((group) => (
+                <OrderBox key={group[0].id} group={group} width={width} onBumpAll={handleBumpAll} onBumpItem={handleBumpItem} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
     </div>
-    </>
   );
 }

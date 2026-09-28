@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTableByNumber, getOpenOrderForTable } from "@/lib/dine-in";
-import { findOrCreateCustomerByPhone } from "@/lib/customers";
+import { customerForOrder } from "@/lib/customers";
+import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
 
 // Lets a customer submit their phone (for loyalty) independently of sending
@@ -23,7 +24,8 @@ export async function POST(
     const order = await getOpenOrderForTable(table.id);
     if (!order) return NextResponse.json({ success: true, attached: false });
 
-    const customerId = await findOrCreateCustomerByPhone(String(phone).trim(), name || "Guest", email, marketing_consent === true);
+    const account = await getCustomerSessionFromRequest(req);
+    const customerId = await customerForOrder(account?.id, String(phone).trim(), name || "Guest", email, marketing_consent === true);
     await supabase
       .from("orders")
       .update({ customer_id: customerId, customer_name: name || null, customer_phone: String(phone).trim() })

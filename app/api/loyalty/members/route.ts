@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { joinMemberAtTill } from "@/lib/customers";
 import { linkMemberToOrders } from "@/lib/member-link";
 import { isValidEmail } from "@/lib/utils";
+import { normalizeUkMobile } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,10 @@ export async function GET(req: NextRequest) {
   if (q.length < 3) return NextResponse.json({ members: [] });
 
   const digits = q.replace(/\D/g, "");
-  let query = supabase.from("customers").select("id, name, phone, email, loyalty_points").limit(6);
+  const mobile = normalizeUkMobile(q);
+  let query = supabase.from("customers").select("id, name, phone, email, loyalty_points").is("merged_into", null).limit(6);
   if (q.includes("@")) query = query.ilike("email", `%${q.replace(/[%_]/g, "")}%`);
+  else if (mobile) query = query.eq("phone", mobile); // "+44 7700 900123" finds 07700900123
   else if (digits.length >= 4) query = query.ilike("phone", `%${digits}%`);
   else query = query.ilike("name", `%${q.replace(/[%_]/g, "")}%`);
 
@@ -29,9 +32,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ members: data ?? [] });
 }
 
-// POST { name, phone, email?, marketing_consent?, order_ids? } — join the
-// Rewards Club at the till (full welcome: sign-up points + 20% voucher for
-// next visit) and link them to this bill.
+// POST { name, phone, email, marketing_consent?, order_ids?, use_customer_id? }
+// — join the Rewards Club at the till (full welcome: sign-up points + 20%
+// voucher for next visit) and link them to this bill. If the mobile and email
+// belong to two different people → 409 with both, and the till asks staff
+// which one (sent back as use_customer_id).
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -40,12 +45,20 @@ export async function POST(req: NextRequest) {
   const name = String(b.name || "").trim();
   const phone = String(b.phone || "").trim();
   const email = String(b.email || "").trim();
-  if (!name || !phone) return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
-  if (phone.replace(/\D/g, "").length < 10) return NextResponse.json({ error: "Enter a full phone number" }, { status: 400 });
-  if (email && !isValidEmail(email)) return NextResponse.json({ error: "That email doesn't look right" }, { status: 400 });
+  if (!name || !phone || !email) return NextResponse.json({ error: "Name, mobile and email are required" }, { status: 400 });
+  if (!normalizeUkMobile(phone)) return NextResponse.json({ error: "Enter a UK mobile number (starts with 07)" }, { status: 400 });
+  if (!isValidEmail(email)) return NextResponse.json({ error: "That email doesn't look right" }, { status: 400 });
 
-  const joined = await joinMemberAtTill({ name, phone, email: email || null, marketingConsent: b.marketing_consent === true });
-  if (!joined.ok) return NextResponse.json({ error: joined.error }, { status: 400 });
+  const joined = await joinMemberAtTill({
+    name,
+    phone,
+    email,
+    marketingConsent: b.marketing_consent === true,
+    useCustomerId: b.use_customer_id ? Number(b.use_customer_id) : null,
+  });
+  if (!joined.ok) {
+    return NextResponse.json({ error: joined.error, conflict: joined.conflict ?? null }, { status: joined.conflict ? 409 : 400 });
+  }
 
   const orderIds = Array.isArray(b.order_ids) ? b.order_ids.map(Number).filter(Boolean) : [];
   if (orderIds.length) {

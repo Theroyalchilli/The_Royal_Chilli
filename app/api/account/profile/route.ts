@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
-import { isValidUkMobile } from "@/lib/utils";
+import { normalizeUkMobile } from "@/lib/phone";
+import { findByPhone } from "@/lib/customer-match";
+import { mergeCustomers } from "@/lib/customer-merge";
 import { CUSTOMER_SAFE_FIELDS } from "@/lib/customers";
 
 export async function PATCH(req: NextRequest) {
@@ -17,9 +19,23 @@ export async function PATCH(req: NextRequest) {
       updates.name = String(name).trim();
     }
     if (phone !== undefined) {
-      const cleanPhone = phone ? String(phone).trim() : null;
-      if (cleanPhone && !isValidUkMobile(cleanPhone)) {
+      // Mobile is required on every account (one customer, one record).
+      const cleanPhone = normalizeUkMobile(phone);
+      if (!cleanPhone) {
         return NextResponse.json({ error: "Please enter a valid UK mobile number (starts with 07, 11 digits)" }, { status: 400 });
+      }
+      // Already on a guest record (from till or online orders)? That's them —
+      // merge it in so its orders and points come across. Another person's
+      // account → refuse.
+      const owner = await findByPhone(cleanPhone);
+      if (owner && owner.id !== session.id) {
+        const { data: me } = await supabase.from("customers").select("email").eq("id", session.id).single();
+        const sameEmailOrNone = !owner.email || owner.email.toLowerCase() === (me?.email ?? "").toLowerCase();
+        if (owner.has_account || !sameEmailOrNone) {
+          return NextResponse.json({ error: "That mobile number is already linked to another account — call us on 020 8797 3044 and we'll sort it out" }, { status: 409 });
+        }
+        const merged = await mergeCustomers(session.id, owner.id, { reason: "customer added their mobile" });
+        if (!merged.ok) return NextResponse.json({ error: merged.error }, { status: 500 });
       }
       updates.phone = cleanPhone;
     }

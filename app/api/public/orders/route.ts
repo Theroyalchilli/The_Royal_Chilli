@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
 import { generateOrderNumber } from "@/lib/orders";
-import { findOrCreateCustomerByPhone } from "@/lib/customers";
+import { customerForOrder } from "@/lib/customers";
+import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
@@ -112,7 +113,9 @@ export async function POST(req: NextRequest) {
       .single();
 
     const orderNumber = await generateOrderNumber();
-    const customerId = await findOrCreateCustomerByPhone(customer_phone, customer_name, customer_email, marketing_consent === true);
+    // logged in → their own account (lib/customers.ts customerForOrder)
+    const account = await getCustomerSessionFromRequest(req);
+    const customerId = await customerForOrder(account?.id, customer_phone, customer_name, customer_email, marketing_consent === true);
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")

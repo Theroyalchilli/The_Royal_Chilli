@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const [y, m] = londonDateStr(now).split("-").map(Number);
   const firstMonth = new Date(Date.UTC(y, m - 1 - (months - 1), 1)).toISOString().slice(0, 7);
 
-  const { data: customers } = await supabase.from("customers").select("id, created_at");
+  const { data: customers } = await supabase.from("customers").select("id, created_at").is("merged_into", null);
   const { data: orders } = await supabase
     .from("orders")
     .select("customer_id, total, discount, discount_reason, created_at")

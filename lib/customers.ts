@@ -13,6 +13,11 @@ import {
 } from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
 import { awardVisitBonus } from "@/lib/visits";
+import { findByPhone, findMember, type MemberSummary } from "@/lib/customer-match";
+import { mergeCustomers } from "@/lib/customer-merge";
+import { normalizeUkMobile, phoneKey } from "@/lib/phone";
+
+const RESTAURANT_PHONE = "020 8797 3044";
 import { sendReferralUnlockedFor, sendWelcomeFor } from "@/lib/rewards-emails";
 
 // Every column except password_hash — use this instead of select("*") on
@@ -21,51 +26,70 @@ import { sendReferralUnlockedFor, sendWelcomeFor } from "@/lib/rewards-emails";
 export const CUSTOMER_SAFE_FIELDS =
   "id, name, phone, email, date_of_birth, address, notes, loyalty_points, referral_code, referred_by_customer_id, referral_completed_at, marketing_consent, created_at";
 
-// Self-service signup: name + email + password only (no phone yet — that's
-// added later from the profile). If an existing guest row already has this
-// email (from a past phone-based checkout that also gave an email), this
-// *claims* that row instead of creating a duplicate — the customer keeps
-// their real order/loyalty history rather than starting over at zero.
+// Self-service signup: name + mobile + email + password. One customer, one
+// record (lib/customer-match.ts): if the mobile or email already belongs to a
+// guest record (from till or online orders), the account *claims* it — their
+// orders and points come with them instead of starting a duplicate at zero.
+export type SignupResult = { ok: true; customer: Customer } | { ok: false; error: string };
+
 export async function signupCustomer(
   name: string,
   email: string,
   password: string,
   marketingConsent = false,
   referralCode?: string | null,
-): Promise<{ ok: true; customer: Customer } | { ok: false; error: string }> {
+  phone?: string | null,
+): Promise<SignupResult> {
   const cleanEmail = email.trim().toLowerCase();
-  const { data: existing } = await supabase
-    .from("customers")
-    .select("id, name, password_hash, referral_code")
-    .ilike("email", cleanEmail)
-    .maybeSingle();
+  const cleanPhone = normalizeUkMobile(phone);
+  if (!cleanPhone) return { ok: false, error: "Please enter a UK mobile number (starts with 07)." };
 
-  if (existing?.password_hash) {
-    return { ok: false, error: "An account with this email already exists — try logging in instead." };
+  const match = await findMember(cleanPhone, cleanEmail);
+  let claimId: number | null = null;
+  if (match.kind === "conflict") {
+    if (!match.mergeable || match.emailMember.has_account) {
+      return {
+        ok: false,
+        error: match.emailMember.has_account
+          ? "An account with this email already exists — try logging in instead."
+          : `That mobile number is already registered to another account. Log in, or call us on ${RESTAURANT_PHONE}.`,
+      };
+    }
+    // the mobile's guest record and the email's record are the same person
+    const merged = await mergeCustomers(match.emailMember.id, match.phoneMember.id, { reason: "website sign-up" });
+    if (!merged.ok) return { ok: false, error: "Failed to create account" };
+    claimId = match.emailMember.id;
+  } else if (match.kind === "match") {
+    if (match.member.has_account) {
+      return { ok: false, error: "An account with this email or mobile already exists — try logging in instead." };
+    }
+    claimId = match.member.id;
   }
 
   const password_hash = await bcrypt.hash(password, 10);
 
-  if (existing) {
-    // Claim the existing guest row — keep its name if it already had a real
-    // one (not the "Guest" placeholder findOrCreateCustomerByPhone uses).
+  if (claimId) {
+    const { data: existing } = await supabase.from("customers").select("name, referral_code").eq("id", claimId).single();
+    // Keep its name if it already had a real one (not the "Guest" placeholder).
     const { data, error } = await supabase
       .from("customers")
       .update({
         password_hash,
-        name: existing.name && existing.name !== "Guest" ? existing.name : name.trim(),
+        email: cleanEmail,
+        phone: cleanPhone,
+        name: existing?.name && existing.name !== "Guest" ? existing.name : name.trim(),
         marketing_consent: marketingConsent,
-        ...(existing.referral_code ? {} : { referral_code: await generateReferralCode() }),
+        ...(existing?.referral_code ? {} : { referral_code: await generateReferralCode() }),
       })
-      .eq("id", existing.id)
+      .eq("id", claimId)
       .select(CUSTOMER_SAFE_FIELDS)
       .single();
     if (error) return { ok: false, error: "Failed to create account" };
     // Rewards Club welcome: sign-up points + the 20% dine-in voucher (next
     // visit). Not a *new* customer, so no Bring a Friend reward for anyone.
-    const isNew = await issueSignupPoints(existing.id);
-    await issueWelcomeVoucher(existing.id);
-    if (isNew) await sendWelcomeFor(existing.id);
+    const isNew = await issueSignupPoints(claimId);
+    await issueWelcomeVoucher(claimId);
+    if (isNew) await sendWelcomeFor(claimId);
     return { ok: true, customer: data as Customer };
   }
 
@@ -75,6 +99,7 @@ export async function signupCustomer(
     .insert({
       name: name.trim(),
       email: cleanEmail,
+      phone: cleanPhone,
       password_hash,
       marketing_consent: marketingConsent,
       referral_code: await generateReferralCode(),
@@ -98,6 +123,9 @@ export async function verifyCustomerLogin(
     .from("customers")
     .select(`${CUSTOMER_SAFE_FIELDS}, password_hash`)
     .ilike("email", email.trim().toLowerCase())
+    // guest rows can share an email; only one *account* per email (unique index)
+    .not("password_hash", "is", null)
+    .is("merged_into", null)
     .maybeSingle();
 
   // Same generic error whether the email doesn't exist or the password is
@@ -127,14 +155,19 @@ export async function findOrCreateCustomerByPhone(
   email?: string | null,
   marketingConsent?: boolean
 ): Promise<number | null> {
-  const cleanPhone = phone.trim();
+  const cleanPhone = phoneKey(phone);
   if (!cleanPhone) return null;
+  const cleanEmail = email?.trim().toLowerCase() || null;
 
-  const { data: existing } = await supabase.from("customers").select("id, email").eq("phone", cleanPhone).maybeSingle();
+  // Match on mobile OR email (lib/customer-match.ts). A quick order that hits
+  // two different records goes by the mobile — the email is left alone.
+  const match = await findMember(cleanPhone, cleanEmail);
+  const existing = match.kind === "match" ? match.member : match.kind === "conflict" ? match.phoneMember : null;
   if (existing) {
     const updates: Record<string, unknown> = {};
-    // Backfill email if we now have one and didn't before — never overwrite an existing value.
-    if (email && !existing.email) updates.email = email;
+    // Backfill what's missing — never overwrite an existing value.
+    if (cleanEmail && !existing.email && match.kind === "match") updates.email = cleanEmail;
+    if (!existing.phone && match.kind === "match") updates.phone = cleanPhone;
     if (marketingConsent === true) updates.marketing_consent = true;
     if (Object.keys(updates).length > 0) {
       await supabase.from("customers").update(updates).eq("id", existing.id);
@@ -144,7 +177,7 @@ export async function findOrCreateCustomerByPhone(
 
   const { data: created, error } = await supabase
     .from("customers")
-    .insert({ name: name.trim() || "Guest", phone: cleanPhone, email: email || null, marketing_consent: marketingConsent === true })
+    .insert({ name: name.trim() || "Guest", phone: cleanPhone, email: cleanEmail, marketing_consent: marketingConsent === true })
     .select("id")
     .single();
   if (error) {
@@ -155,35 +188,88 @@ export async function findOrCreateCustomerByPhone(
 }
 
 /**
- * Joining the Rewards Club at the till: find the customer by phone (or make
- * them), and give the full welcome — sign-up points + the 20% voucher for
- * their next visit — if they haven't had it yet. (A guest row made silently
- * from an earlier order hasn't: joining is what earns it.)
+ * Which customer a website / QR order or booking belongs to. Logged in → always
+ * their own account, whatever number they typed (it might be a partner's);
+ * their mobile is added to the account if it has none and nobody else has it.
+ * Not logged in → matched on mobile OR email as usual.
  */
+export async function customerForOrder(
+  accountId: number | null | undefined,
+  phone: string | null | undefined,
+  name: string,
+  email?: string | null,
+  marketingConsent?: boolean,
+): Promise<number | null> {
+  if (accountId) {
+    const { data: me } = await supabase.from("customers").select("id, phone, merged_into").eq("id", accountId).maybeSingle();
+    if (me && !me.merged_into) {
+      const updates: Record<string, unknown> = {};
+      const mobile = normalizeUkMobile(phone);
+      if (!me.phone && mobile && !(await findByPhone(mobile))) updates.phone = mobile;
+      if (marketingConsent === true) updates.marketing_consent = true;
+      if (Object.keys(updates).length) await supabase.from("customers").update(updates).eq("id", me.id);
+      return me.id;
+    }
+  }
+  if (!phone || !String(phone).trim()) return null;
+  return findOrCreateCustomerByPhone(String(phone), name, email, marketingConsent);
+}
+
+/**
+ * Joining the Rewards Club at the till (mobile + email required). Matches on
+ * mobile OR email; if they point at two different people, returns the two so
+ * staff can pick (`useCustomerId` on the retry). Gives the full welcome —
+ * sign-up points + the 20% voucher for their next visit — if they haven't
+ * had it (a guest row made from an earlier order hasn't: joining earns it).
+ */
+export type JoinResult =
+  | { ok: true; customerId: number; alreadyMember: boolean }
+  | { ok: false; error: string; conflict?: { phoneMember: MemberSummary; emailMember: MemberSummary } };
+
 export async function joinMemberAtTill(input: {
   name: string;
   phone: string;
-  email?: string | null;
+  email: string;
   marketingConsent?: boolean;
-}): Promise<{ ok: true; customerId: number; alreadyMember: boolean } | { ok: false; error: string }> {
-  const phone = input.phone.trim();
-  const email = input.email?.trim().toLowerCase() || null;
-  if (!phone) return { ok: false, error: "Phone number is required" };
+  useCustomerId?: number | null;
+}): Promise<JoinResult> {
+  const phone = normalizeUkMobile(input.phone);
+  const email = input.email.trim().toLowerCase();
+  if (!phone) return { ok: false, error: "Enter a UK mobile number (starts with 07)" };
+  if (!email) return { ok: false, error: "Email is required to join" };
 
-  if (email) {
-    const { data: byEmail } = await supabase.from("customers").select("id, phone").ilike("email", email).maybeSingle();
-    if (byEmail && byEmail.phone && byEmail.phone !== phone) {
-      return { ok: false, error: "That email already belongs to another member — search for them instead" };
+  let customerId: number;
+  if (input.useCustomerId) {
+    customerId = input.useCustomerId; // staff chose which record after a conflict
+  } else {
+    const match = await findMember(phone, email);
+    if (match.kind === "conflict") {
+      if (!match.mergeable) return { ok: false, error: "These belong to two different people", conflict: match };
+      const merged = await mergeCustomers(match.emailMember.id, match.phoneMember.id, { reason: "joined at the till" });
+      if (!merged.ok) return { ok: false, error: merged.error };
+      customerId = match.emailMember.id;
+    } else if (match.kind === "match") {
+      customerId = match.member.id;
+    } else {
+      const { data: created, error } = await supabase
+        .from("customers")
+        .insert({ name: input.name.trim() || "Guest", phone, email, marketing_consent: input.marketingConsent === true })
+        .select("id")
+        .single();
+      if (error || !created) return { ok: false, error: "Couldn't create the member" };
+      customerId = created.id;
     }
   }
 
-  const customerId = await findOrCreateCustomerByPhone(phone, input.name || "Guest", email, input.marketingConsent === true);
-  if (!customerId) return { ok: false, error: "Couldn't create the member" };
-
-  const { data: c } = await supabase.from("customers").select("name, referral_code").eq("id", customerId).single();
+  // Fill in what the record is missing (never overwrite, never take a number
+  // or email that's on someone else's record).
+  const { data: c } = await supabase.from("customers").select("name, phone, email, referral_code").eq("id", customerId).single();
   const updates: Record<string, unknown> = {};
   if (!c?.referral_code) updates.referral_code = await generateReferralCode();
   if (input.name.trim() && (!c?.name || c.name === "Guest")) updates.name = input.name.trim();
+  if (!c?.phone && !(await findByPhone(phone))) updates.phone = phone;
+  if (!c?.email) updates.email = email;
+  if (input.marketingConsent === true) updates.marketing_consent = true;
   if (Object.keys(updates).length) await supabase.from("customers").update(updates).eq("id", customerId);
 
   const { data: had } = await supabase
@@ -195,7 +281,7 @@ export async function joinMemberAtTill(input: {
   const alreadyMember = !!(had && had.length);
   const isNew = await issueSignupPoints(customerId);
   await issueWelcomeVoucher(customerId);
-  if (isNew) await sendWelcomeFor(customerId); // only if they gave an email
+  if (isNew) await sendWelcomeFor(customerId);
   return { ok: true, customerId, alreadyMember };
 }
 

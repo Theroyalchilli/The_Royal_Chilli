@@ -59,6 +59,20 @@ export default function CheckoutPage() {
   const [confirmation, setConfirmation] = useState<{ orderNumber: string; total: number; scheduledFor: string | null }>({ orderNumber: "", total: 0, scheduledFor: null });
   const [confirmed, setConfirmed] = useState(false);
 
+  // Logged in → fill in their details (only fields they haven't typed in).
+  useEffect(() => {
+    fetch("/api/account/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const c = d?.customer as { name?: string; email?: string; phone?: string | null } | undefined;
+        if (!c) return;
+        setName((v) => v || c.name || "");
+        setEmail((v) => v || c.email || "");
+        setPhone((v) => v || c.phone || "");
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     setCart(readCart());
     setOrderType(readOrderType());

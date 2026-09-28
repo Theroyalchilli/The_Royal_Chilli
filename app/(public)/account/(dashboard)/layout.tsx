@@ -3,6 +3,7 @@ import Image from "next/image";
 import { getCustomerSession } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
 import AccountBottomNav from "@/components/site/AccountBottomNav";
+import AddMobileGate from "@/components/site/AddMobileGate";
 
 // Shared shell for every /account/* dashboard page — topbar with a live
 // points chip, the page content, and the fixed bottom tab bar. SiteHeader's
@@ -13,7 +14,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const session = await getCustomerSession();
   if (!session) redirect("/account/login");
 
-  const { data: customer } = await supabase.from("customers").select("loyalty_points").eq("id", session.id).maybeSingle();
+  const { data: customer } = await supabase.from("customers").select("loyalty_points, phone").eq("id", session.id).maybeSingle();
 
   return (
     <div className="min-h-screen pb-20">
@@ -31,7 +32,8 @@ export default async function AccountLayout({ children }: { children: React.Reac
         </div>
       </div>
 
-      <div className="mx-auto max-w-lg px-4 pt-6 overflow-x-hidden">{children}</div>
+      {/* every account needs a mobile — asked for before anything else */}
+      <div className="mx-auto max-w-lg px-4 pt-6 overflow-x-hidden">{customer && !customer.phone ? <AddMobileGate /> : children}</div>
 
       <AccountBottomNav />
     </div>

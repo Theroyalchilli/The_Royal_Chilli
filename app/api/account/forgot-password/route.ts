@@ -18,6 +18,9 @@ export async function POST(req: NextRequest) {
       .from("customers")
       .select("id, name, email, password_hash")
       .ilike("email", email.trim().toLowerCase())
+      // guest rows can share an email — only the account row has a password
+      .not("password_hash", "is", null)
+      .is("merged_into", null)
       .maybeSingle();
 
     if (customer?.password_hash) {

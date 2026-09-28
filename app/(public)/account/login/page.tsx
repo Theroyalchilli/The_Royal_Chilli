@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { normalizeUkMobile } from "@/lib/phone";
 
 function AuthForm() {
   const router = useRouter();
@@ -16,6 +17,7 @@ function AuthForm() {
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [error, setError] = useState("");
@@ -31,12 +33,16 @@ function AuthForm() {
       setError("Please enter your name");
       return;
     }
+    if (mode === "signup" && !normalizeUkMobile(mobile)) {
+      setError("Please enter your UK mobile number (starts with 07)");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/account/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "signup" ? { name, email, password, marketingConsent, referralCode: referralCode || undefined } : { email, password }),
+        body: JSON.stringify(mode === "signup" ? { name, phone: mobile, email, password, marketingConsent, referralCode: referralCode || undefined } : { email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -94,6 +100,20 @@ function AuthForm() {
                 placeholder="e.g. Aarav Sharma"
                 className="w-full rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-300"
               />
+            </div>
+          )}
+          {mode === "signup" && (
+            <div className="mb-3">
+              <label className="mb-1 block text-xs text-primary-foreground/70">Mobile number</label>
+              <input
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                type="tel"
+                inputMode="tel"
+                placeholder="07…"
+                className="w-full rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-300"
+              />
+              <p className="mt-1 text-[11px] text-primary-foreground/50">So we can find your points when you dine in.</p>
             </div>
           )}
           <div className="mb-3">

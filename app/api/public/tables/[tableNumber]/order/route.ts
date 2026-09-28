@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { getTableByNumber, addItemsToTable, getOpenOrderForTable, getOrderItems } from "@/lib/dine-in";
 import { queueKitchenTicketSafely } from "@/lib/print-queue";
 
@@ -27,7 +28,9 @@ export async function POST(
       return NextResponse.json({ error: "No items provided" }, { status: 400 });
     }
 
+    const account = await getCustomerSessionFromRequest(req);
     const { orderId, itemIds } = await addItemsToTable(table.id, items, {
+      accountId: account?.id ?? null,
       phone: customer_phone,
       name: customer_name,
       email: customer_email,

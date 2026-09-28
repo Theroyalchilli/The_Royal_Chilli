@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Member = { id: number; name: string; phone: string | null; email: string | null; loyalty_points: number };
+type Conflict = { phoneMember: Member; emailMember: Member };
 
 // Payment screen: put a Rewards Club member on the bill so it earns points —
 // find them by phone/email, or join them up there and then (full welcome:
@@ -25,6 +26,7 @@ export default function MemberPanel({
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState<Conflict | null>(null);
 
   // search as they type (debounced)
   useEffect(() => {
@@ -62,17 +64,19 @@ export default function MemberPanel({
     }
   }
 
-  async function join() {
+  async function join(useCustomerId?: number) {
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/loyalty/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, email, marketing_consent: consent, order_ids: orderIds }),
+        body: JSON.stringify({ name, phone, email, marketing_consent: consent, order_ids: orderIds, use_customer_id: useCustomerId }),
       });
       const d = await res.json();
+      if (res.status === 409 && d.conflict) return setConflict(d.conflict);
       if (!res.ok) return setError(d.error || "Couldn't join them up");
+      setConflict(null);
       onLinked(d.member, !d.already_member);
     } finally {
       setBusy(false);
@@ -127,14 +131,35 @@ export default function MemberPanel({
         <div className="space-y-1.5">
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className={input} />
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" inputMode="tel" className={input} />
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (for their welcome voucher)" type="email" className={input} />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (their welcome voucher goes here)" type="email" className={input} />
           <label className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5" />
             <span>They&apos;re happy to get offers &amp; rewards by email</span>
           </label>
-          <button onClick={join} disabled={busy || !name.trim() || !phone.trim()} className="w-full rounded-lg bg-rose-600 py-2 text-xs font-bold text-white disabled:opacity-50">
-            {busy ? "Joining…" : "Join & add to this bill"}
-          </button>
+          {conflict ? (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px]">
+              <p className="font-semibold text-amber-800">⚠️ These belong to two different people — which is it?</p>
+              {[
+                { label: conflict.phoneMember.phone ?? "mobile", m: conflict.phoneMember },
+                { label: conflict.emailMember.email ?? "email", m: conflict.emailMember },
+              ].map(({ label, m }) => (
+                <button
+                  key={m.id}
+                  onClick={() => join(m.id)}
+                  disabled={busy}
+                  className="mt-1 flex w-full items-center justify-between rounded bg-white px-2 py-1.5 text-left hover:bg-amber-100 disabled:opacity-50"
+                >
+                  <span>{label} → <b>{m.name}</b></span>
+                  <span className="text-rose-700">{m.loyalty_points} pts · Use</span>
+                </button>
+              ))}
+              <button onClick={() => setConflict(null)} className="mt-1 w-full text-center text-muted-foreground underline">Cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => join()} disabled={busy || !name.trim() || !phone.trim() || !email.trim()} className="w-full rounded-lg bg-rose-600 py-2 text-xs font-bold text-white disabled:opacity-50">
+              {busy ? "Joining…" : "Join & add to this bill"}
+            </button>
+          )}
           <p className="text-[10px] text-muted-foreground">They get 200 points now and 20% off their next dine-in visit.</p>
         </div>
       )}

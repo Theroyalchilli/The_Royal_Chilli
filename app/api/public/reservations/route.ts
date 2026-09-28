@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
-import { findOrCreateCustomerByPhone } from "@/lib/customers";
+import { customerForOrder } from "@/lib/customers";
+import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { sendReservationConfirmationEmail } from "@/lib/email";
 import { isValidEmail } from "@/lib/utils";
 
@@ -36,7 +37,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ full: true, message: "That time is fully booked. Would you like to join the waitlist instead?" });
     }
 
-    const customerId = await findOrCreateCustomerByPhone(customer_phone, customer_name, customer_email);
+    const account = await getCustomerSessionFromRequest(req);
+    const customerId = await customerForOrder(account?.id, customer_phone, customer_name, customer_email);
 
     // Deposits only apply to an actually-held slot — not the waitlist, since
     // there's no table to hold yet.

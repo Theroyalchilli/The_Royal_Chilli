@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search");
 
-  let query = supabase.from("customers").select(CUSTOMER_SAFE_FIELDS).order("created_at", { ascending: false });
+  let query = supabase.from("customers").select(CUSTOMER_SAFE_FIELDS).is("merged_into", null).order("created_at", { ascending: false });
   if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 
   const { data: customers, error } = await query;

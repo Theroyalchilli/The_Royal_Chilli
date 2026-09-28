@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
 import { getActiveTiers, tierForSpend, computeSegment } from "@/lib/crm";
 import { CUSTOMER_SAFE_FIELDS } from "@/lib/customers";
+import { tradingDayStr } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -21,11 +22,12 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
 
   const { data: paidOrders } = await supabase.from("orders").select("customer_id, total, created_at").eq("is_paid", true).not("customer_id", "is", null);
-  const spendByCustomer = new Map<number, { spend: number; visits: number; lastVisit: string | null }>();
+  // visits = trading days with a paid order (two bills one night = one visit)
+  const spendByCustomer = new Map<number, { spend: number; days: Set<string>; lastVisit: string | null }>();
   for (const o of paidOrders || []) {
-    const cur = spendByCustomer.get(o.customer_id) || { spend: 0, visits: 0, lastVisit: null };
+    const cur = spendByCustomer.get(o.customer_id) || { spend: 0, days: new Set<string>(), lastVisit: null };
     cur.spend += Number(o.total);
-    cur.visits += 1;
+    cur.days.add(tradingDayStr(new Date(o.created_at)));
     if (!cur.lastVisit || o.created_at > cur.lastVisit) cur.lastVisit = o.created_at;
     spendByCustomer.set(o.customer_id, cur);
   }
@@ -36,16 +38,16 @@ export async function GET(req: NextRequest) {
   const now = Date.now();
 
   const enriched = (customers || []).map((c) => {
-    const stats = spendByCustomer.get(c.id) || { spend: 0, visits: 0, lastVisit: null };
+    const stats = spendByCustomer.get(c.id) || { spend: 0, days: new Set<string>(), lastVisit: null };
     const lifetimeSpend = Math.round(stats.spend * 100) / 100;
     const daysSinceLastVisit = stats.lastVisit ? Math.floor((now - new Date(stats.lastVisit).getTime()) / 86_400_000) : null;
     return {
       ...c,
       lifetime_spend: lifetimeSpend,
-      visit_count: stats.visits,
+      visit_count: stats.days.size,
       last_visit: stats.lastVisit,
       tier: tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze",
-      segment: computeSegment({ visitCount: stats.visits, daysSinceLastVisit, lifetimeSpend, winbackDays }),
+      segment: computeSegment({ visitCount: stats.days.size, daysSinceLastVisit, winbackDays }),
     };
   });
 

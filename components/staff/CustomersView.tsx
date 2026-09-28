@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import RewardsRules from "@/components/staff/RewardsRules";
+import ClubReport from "@/components/staff/ClubReport";
 
-type Segment = "NEW" | "ACTIVE" | "LOYAL" | "VIP" | "AT_RISK" | "INACTIVE";
+type Segment = "NEW" | "FIRST_TIME" | "RETURNING" | "REGULAR" | "LAPSED";
 type Customer = {
   id: number; name: string; phone: string; email: string | null; date_of_birth: string | null;
   loyalty_points: number; referral_code: string | null; lifetime_spend: number; visit_count: number; tier: string;
@@ -17,13 +18,22 @@ type Reward = {
 };
 type Birthday = { id: number; name: string; phone: string; days_away: number };
 
+// Rewards Club groups (lib/crm.ts computeSegment)
+const SEGMENTS: Segment[] = ["NEW", "FIRST_TIME", "RETURNING", "REGULAR", "LAPSED"];
 const segmentStyle: Record<Segment, string> = {
-  NEW: "text-blue-600 bg-blue-50 border-blue-200",
-  ACTIVE: "text-foreground bg-surface-hover border-border",
-  LOYAL: "text-emerald-700 bg-emerald-50 border-emerald-200",
-  VIP: "text-amber-700 bg-amber-50 border-amber-200",
-  AT_RISK: "text-orange-700 bg-orange-50 border-orange-200",
-  INACTIVE: "text-red-700 bg-red-50 border-red-200",
+  NEW: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  FIRST_TIME: "text-amber-700 bg-amber-50 border-amber-200",
+  RETURNING: "text-blue-700 bg-blue-50 border-blue-200",
+  REGULAR: "text-purple-700 bg-purple-50 border-purple-200",
+  LAPSED: "text-red-700 bg-red-50 border-red-200",
+};
+const segmentLabel: Record<Segment, string> = { NEW: "🟢 New", FIRST_TIME: "🟡 First-time", RETURNING: "🔵 Returning", REGULAR: "🟣 Regular", LAPSED: "🔴 Lapsed" };
+const segmentHint: Record<Segment, string> = {
+  NEW: "Joined, no visits yet",
+  FIRST_TIME: "1 visit",
+  RETURNING: "2–4 visits",
+  REGULAR: "5+ visits, in within 60 days",
+  LAPSED: "No visit in 45+ days",
 };
 type Tier = { id: number; name: string; min_lifetime_spend: number; points_multiplier: number; sort_order: number; active: number };
 type Redemption = {
@@ -155,7 +165,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
           </div>
           <div className="flex flex-col items-end gap-1">
             <span className={`text-sm font-bold ${tierColor[c.tier]}`}>{c.tier}</span>
-            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${segmentStyle[c.segment]}`}>{c.segment.replace("_", " ")}</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${segmentStyle[c.segment]}`}>{segmentLabel[c.segment] ?? c.segment}</span>
           </div>
         </div>
 
@@ -175,7 +185,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
           </label>
         )}
 
-        {(c.segment === "AT_RISK" || c.segment === "INACTIVE") && isManager && (
+        {c.segment === "LAPSED" && isManager && (
           <div className="mt-3 rounded-lg border border-orange-300/50 bg-orange-50 p-3">
             <p className="text-orange-800 text-xs font-semibold">This customer hasn&apos;t visited in a while.</p>
             {!c.marketing_consent ? (
@@ -241,7 +251,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
 }
 
 export default function CustomersView({ isManager }: { isManager: boolean }) {
-  const [tab, setTab] = useState<"customers" | "rewards" | "rules" | "tiers" | "redemptions">("customers");
+  const [tab, setTab] = useState<"customers" | "report" | "rewards" | "rules" | "tiers" | "redemptions">("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState<Segment | "all">("all");
@@ -342,6 +352,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
 
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
             <button onClick={() => setTab("customers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "customers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Customers</button>
+            <button onClick={() => setTab("report")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "report" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Club Report</button>
             <button onClick={() => setTab("rewards")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rewards" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Catalog</button>
             <button onClick={() => setTab("rules")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rules" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Rules</button>
             <button onClick={() => setTab("tiers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "tiers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Tiers</button>
@@ -364,18 +375,33 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
           <div className="mt-5">
             <div className="flex flex-wrap gap-2">
               <input placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 min-w-[160px] bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-              <select value={segmentFilter} onChange={(e) => setSegmentFilter(e.target.value as Segment | "all")}
-                className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
-                <option value="all">All segments</option>
-                {(["NEW", "ACTIVE", "LOYAL", "VIP", "AT_RISK", "INACTIVE"] as Segment[]).map((s) => (
-                  <option key={s} value={s}>{s.replace("_", " ")}</option>
-                ))}
-              </select>
               <button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
+            </div>
+            {/* Group counts — tap one to filter the list */}
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
+              <button
+                onClick={() => setSegmentFilter("all")}
+                className={`rounded-lg border px-2 py-2 text-left ${segmentFilter === "all" ? "border-red-500 ring-1 ring-red-500" : "border-border"} bg-surface`}
+              >
+                <div className="text-lg font-bold text-foreground">{customers.length}</div>
+                <div className="text-[11px] text-muted-foreground">All members</div>
+              </button>
+              {SEGMENTS.map((sg) => (
+                <button
+                  key={sg}
+                  onClick={() => setSegmentFilter(segmentFilter === sg ? "all" : sg)}
+                  title={segmentHint[sg]}
+                  className={`rounded-lg border px-2 py-2 text-left ${segmentFilter === sg ? "border-red-500 ring-1 ring-red-500" : "border-border"} bg-surface`}
+                >
+                  <div className="text-lg font-bold text-foreground">{customers.filter((c) => c.segment === sg).length}</div>
+                  <div className="text-[11px] text-muted-foreground">{segmentLabel[sg]}</div>
+                  <div className="text-[10px] text-muted-foreground/70">{segmentHint[sg]}</div>
+                </button>
+              ))}
             </div>
             <div className="mt-3 rounded-xl border border-border overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Phone</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Visits</th><th className="text-right px-3 py-2">Points</th><th className="text-right px-3 py-2">Tier</th><th className="text-right px-3 py-2">Segment</th></tr></thead>
+                <thead className="bg-surface text-muted-foreground"><tr><th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Phone</th><th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Visits</th><th className="text-right px-3 py-2">Points</th><th className="text-right px-3 py-2">Tier</th><th className="text-right px-3 py-2">Group</th></tr></thead>
                 <tbody className="divide-y divide-border">
                   {customers.filter((c) => segmentFilter === "all" || c.segment === segmentFilter).map((c) => (
                     <tr key={c.id} onClick={() => setDetailId(c.id)} className="bg-background hover:bg-surface cursor-pointer">
@@ -386,7 +412,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
                       <td className="px-3 py-2 text-right text-foreground">{c.loyalty_points}</td>
                       <td className={`px-3 py-2 text-right font-semibold ${tierColor[c.tier]}`}>{c.tier}</td>
                       <td className="px-3 py-2 text-right">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${segmentStyle[c.segment]}`}>{c.segment.replace("_", " ")}</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${segmentStyle[c.segment]}`}>{segmentLabel[c.segment] ?? c.segment}</span>
                       </td>
                     </tr>
                   ))}
@@ -440,6 +466,8 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
             </div>
           </div>
         )}
+
+        {tab === "report" && <div className="mt-5"><ClubReport /></div>}
 
         {tab === "rules" && <RewardsRules canEdit={isManager} />}
 

@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { tradingDayStr } from "@/lib/london-date";
 
 export type LoyaltyTier = { id: number; name: string; min_lifetime_spend: number; points_multiplier: number };
 
@@ -41,20 +42,41 @@ export async function tierFromSpend(lifetimeSpend: number): Promise<string> {
   return tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze";
 }
 
-export type CustomerSegment = "NEW" | "ACTIVE" | "LOYAL" | "VIP" | "AT_RISK" | "INACTIVE";
+// Rewards Club customer groups (phase 5). A "visit" is a trading day with a
+// paid order (lib/visits.ts), so two bills in one night are one visit.
+export type CustomerSegment = "NEW" | "FIRST_TIME" | "RETURNING" | "REGULAR" | "LAPSED";
 
-// Computed at read-time from visit recency/count rather than stored — always
-// correct, no background job needed to keep a segment column in sync.
-// AT_RISK/INACTIVE take priority over spend-based segments (a Gold-tier
-// customer who hasn't visited in 3 months is still someone to win back).
-export function computeSegment(params: { visitCount: number; daysSinceLastVisit: number | null; lifetimeSpend: number; winbackDays: number }): CustomerSegment {
-  const { visitCount, daysSinceLastVisit, lifetimeSpend, winbackDays } = params;
+export const SEGMENT_LABEL: Record<CustomerSegment, string> = {
+  NEW: "New",
+  FIRST_TIME: "First-time",
+  RETURNING: "Returning",
+  REGULAR: "Regular",
+  LAPSED: "Lapsed",
+};
+
+/** A regular has 5+ visits and has been in within this many days. */
+export const REGULAR_WINDOW_DAYS = 60;
+
+// Computed at read-time from visit count and recency — always correct, no
+// background job. Lapsed takes priority: a regular who hasn't been in for
+// 45+ days (winbackDays) is someone to win back.
+//   New        joined, no visits yet
+//   First-time 1 visit
+//   Returning  2–4 visits
+//   Regular    5+ visits, last visit within 60 days
+//   Lapsed     visited before, nothing in 45+ days
+export function computeSegment(params: { visitCount: number; daysSinceLastVisit: number | null; winbackDays: number }): CustomerSegment {
+  const { visitCount, daysSinceLastVisit, winbackDays } = params;
   if (visitCount === 0) return "NEW";
-  if (daysSinceLastVisit != null && daysSinceLastVisit > winbackDays * 2) return "INACTIVE";
-  if (daysSinceLastVisit != null && daysSinceLastVisit > winbackDays) return "AT_RISK";
-  if (lifetimeSpend >= 500 || visitCount >= 15) return "VIP";
-  if (visitCount >= 5) return "LOYAL";
-  return "ACTIVE";
+  if (daysSinceLastVisit != null && daysSinceLastVisit > winbackDays) return "LAPSED";
+  if (visitCount >= 5 && (daysSinceLastVisit == null || daysSinceLastVisit <= REGULAR_WINDOW_DAYS)) return "REGULAR";
+  if (visitCount >= 2) return "RETURNING";
+  return "FIRST_TIME";
+}
+
+/** Distinct trading days (5am–5am UK) among these paid orders = visits. */
+export function countVisits(orders: { created_at: string }[]): number {
+  return new Set(orders.map((o) => tradingDayStr(new Date(o.created_at)))).size;
 }
 
 export async function getCustomerStats(customerId: number) {
@@ -65,7 +87,7 @@ export async function getCustomerStats(customerId: number) {
     .eq("is_paid", true);
 
   const lifetimeSpend = Math.round((orders || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
-  const visitCount = (orders || []).length;
+  const visitCount = countVisits(orders || []);
 
   const orderIds = (orders || []).map((o) => o.id);
   let favouriteDish: string | null = null;

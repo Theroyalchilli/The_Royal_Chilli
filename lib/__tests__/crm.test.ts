@@ -3,7 +3,7 @@ jest.mock("../supabase", () => ({
   default: { from: () => ({ select: () => Promise.resolve({ data: null, error: null }) }) },
 }));
 
-import { tierForSpend, computeSegment, type LoyaltyTier } from "@/lib/crm";
+import { tierForSpend, computeSegment, countVisits, type LoyaltyTier } from "@/lib/crm";
 
 describe("tierForSpend", () => {
   const tiers: LoyaltyTier[] = [
@@ -36,36 +36,37 @@ describe("tierForSpend", () => {
   });
 });
 
-describe("computeSegment", () => {
+describe("computeSegment (Rewards Club groups)", () => {
   const winbackDays = 45;
+  const g = (visitCount: number, daysSinceLastVisit: number | null) => computeSegment({ visitCount, daysSinceLastVisit, winbackDays });
 
-  it("is NEW for a customer with zero visits, regardless of recency data", () => {
-    expect(computeSegment({ visitCount: 0, daysSinceLastVisit: null, lifetimeSpend: 0, winbackDays })).toBe("NEW");
+  it("New: joined, no visits yet", () => {
+    expect(g(0, null)).toBe("NEW");
   });
-
-  it("is AT_RISK past the win-back threshold but not yet double it", () => {
-    expect(computeSegment({ visitCount: 3, daysSinceLastVisit: 46, lifetimeSpend: 50, winbackDays })).toBe("AT_RISK");
-    expect(computeSegment({ visitCount: 3, daysSinceLastVisit: 45, lifetimeSpend: 50, winbackDays })).not.toBe("AT_RISK");
+  it("First-time: one visit", () => {
+    expect(g(1, 3)).toBe("FIRST_TIME");
   });
-
-  it("is INACTIVE once recency passes double the win-back threshold", () => {
-    expect(computeSegment({ visitCount: 3, daysSinceLastVisit: 91, lifetimeSpend: 50, winbackDays })).toBe("INACTIVE");
+  it("Returning: 2–4 visits", () => {
+    expect(g(2, 3)).toBe("RETURNING");
+    expect(g(4, 30)).toBe("RETURNING");
   });
-
-  it("recency overrides a high spend/visit count — a lapsed VIP is still AT_RISK, not VIP", () => {
-    expect(computeSegment({ visitCount: 20, daysSinceLastVisit: 60, lifetimeSpend: 900, winbackDays })).toBe("AT_RISK");
+  it("Regular: 5+ visits, recent", () => {
+    expect(g(5, 10)).toBe("REGULAR");
+    expect(g(20, 45)).toBe("REGULAR");
   });
-
-  it("is VIP for high spend or high visit count within the recency window", () => {
-    expect(computeSegment({ visitCount: 2, daysSinceLastVisit: 5, lifetimeSpend: 600, winbackDays })).toBe("VIP");
-    expect(computeSegment({ visitCount: 16, daysSinceLastVisit: 5, lifetimeSpend: 50, winbackDays })).toBe("VIP");
+  it("Lapsed: nothing in 45+ days — even a regular", () => {
+    expect(g(1, 46)).toBe("LAPSED");
+    expect(g(20, 46)).toBe("LAPSED");
+    expect(g(3, 45)).not.toBe("LAPSED");
   });
+});
 
-  it("is LOYAL for a frequent but lower-spend recent customer", () => {
-    expect(computeSegment({ visitCount: 6, daysSinceLastVisit: 5, lifetimeSpend: 100, winbackDays })).toBe("LOYAL");
-  });
-
-  it("is ACTIVE for a recent customer who is neither loyal nor VIP yet", () => {
-    expect(computeSegment({ visitCount: 2, daysSinceLastVisit: 5, lifetimeSpend: 40, winbackDays })).toBe("ACTIVE");
+describe("countVisits", () => {
+  it("two bills the same trading night are one visit", () => {
+    expect(countVisits([
+      { created_at: "2026-10-07T19:00:00Z" }, // Wed 20:00
+      { created_at: "2026-10-07T23:30:00Z" }, // Thu 00:30 — still Wednesday
+      { created_at: "2026-10-09T12:00:00Z" }, // Fri lunch
+    ])).toBe(2);
   });
 });

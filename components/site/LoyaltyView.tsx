@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { shareMessage } from "@/lib/share-message";
 
 type Reward = { id: number; name: string; description: string | null; points_cost: number; discount_amount: number | null };
 type Redemption = {
@@ -21,6 +22,7 @@ type LoyaltyData = {
   activeRedemption: Redemption | null;
   welcomeVoucher: Redemption | null;
   referralCode: string | null;
+  shareMessage?: string | null;
   referralVouchers: ReferralVoucher[];
 };
 
@@ -149,10 +151,11 @@ function VoucherPanel({ redemption, onCancel, busy }: { redemption: Redemption |
 }
 
 // Bring a Friend: the member's share link, and what each side gets.
-function BringAFriend({ code }: { code: string }) {
+function BringAFriend({ code, template }: { code: string; template: string | null }) {
   const [copied, setCopied] = useState(false);
   const link = typeof window !== "undefined" ? `${window.location.origin}/join?ref=${code}` : `/join?ref=${code}`;
-  const message = `Join me at The Royal Chilli's Rewards Club — you'll get 200 points and 20% off your first dine-in visit: ${link}`;
+  // wording set in Staff Hub → Rewards Rules (lib/share-message.ts)
+  const message = shareMessage(template, link);
 
   async function share() {
     if (navigator.share) {
@@ -163,7 +166,7 @@ function BringAFriend({ code }: { code: string }) {
         /* cancelled — fall through to copy */
       }
     }
-    await navigator.clipboard?.writeText(link).catch(() => {});
+    await navigator.clipboard?.writeText(message).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   }
@@ -178,7 +181,7 @@ function BringAFriend({ code }: { code: string }) {
       <div className="mt-3 rounded-lg bg-muted px-3 py-2 text-center font-mono text-sm tracking-wider">{code}</div>
       <div className="mt-2 flex gap-2">
         <button onClick={share} className="flex-1 rounded-lg bg-primary py-2.5 text-xs font-semibold text-primary-foreground">
-          {copied ? "Link copied ✓" : "Share my link"}
+          {copied ? "Message copied ✓" : "Share my link"}
         </button>
         <a
           href={`https://wa.me/?text=${encodeURIComponent(message)}`}
@@ -295,7 +298,7 @@ function LoyaltyInner() {
 
       {tab === "rewards" && (
         <>
-          {data.referralCode && <BringAFriend code={data.referralCode} />}
+          {data.referralCode && <BringAFriend code={data.referralCode} template={data.shareMessage ?? null} />}
           <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Redeem your points</div>
           <div className="rounded-2xl border border-border bg-surface shadow-sm">
             {data.rewards.length === 0 ? (

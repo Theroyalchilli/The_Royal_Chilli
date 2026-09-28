@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   const session = await getCustomerSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: customer } = await supabase.from("customers").select("loyalty_points, referral_code").eq("id", session.id).maybeSingle();
+  const [{ data: customer }, { data: shareSetting }] = await Promise.all([
+    supabase.from("customers").select("loyalty_points, referral_code").eq("id", session.id).maybeSingle(),
+    supabase.from("app_settings").select("value").eq("key", "loyalty_share_message").maybeSingle(),
+  ]);
 
   const { data: rewards } = await supabase
     .from("loyalty_rewards")
@@ -53,6 +56,7 @@ export async function GET(req: NextRequest) {
     activeRedemption: live.find((r) => !isWelcome(r) && !isReferral(r) && r.status === "issued") ?? null,
     welcomeVoucher: live.find((r) => isWelcome(r) && r.status === "issued") ?? null,
     referralCode: customer?.referral_code ?? null,
+    shareMessage: typeof shareSetting?.value === "string" ? shareSetting.value : null,
     referralVouchers: referral.map((r) => ({
       id: r.id,
       status: r.status,

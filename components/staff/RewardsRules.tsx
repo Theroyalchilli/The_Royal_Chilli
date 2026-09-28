@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { DEFAULT_SHARE_MESSAGE } from "@/lib/share-message";
 
 // Staff Hub → Customers & Loyalty → Rules: the Rewards Club numbers, kept in
 // app_settings so they can change without a rebuild.
@@ -21,6 +22,7 @@ type Form = {
   referralMinSpend: string;
   referralMaxPerYear: string;
   expiryMonths: string;
+  shareMessage: string;
 };
 
 const num = (v: unknown, d = "") => (v == null ? d : String(v));
@@ -62,6 +64,7 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
           referralMinSpend: num(s.loyalty_referral_min_spend, "20"),
           referralMaxPerYear: num(s.loyalty_referral_max_per_year, "10"),
           expiryMonths: num(s.loyalty_points_expiry_months, "12"),
+          shareMessage: typeof s.loyalty_share_message === "string" && s.loyalty_share_message.trim() ? s.loyalty_share_message : DEFAULT_SHARE_MESSAGE,
         });
       })
       .catch(() => {});
@@ -73,6 +76,10 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
 
   async function save() {
     if (!form) return;
+    if (!form.shareMessage.includes("{link}")) {
+      toast({ variant: "destructive", title: "The share message needs {link} where the member's link goes" });
+      return;
+    }
     if (n(form.redeemStep) > n(form.maxPerVisit)) {
       toast({ variant: "destructive", title: "Step can't be bigger than the max per visit" });
       return;
@@ -96,6 +103,7 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
         loyalty_referral_min_spend: n(form.referralMinSpend),
         loyalty_referral_max_per_year: n(form.referralMaxPerYear),
         loyalty_points_expiry_months: n(form.expiryMonths),
+        loyalty_share_message: form.shareMessage,
       }),
     });
     setSaving(false);
@@ -162,6 +170,27 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
         <div className="rounded-xl border border-border bg-surface">
           <Row label="Friend's first order must be at least">£{box("referralMinSpend")}</Row>
           <Row label="Max £5 vouchers per member per year">{box("referralMaxPerYear")}</Row>
+          <div className="border-t border-border px-4 py-3">
+            <div className="text-sm font-medium text-foreground">Share message</div>
+            <div className="text-xs text-muted-foreground">
+              What members send when they tap Share my link or WhatsApp. <b>{"{link}"}</b> becomes their own join link.
+            </div>
+            <textarea
+              value={form.shareMessage}
+              onChange={(e) => setForm({ ...form, shareMessage: e.target.value })}
+              disabled={!canEdit}
+              rows={9}
+              className="mt-2 w-full rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm text-foreground disabled:opacity-60"
+            />
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => setForm({ ...form, shareMessage: DEFAULT_SHARE_MESSAGE })}
+              className="mt-1 text-xs text-muted-foreground underline disabled:opacity-60"
+            >
+              Reset to the standard message
+            </button>
+          </div>
         </div>
       </section>
 

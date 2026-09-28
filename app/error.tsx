@@ -28,15 +28,22 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
     return <div className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground">Updating to the latest version…</div>;
   }
 
-  if (STAFF_AREAS.some((a) => pathname === a || pathname.startsWith(`${a}/`))) {
+  const staffArea = STAFF_AREAS.find((a) => pathname === a || pathname.startsWith(`${a}/`));
+  if (staffArea) {
+    // Staff Hub / till: "home" is the start of their own area, not the website
+    const home = staffArea === "/staff" ? "/staff" : staffArea === "/login" ? "/login" : "/pos";
     return (
       <div className="mx-auto grid min-h-[60vh] max-w-sm place-items-center px-6 text-center">
         <div>
-          <h1 className="text-xl font-semibold">Something went wrong on this screen</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Tap Try again. If it keeps happening, tell a manager.</p>
-          <button onClick={tryAgain} className="mt-4 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white">
-            Try again
-          </button>
+          <h1 className="text-2xl font-semibold">Something went wrong 🌶️</h1>
+          <p className="mt-2 text-sm text-muted-foreground">We&apos;re sorry — this page couldn&apos;t be loaded properly.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Please try again. If the problem continues, return to the homepage and try again in a moment.</p>
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button onClick={tryAgain} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white">Try Again</button>
+            <a href={home} className="rounded-xl border border-border px-4 py-3 text-sm font-semibold">Back to Home</a>
+          </div>
+          <p className="mt-6 text-xs text-muted-foreground">If you still need help, please contact The Royal Chilli team.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Authentic Flavours. Memorable Experiences.</p>
           {error.digest && <p className="mt-3 text-[11px] text-muted-foreground">Error ref: {error.digest}</p>}
         </div>
       </div>

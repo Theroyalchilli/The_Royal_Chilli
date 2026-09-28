@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const { data: customers, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
 
-  const { data: paidOrders } = await supabase.from("orders").select("customer_id, total, created_at").eq("status", "paid").not("customer_id", "is", null);
+  const { data: paidOrders } = await supabase.from("orders").select("customer_id, total, created_at").eq("is_paid", true).not("customer_id", "is", null);
   const spendByCustomer = new Map<number, { spend: number; visits: number; lastVisit: string | null }>();
   for (const o of paidOrders || []) {
     const cur = spendByCustomer.get(o.customer_id) || { spend: 0, visits: 0, lastVisit: null };

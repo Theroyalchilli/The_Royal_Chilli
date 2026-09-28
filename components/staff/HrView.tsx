@@ -6,6 +6,7 @@ import type { Staff } from "@/lib/types";
 import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
 import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
 import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
+import { londonDateStr } from "@/lib/london-date";
 
 type HrDetails = {
   preferred_name: string | null; job_title: string | null; department: string | null;
@@ -470,12 +471,12 @@ type RtwCheck = {
   checked_by_name: string | null; checked_by_position: string | null; employer_declaration_confirmed: boolean; signed_by: string | null; signed_date: string | null;
 };
 const emptyCheck = {
-  check_date: new Date().toISOString().slice(0, 10), check_method: "manual",
+  check_date: londonDateStr(), check_method: "manual",
   identity_matched: false, documents_genuine_valid: false, work_permitted: false,
   time_limited: false, permission_expiry_date: "", follow_up_due_date: "",
   student_dates_retained: "not_applicable", ecs_expiry_date: "", evidence_stored_securely: false,
   storage_location: "", retention_reminder_recorded: false, restrictions_communicated: "not_applicable",
-  document_reference: "", checked_by_position: "", employer_declaration_confirmed: false, signed_by: "", signed_date: new Date().toISOString().slice(0, 10),
+  document_reference: "", checked_by_position: "", employer_declaration_confirmed: false, signed_by: "", signed_date: londonDateStr(),
 };
 
 function RtwVerificationTab({ staffId }: { staffId: number }) {
@@ -684,7 +685,7 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [form, setForm] = useState({
     name: "", username: "", password: "", role: "employee", email: "", phone: "",
     employment_type: "hourly" as "hourly" | "salaried", pay_rate: "0", pay_frequency: "weekly" as "weekly" | "monthly",
-    hire_date: new Date().toISOString().slice(0, 10),
+    hire_date: londonDateStr(),
   });
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();

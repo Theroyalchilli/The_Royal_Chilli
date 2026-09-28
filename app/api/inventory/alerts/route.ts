@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { londonDateStr } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
     .select("*, ingredient:ingredients(name, unit)")
     .not("expiry_date", "is", null)
     .lte("expiry_date", sevenDaysOut)
-    .gte("expiry_date", new Date().toISOString().slice(0, 10));
+    .gte("expiry_date", londonDateStr());
 
   const flatExpiring = (expiringItems || []).map((i) => {
     const { ingredient: ing, ...rest } = i as typeof i & { ingredient: { name: string; unit: string } | null };

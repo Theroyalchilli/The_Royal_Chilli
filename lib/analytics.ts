@@ -1,12 +1,13 @@
 import supabase from "@/lib/supabase";
+import { tradingRangeUtc } from "@/lib/london-date";
 
 export async function getPaidOrdersInRange(from: string, to: string) {
   const { data, error } = await supabase
     .from("orders")
     .select("id, total, staff_id, created_at")
-    .eq("status", "paid")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .eq("is_paid", true)
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
   if (error) throw error;
   return data || [];
 }

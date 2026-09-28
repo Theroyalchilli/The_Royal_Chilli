@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { tradingRangeUtc } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -21,8 +22,8 @@ export async function GET(req: NextRequest) {
     .limit(500);
   if (ingredientId) query = query.eq("ingredient_id", ingredientId);
   if (movementType) query = query.eq("movement_type", movementType);
-  if (from) query = query.gte("created_at", `${from}T00:00:00.000Z`);
-  if (to) query = query.lte("created_at", `${to}T23:59:59.999Z`);
+  if (from) query = query.gte("created_at", tradingRangeUtc(from).start);
+  if (to) query = query.lte("created_at", tradingRangeUtc(to).end);
 
   const { data, error } = await query;
   if (error) {

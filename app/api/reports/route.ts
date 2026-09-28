@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { getRefundsByOrderId } from "@/lib/analytics";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,19 +12,19 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = tradingDayStr();
     const date = searchParams.get("date") || today;
     // from/to support a real range; date alone (back-compat) means a single day.
     const from = searchParams.get("from") || date;
     const to = searchParams.get("to") || date;
 
-    const dayStart = from + "T00:00:00.000Z";
-    const dayEnd = to + "T23:59:59.999Z";
+    // Trading days, 5am-5am UK (lib/london-date.ts).
+    const { start: dayStart, end: dayEnd } = tradingRangeUtc(from, to);
 
     // Fetch all non-cancelled orders for the day
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
-      .select("id, total, discount, status, order_type, created_at, customer_id")
+      .select("id, total, discount, status, is_paid, order_type, created_at, customer_id")
       .gte("created_at", dayStart)
       .lte("created_at", dayEnd)
       .not("status", "eq", "cancelled");
@@ -46,7 +47,8 @@ export async function GET(req: NextRequest) {
     // up separately via Staff Hub → Reports → Pending Bills instead. Order
     // *counts* still include it, since it genuinely was placed that day.
     const totalOrders = ordersData.length;
-    const paidOrdersData = ordersData.filter((o) => o.status === "paid");
+    // is_paid (migration 063): paid at the till OR fully paid online.
+    const paidOrdersData = ordersData.filter((o) => o.is_paid);
     const totalRevenue = paidOrdersData.reduce((s, o) => s + netTotal(o), 0);
     const avgOrderValue = paidOrdersData.length > 0 ? totalRevenue / paidOrdersData.length : 0;
     const paidOrders = paidOrdersData.length;

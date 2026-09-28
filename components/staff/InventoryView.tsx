@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { tradingDayStr } from "@/lib/london-date";
 
 type Ingredient = {
   id: number; name: string; unit: string; current_stock: number; reorder_level: number;
@@ -660,8 +661,8 @@ function StockTakesTab({ canApprove }: { canApprove: boolean }) {
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
 function ReconciliationTab() {
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = tradingDayStr();
+  const weekAgo = tradingDayStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   const [from, setFrom] = useState(weekAgo);
   const [to, setTo] = useState(today);
   const [report, setReport] = useState<ReconciliationReport | null>(null);

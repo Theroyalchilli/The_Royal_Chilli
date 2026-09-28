@@ -42,11 +42,11 @@ export async function POST(req: NextRequest) {
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, status, order_type, subtotal, total")
+      .select("id, status, is_paid, order_type, subtotal, total")
       .eq("id", order_id)
       .single();
     if (orderErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    if (order.status === "paid" || order.status === "cancelled") {
+    if (order.is_paid || order.status === "cancelled") {
       return NextResponse.json({ error: "This order can no longer be changed" }, { status: 409 });
     }
 

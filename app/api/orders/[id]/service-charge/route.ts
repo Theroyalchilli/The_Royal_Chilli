@@ -17,8 +17,8 @@ export async function POST(
       return NextResponse.json({ error: "pct must be between 0 and 100" }, { status: 400 });
     }
 
-    const { data: order } = await supabase.from("orders").select("status").eq("id", id).single();
-    if (order?.status === "paid") {
+    const { data: order } = await supabase.from("orders").select("status, is_paid").eq("id", id).single();
+    if (order?.is_paid) {
       return NextResponse.json({ error: "Cannot change the service charge on an order that's already fully paid" }, { status: 409 });
     }
 

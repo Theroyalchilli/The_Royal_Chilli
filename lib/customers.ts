@@ -148,7 +148,7 @@ export async function estimatePurchasePoints(customerId: number, orderTotal: num
     .from("orders")
     .select("total")
     .eq("customer_id", customerId)
-    .eq("status", "paid");
+    .eq("is_paid", true);
   const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
 
   const tiers = await getActiveTiers();
@@ -188,7 +188,7 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
     .from("orders")
     .select("total")
     .eq("customer_id", customerId)
-    .eq("status", "paid")
+    .eq("is_paid", true)
     .neq("id", orderId);
   const priorSpend = (priorOrders || []).reduce((s, o) => s + Number(o.total), 0);
 

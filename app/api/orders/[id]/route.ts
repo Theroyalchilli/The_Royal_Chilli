@@ -74,7 +74,7 @@ export async function PUT(
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, table_id, status")
+      .select("id, table_id, status, is_paid")
       .eq("id", id)
       .single();
 
@@ -115,7 +115,7 @@ export async function PUT(
       // Discount/service-charge changes are refused once the bill is fully
       // settled — otherwise it silently rewrites a total that's already
       // been paid and reported on.
-      if (order.status === "paid") {
+      if (order.is_paid) {
         return NextResponse.json({ error: "Cannot change the discount on an order that's already fully paid" }, { status: 409 });
       }
 

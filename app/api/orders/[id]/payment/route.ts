@@ -28,7 +28,7 @@ export async function POST(
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, total, amount_paid, table_id, status, customer_id")
+      .select("id, total, amount_paid, table_id, status, is_paid, customer_id")
       .eq("id", id)
       .single();
 
@@ -36,7 +36,7 @@ export async function POST(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.status === "paid") {
+    if (order.is_paid) {
       return NextResponse.json(
         { error: "Order already paid" },
         { status: 400 }

@@ -5,6 +5,8 @@ import supabase from "@/lib/supabase";
 import { stripe } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
+import { awardPurchasePoints } from "@/lib/customers";
+import { depleteStockForOrder } from "@/lib/inventory";
 
 // Stripe is the source of truth for "did the payment actually succeed" — the
 // browser redirect back to success_url is just a UX hint, never trusted on
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
           .from("payments").select("id").eq("order_id", Number(order_id)).eq("reference", session.id).maybeSingle();
         const { data: order } = await supabase
           .from("orders")
-          .select("order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_name, customer_email, customer_address, customer_postcode")
+          .select("order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_id, customer_name, customer_email, customer_address, customer_postcode")
           .eq("id", order_id).single();
         if (!existingPayment && order && Number(order.amount_paid) < Number(order.total)) {
           const amount = (session.amount_total || 0) / 100;
@@ -53,6 +55,19 @@ export async function POST(req: NextRequest) {
             staff_id: null,
             reference: session.id,
           });
+
+          // Fully paid online: the same follow-ups a till payment runs —
+          // loyalty points for a signed-in customer and stock depletion —
+          // which online payments used to skip. Inside the idempotency guard,
+          // so a redelivered event can't award or deplete twice (depletion
+          // also guards itself per order).
+          if (Number(order.amount_paid) + amount >= Number(order.total) - 0.009) {
+            const orderId = Number(order_id);
+            if (order.customer_id) {
+              waitUntil(awardPurchasePoints(order.customer_id, Number(order.total), orderId).catch((e) => console.error("Loyalty points failed for online order", orderId, e)));
+            }
+            waitUntil(depleteStockForOrder(orderId, null).catch((e) => console.error("Stock depletion failed for online order", orderId, e)));
+          }
 
           // Pay-online orders only reach the kitchen printer once paid (the
           // order route skipped them) — inside the idempotency guard, so a

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getOrderForReceipt } from "@/lib/receipt";
+import { isFullyPaid } from "@/lib/payment-status";
 import AutoPrint from "./AutoPrint";
 import PrintNav from "./PrintNav";
 
@@ -25,7 +26,7 @@ export default async function ReceiptPrintPage({
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
     : order.order_type.toUpperCase();
   const balanceDue = Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100;
-  const isPaid = order.status === "paid";
+  const isPaid = isFullyPaid(order);
 
   return (
     <>

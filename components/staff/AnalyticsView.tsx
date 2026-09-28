@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
-function firstOfMonth() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); }
-function today() { return new Date().toISOString().slice(0, 10); }
+function firstOfMonth() { return firstOfMonthStr(tradingDayStr()); }
+function today() { return tradingDayStr(); }
 
 type SalesData = {
   total_revenue: number; refunds_total: number; total_orders: number; avg_order_value: number;

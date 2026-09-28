@@ -1,5 +1,6 @@
 import supabase from "@/lib/supabase";
 import { getItemSalesInRange } from "@/lib/analytics";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
 export type DashboardStat = {
   label: string;
@@ -43,19 +44,19 @@ export type DashboardData = {
 type OrderRow = { id: number; total: number; order_type: string; created_at: string };
 type AttendanceRow = { staff_id: number; work_date: string; net_work_seconds: number | null; late_seconds: number | null; clock_in: string | null; clock_out: string | null };
 
+// Trading days (5am-5am UK, lib/london-date.ts): Monday's figures include
+// Monday night's orders after midnight.
 function todayRange() {
-  const today = new Date().toISOString().slice(0, 10);
-  return { today, start: `${today}T00:00:00.000Z`, end: `${today}T23:59:59.999Z` };
+  const today = tradingDayStr();
+  return { today, ...tradingRangeUtc(today) };
 }
 function lastNDays(n: number): string[] {
+  const today = tradingDayStr();
   const out: string[] = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    out.push(d.toISOString().slice(0, 10));
-  }
+  for (let i = n - 1; i >= 0; i--) out.push(addDaysStr(today, -i));
   return out;
 }
+const dayOf = (o: { created_at: string }) => tradingDayStr(new Date(o.created_at));
 const dayLabel = (dateStr: string) => new Date(dateStr + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short" });
 function addDaysStr(dateStr: string, n: number): string {
   const d = new Date(dateStr + "T00:00:00Z");
@@ -81,9 +82,9 @@ async function paidOrdersInRange(from: string, to: string): Promise<OrderRow[]> 
   const { data } = await supabase
     .from("orders")
     .select("id, total, order_type, created_at")
-    .eq("status", "paid")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .eq("is_paid", true)
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
   return data ?? [];
 }
 
@@ -107,7 +108,7 @@ async function lowStockList(): Promise<{ name: string; current_stock: number; un
 
 function deriveTrend(orders: OrderRow[], week: string[]): TrendPoint[] {
   const byDay = new Map<string, number>();
-  for (const o of orders) byDay.set(o.created_at.slice(0, 10), (byDay.get(o.created_at.slice(0, 10)) ?? 0) + Number(o.total));
+  for (const o of orders) byDay.set(dayOf(o), (byDay.get(dayOf(o)) ?? 0) + Number(o.total));
   return week.map((d) => ({ date: d, label: dayLabel(d), revenue: Math.round((byDay.get(d) ?? 0) * 100) / 100 }));
 }
 
@@ -137,7 +138,7 @@ function deriveChannelMix(orders: OrderRow[], week: string[]): SlicePoint[] {
   const weekSet = new Set(week);
   const byChannel = new Map<string, number>();
   for (const o of orders) {
-    if (!weekSet.has(o.created_at.slice(0, 10))) continue;
+    if (!weekSet.has(dayOf(o))) continue;
     byChannel.set(o.order_type, (byChannel.get(o.order_type) ?? 0) + Number(o.total));
   }
   return [...byChannel.entries()]
@@ -292,7 +293,7 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
 
     const trend = deriveTrend(orders14, week);
     const prevTrend = deriveTrend(orders14, prevWeek);
-    const weekOrderIds = orders14.filter((o) => week.includes(o.created_at.slice(0, 10))).map((o) => o.id);
+    const weekOrderIds = orders14.filter((o) => week.includes(dayOf(o))).map((o) => o.id);
 
     // These three depend on the batch above but not on each other — run together.
     const [costMap, categorySales] = await Promise.all([
@@ -357,7 +358,7 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
       supabase.from("restaurant_tables").select("status"),
       reservationsCountForWeek(week),
     ]);
-    const orders = orders28.filter((o) => week.includes(o.created_at.slice(0, 10)));
+    const orders = orders28.filter((o) => week.includes(dayOf(o)));
 
     const openToday = attendance.filter((r) => r.work_date === today && r.clock_in && !r.clock_out);
     const staffIds = [...new Set(openToday.map((r) => r.staff_id))];

@@ -1,5 +1,6 @@
 import supabase from "@/lib/supabase";
 import { computeHoursForPeriod } from "@/lib/payroll";
+import { tradingRangeUtc } from "@/lib/london-date";
 
 export async function getVatRate(): Promise<number> {
   const { data } = await supabase.from("app_settings").select("value").eq("key", "vat_rate").maybeSingle();
@@ -20,9 +21,9 @@ export async function getRevenue(from: string, to: string): Promise<number> {
   const { data } = await supabase
     .from("orders")
     .select("total")
-    .eq("status", "paid")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .eq("is_paid", true)
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
   return Math.round((data || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
 }
 
@@ -34,9 +35,9 @@ export async function getOutputVatCollected(from: string, to: string): Promise<n
   const { data } = await supabase
     .from("orders")
     .select("tax")
-    .eq("status", "paid")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .eq("is_paid", true)
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
   return Math.round((data || []).reduce((s, o) => s + Number(o.tax), 0) * 100) / 100;
 }
 
@@ -79,9 +80,9 @@ export async function getRecipeCogs(from: string, to: string): Promise<{
   const { data: paidOrders } = await supabase
     .from("orders")
     .select("id, total")
-    .eq("status", "paid")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .eq("is_paid", true)
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
 
   const orderIds = (paidOrders || []).map((o) => o.id);
   const totalRevenue = Math.round((paidOrders || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;

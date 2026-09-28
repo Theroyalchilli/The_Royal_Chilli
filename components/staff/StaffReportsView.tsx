@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency } from "@/lib/utils";
+import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
 
 export default function StaffReportsView() {
   const [tab, setTab] = useState<"sales" | "staff" | "pending">("sales");
@@ -166,7 +167,7 @@ interface WeekDay { date: string; label: string; revenue: number; orders: number
 const ORDER_TYPE_LABELS: Record<string, string> = { dine_in: "Dine-In", takeaway: "Takeaway", delivery: "Delivery" };
 const ORDER_TYPE_ICONS: Record<string, string> = { dine_in: "🍽️", takeaway: "🥡", delivery: "🛵" };
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => tradingDayStr();
 
 function SalesReport() {
   const [data, setData] = useState<ReportData | null>(null);
@@ -207,9 +208,10 @@ function SalesReport() {
     setWeekLoading(true);
     try {
       const days: WeekDay[] = [];
+      const base = tradingDayStr();
       for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
+        const d = new Date(`${base}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - i);
         const dateStr = d.toISOString().slice(0, 10);
         const label = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
         try {
@@ -524,11 +526,10 @@ function SalesReport() {
 type StaffRow = { staff_id: number; name: string; role: string; hours_worked: number; late_count: number; pay_rate: number; labour_cost: number };
 
 function firstOfMonth() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return firstOfMonthStr(tradingDayStr());
 }
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return tradingDayStr();
 }
 
 function StaffLabourReport() {

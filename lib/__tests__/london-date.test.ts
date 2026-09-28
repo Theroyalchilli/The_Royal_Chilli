@@ -26,3 +26,22 @@ describe("londonDayRangeUtc", () => {
     expect(londonDayRangeUtc("2026-03-29")).toEqual({ start: "2026-03-29T00:00:00.000Z", end: "2026-03-29T22:59:59.999Z" });
   });
 });
+
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
+
+describe("trading day (5am to 5am UK)", () => {
+  it("counts 2am on Tuesday as Monday's trading", () => {
+    // Tue 29 Sept 2026, 02:00 BST = 01:00Z
+    expect(tradingDayStr(new Date("2026-09-29T01:00:00Z"))).toBe("2026-09-28");
+    // Tue 29 Sept, 09:00 BST — a new trading day
+    expect(tradingDayStr(new Date("2026-09-29T08:00:00Z"))).toBe("2026-09-29");
+  });
+
+  it("runs Monday 05:00 to Tuesday 04:59:59 UK time", () => {
+    expect(tradingRangeUtc("2026-09-28")).toEqual({ start: "2026-09-28T04:00:00.000Z", end: "2026-09-29T03:59:59.999Z" });
+  });
+
+  it("spans several days and the clocks going back", () => {
+    expect(tradingRangeUtc("2026-10-24", "2026-10-25")).toEqual({ start: "2026-10-24T04:00:00.000Z", end: "2026-10-26T04:59:59.999Z" });
+  });
+});

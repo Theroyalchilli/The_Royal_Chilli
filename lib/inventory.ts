@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { tradingRangeUtc } from "@/lib/london-date";
 
 export type ReconciliationLine = {
   ingredient_id: number;
@@ -26,7 +27,7 @@ export type ReconciliationReport = {
 // recipe entered yet are silently skipped — this is additive/best-effort
 // bookkeeping, never a condition for the sale itself, so callers should
 // never let a failure here affect the payment response.
-export async function depleteStockForOrder(orderId: number, staffId: number): Promise<void> {
+export async function depleteStockForOrder(orderId: number, staffId: number | null): Promise<void> {
   // Both Pay Later and an eventual full payment call this for the same
   // order — without this guard, a Pay Later order that later gets paid off
   // has its stock deducted twice for the same food.
@@ -167,9 +168,9 @@ export async function getReconciliationReport(from: string, to: string): Promise
   const { data: paidOrders } = await supabase
     .from("orders")
     .select("id, total")
-    .eq("status", "paid")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .eq("is_paid", true)
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
 
   const orderIds = (paidOrders || []).map((o) => o.id);
   const netSales = Math.round((paidOrders || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
@@ -226,8 +227,8 @@ export async function getReconciliationReport(from: string, to: string): Promise
     .from("stock_movements")
     .select("ingredient_id, quantity_delta")
     .neq("movement_type", "purchase")
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
   for (const m of movements || []) {
     actualUsage.set(m.ingredient_id, (actualUsage.get(m.ingredient_id) || 0) - Number(m.quantity_delta));
   }

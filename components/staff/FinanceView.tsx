@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import ZReportView from "@/components/pos/ZReportView";
 import { zDateTime, type ZReport } from "@/lib/z-report";
+import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
-function firstOfMonth() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); }
-function today() { return new Date().toISOString().slice(0, 10); }
+function firstOfMonth() { return firstOfMonthStr(tradingDayStr()); }
+function today() { return tradingDayStr(); }
 
 function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
   const isToday = from === today() && to === today();

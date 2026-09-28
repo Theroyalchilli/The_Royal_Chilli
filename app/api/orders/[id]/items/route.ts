@@ -124,8 +124,8 @@ export async function PUT(
       // Once an order is paid, voiding an item wouldn't touch the money
       // already taken for it — that's what Refund is for — so it's blocked
       // here rather than left to silently drift out of sync.
-      const { data: orderForVoid } = await supabase.from("orders").select("status, table_id").eq("id", orderId).single();
-      if (orderForVoid?.status === "paid") {
+      const { data: orderForVoid } = await supabase.from("orders").select("status, is_paid, table_id").eq("id", orderId).single();
+      if (orderForVoid?.is_paid) {
         return NextResponse.json({ error: "Cannot void items on a paid order — use Refund from Order History instead." }, { status: 409 });
       }
 

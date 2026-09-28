@@ -18,7 +18,7 @@ export default async function AccountOrdersPage() {
     .from("orders")
     .select("id, order_number, order_type, status, total, scheduled_for, created_at")
     .eq("customer_id", session.id)
-    .eq("status", "paid")
+    .eq("is_paid", true)
     .order("created_at", { ascending: false })
     .limit(20);
 

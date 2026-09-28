@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 
 // Based on the highest sequence number actually issued today, not a row
 // COUNT — a COUNT drifts (and reissues an already-used number, which then
@@ -9,12 +10,12 @@ import { canManageInventory } from "@/lib/permissions";
 // orders is deleted rather than just cancelled. Same fix as
 // lib/orders.ts's generateOrderNumber().
 async function generatePoNumber(): Promise<string> {
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const dateStr = londonDateStr().replace(/-/g, "");
   const prefix = `PO-${dateStr}-`;
   const { data: rows } = await supabase
     .from("purchase_orders")
     .select("order_number")
-    .gte("created_at", new Date().toISOString().slice(0, 10) + "T00:00:00.000Z")
+    .gte("created_at", londonDayRangeUtc(londonDateStr()).start)
     .like("order_number", `${prefix}%`);
 
   let maxSeq = 0;

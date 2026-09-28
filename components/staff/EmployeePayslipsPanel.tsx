@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
+import { firstOfMonthStr, londonDateStr } from "@/lib/london-date";
 
 type Payslip = {
   id: number; staff_id: number; name: string; period_start: string; period_end: string;
@@ -11,8 +12,8 @@ type Payslip = {
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 function fmtDate(d: string) { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
-function today() { return new Date().toISOString().slice(0, 10); }
-function firstOfMonth() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); }
+function today() { return londonDateStr(); }
+function firstOfMonth() { return firstOfMonthStr(); }
 
 // ── Employee picker — search + role/active filters, same shape as HR's directory ──
 function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSelect: (s: Staff) => void }) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
+import { tradingRangeUtc } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -17,8 +18,8 @@ export async function GET(req: NextRequest) {
     .from("stock_movements")
     .select("ingredient_id, movement_type, quantity_delta, ingredient:ingredients(name, unit, cost_per_unit, current_stock, reorder_level)")
     .in("movement_type", ["waste", "usage"])
-    .gte("created_at", `${from}T00:00:00.000Z`)
-    .lte("created_at", `${to}T23:59:59.999Z`);
+    .gte("created_at", tradingRangeUtc(from).start)
+    .lte("created_at", tradingRangeUtc(to).end);
   if (error) return NextResponse.json({ error: "Failed to fetch stock movements" }, { status: 500 });
 
   const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000) + 1);

@@ -25,9 +25,14 @@ function londonOffsetMinutes(date: Date): number {
 
 // The UTC instant of UK midnight at the start of `dateStr` ("YYYY-MM-DD").
 function londonMidnightUtc(dateStr: string): Date {
+  return londonWallTimeUtc(dateStr, 0);
+}
+
+// The UTC instant of `hour`:00 UK time on `dateStr`.
+export function londonWallTimeUtc(dateStr: string, hour: number): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
-  const guess = new Date(Date.UTC(y, m - 1, d));
-  // The offset at UK midnight — checked twice so a clock-change day is right.
+  const guess = new Date(Date.UTC(y, m - 1, d, hour));
+  // The UK offset at that moment — checked twice so a clock-change day is right.
   const first = new Date(guess.getTime() - londonOffsetMinutes(guess) * 60_000);
   return new Date(guess.getTime() - londonOffsetMinutes(first) * 60_000);
 }
@@ -39,4 +44,38 @@ export function londonDayRangeUtc(dateStr: string): { start: string; end: string
   const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
   const end = new Date(londonMidnightUtc(next).getTime() - 1);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// ---------- trading day ----------
+// The restaurant opens at 9am and closes around 2am, so a "day" for sales
+// reports runs 5am to 5am UK time: Monday's report includes Monday night's
+// orders after midnight. (Order numbers and Order History use the plain UK
+// calendar date; the Z report runs per till shift.)
+export const TRADING_DAY_START_HOUR = 5;
+
+function nextDateStr(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+// The trading day ("YYYY-MM-DD") that `date` belongs to.
+export function tradingDayStr(date: Date = new Date()): string {
+  const today = londonDateStr(date);
+  return date.getTime() < londonWallTimeUtc(today, TRADING_DAY_START_HOUR).getTime()
+    ? londonDateStr(new Date(londonWallTimeUtc(today, 0).getTime() - 12 * 3600_000))
+    : today;
+}
+
+// [start, end] of trading days `from`..`to` (inclusive) as UTC ISO strings.
+export function tradingRangeUtc(from: string, to: string = from): { start: string; end: string } {
+  return {
+    start: londonWallTimeUtc(from, TRADING_DAY_START_HOUR).toISOString(),
+    end: new Date(londonWallTimeUtc(nextDateStr(to), TRADING_DAY_START_HOUR).getTime() - 1).toISOString(),
+  };
+}
+
+// "YYYY-MM-01" for the current UK month (new Date(y, m, 1).toISOString()
+// lands on the last day of the previous month in summer time).
+export function firstOfMonthStr(dateStr: string = londonDateStr()): string {
+  return `${dateStr.slice(0, 8)}01`;
 }

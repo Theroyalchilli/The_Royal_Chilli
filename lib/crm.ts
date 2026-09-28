@@ -62,7 +62,7 @@ export async function getCustomerStats(customerId: number) {
     .from("orders")
     .select("id, total, created_at")
     .eq("customer_id", customerId)
-    .eq("status", "paid");
+    .eq("is_paid", true);
 
   const lifetimeSpend = Math.round((orders || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
   const visitCount = (orders || []).length;

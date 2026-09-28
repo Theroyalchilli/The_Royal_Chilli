@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { londonDateStr } from "@/lib/london-date";
 
 // Marks a PO received, moves stock via stock_movements (so it's audit-tracked like everything
 // else), updates each ingredient's last-known cost, and records batch expiry dates.
@@ -52,7 +53,7 @@ export async function POST(
 
     const { data: updatedPo, error: updateErr } = await supabase
       .from("purchase_orders")
-      .update({ status: "received", received_date: new Date().toISOString().slice(0, 10) })
+      .update({ status: "received", received_date: londonDateStr() })
       .eq("id", id)
       .select()
       .single();

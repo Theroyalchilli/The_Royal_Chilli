@@ -112,9 +112,17 @@ describe("PUT /api/orders/[id] — discount rule", () => {
   });
 
   it("409s a discount change on an order that's already fully paid", async () => {
-    queue("orders", { data: { id: 1, table_id: null, status: "paid" }, error: null });
+    queue("orders", { data: { id: 1, table_id: null, status: "paid", is_paid: true }, error: null });
     const res = await patchOrder("1", { discount_type: "amount", discount_value: 5 });
     expect(res.status).toBe(409);
     expect(ordersUpdatePayloads).toHaveLength(0);
+  });
+});
+
+describe("PUT /api/orders/[id] — online-paid orders", () => {
+  it("409s a discount on an order paid online (still 'sent_to_kitchen', but is_paid)", async () => {
+    queue("orders", { data: { id: 1, table_id: null, status: "sent_to_kitchen", is_paid: true }, error: null });
+    const res = await patchOrder("1", { discount_type: "amount", discount_value: 5, discount_given_by_staff_id: 7 });
+    expect(res.status).toBe(409);
   });
 });

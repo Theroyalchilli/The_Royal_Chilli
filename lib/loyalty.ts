@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import supabase from "@/lib/supabase";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
+import { londonDateStr } from "@/lib/london-date";
 
 export async function getLoyaltySetting(key: string, fallback: number): Promise<number> {
   const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
@@ -87,7 +88,7 @@ export async function issueRedemption(customerId: number, rewardId: number, staf
   if (rewardErr || !reward) return { ok: false, error: "Reward not found" };
   if (!reward.active) return { ok: false, error: "This reward is no longer available" };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = londonDateStr();
   if (reward.start_date && todayStr < reward.start_date) return { ok: false, error: "This reward isn't available yet" };
   if (reward.end_date && todayStr > reward.end_date) return { ok: false, error: "This reward has ended" };
 
@@ -96,7 +97,7 @@ export async function issueRedemption(customerId: number, rewardId: number, staf
   }
 
   if (reward.eligible_tier_id) {
-    const { data: paidOrders } = await supabase.from("orders").select("total").eq("customer_id", customerId).eq("status", "paid");
+    const { data: paidOrders } = await supabase.from("orders").select("total").eq("customer_id", customerId).eq("is_paid", true);
     const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
     const tiers = await getActiveTiers();
     const customerTier = tierForSpend(tiers, lifetimeSpend);

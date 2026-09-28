@@ -63,7 +63,7 @@ describe("POST /api/orders/[id]/service-charge", () => {
   });
 
   it("409s once the order is already fully paid", async () => {
-    queue("orders", { data: { status: "paid" }, error: null });
+    queue("orders", { data: { status: "paid", is_paid: true }, error: null });
     const res = await setServiceCharge("1", 10);
     expect(res.status).toBe(409);
     expect(ordersUpdatePayloads).toHaveLength(0);

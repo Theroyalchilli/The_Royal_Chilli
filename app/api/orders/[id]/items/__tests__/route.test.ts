@@ -95,7 +95,7 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
   });
 
   it("refuses to void an item on an already-paid order", async () => {
-    queue("orders", { data: { status: "paid", table_id: 5 }, error: null }); // paid-status guard read
+    queue("orders", { data: { status: "paid", is_paid: true, table_id: 5 }, error: null }); // paid-status guard read
 
     const res = await voidItem("77", 1);
     expect(res.status).toBe(409);

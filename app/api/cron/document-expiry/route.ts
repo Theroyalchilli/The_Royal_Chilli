@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
+import { londonDateStr } from "@/lib/london-date";
 
 // Daily sweep of employee_documents.expiry_date — any document with an
 // expiry (right-to-work, visa/BRP, certificate, contract review, etc, not
@@ -22,7 +23,7 @@ const THRESHOLDS = [
 export async function GET(req: NextRequest) {
   if (!isAuthorizedCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = londonDateStr();
   const farthest = new Date();
   farthest.setDate(farthest.getDate() + 60);
 

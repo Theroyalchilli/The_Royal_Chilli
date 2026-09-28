@@ -12,6 +12,7 @@ import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
 import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
+import CloseDayReminder from "@/components/pos/CloseDayReminder";
 import ZReportView from "@/components/pos/ZReportView";
 import type { ZReport } from "@/lib/z-report";
 import type {
@@ -1015,6 +1016,7 @@ export default function POSPage() {
         </div>
       </div>
 
+      <CloseDayReminder openedAt={tillPeriod?.opened_at ?? null} onCloseDay={openEndOfDay} />
       <TableRequestsBanner />
 
       {/* ══════════════════════════════════════════

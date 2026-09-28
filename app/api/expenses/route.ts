@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
+import { londonDateStr } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       .insert({
         category, description, amount,
         vat_applicable: vat_applicable === undefined ? 1 : Number(vat_applicable),
-        expense_date: expense_date || new Date().toISOString().slice(0, 10),
+        expense_date: expense_date || londonDateStr(),
         receipt_reference: receipt_reference || null,
         recorded_by: session.id,
       })

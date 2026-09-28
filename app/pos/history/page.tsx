@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/utils";
 import PaymentModal from "@/components/pos/PaymentModal";
 import PrintButton from "@/components/pos/PrintButton";
 import type { CartItem } from "@/lib/types";
-import { amountHeld, isFullyPaid } from "@/lib/payment-status";
+import { amountHeld, isFullyPaid, paymentState, PAYMENT_STATE_LABEL, type PaymentState } from "@/lib/payment-status";
 
 interface OrderRow {
   id: number;
@@ -31,7 +31,19 @@ interface OrderRow {
   created_at: string;
   item_count?: number;
   payment_method?: string | null;
+  refunded_amount?: number;
 }
+
+const PAY_BADGE: Record<PaymentState, string> = {
+  paid: "bg-emerald-500/15 border-emerald-500/40 text-emerald-700",
+  part_paid: "bg-amber-500/15 border-amber-500/40 text-amber-700",
+  unpaid: "bg-slate-500/15 border-slate-500/40 text-slate-700",
+  refunded: "bg-sky-500/15 border-sky-500/40 text-sky-700",
+  part_refunded: "bg-sky-500/15 border-sky-500/40 text-sky-700",
+};
+const PAY_ICON: Record<PaymentState, string> = { paid: "✓", part_paid: "◐", unpaid: "○", refunded: "↩", part_refunded: "↩" };
+
+const payState = (o: OrderRow) => paymentState(o, Number(o.refunded_amount || 0));
 
 interface OrderItem {
   id: number;
@@ -68,7 +80,7 @@ function endOfDay(dateStr: string): Date {
 // was ordered or why it's unpaid.
 function matchesCategory(order: OrderRow, category: CategoryFilter): boolean {
   if (category === "all") return true;
-  if (category === "pending") return !isFullyPaid(order) && order.status !== "cancelled";
+  if (category === "pending") return !isFullyPaid(order) && order.status !== "cancelled" && !Number(order.refunded_amount || 0);
   if (category === "online") return (order.order_type === "takeaway" || order.order_type === "delivery") && !order.staff_id;
   if (category === "takeaway") return order.order_type === "takeaway" && !!order.staff_id;
   if (category === "delivery") return order.order_type === "delivery" && !!order.staff_id;
@@ -372,9 +384,10 @@ export default function HistoryPage() {
                             📌 Pay Later
                           </span>
                         )}
-                        {order.status !== "paid" && order.status !== "cancelled" && isFullyPaid(order) && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-emerald-500/15 border-emerald-500/40 text-emerald-700">
-                            ✓ Paid
+                        {!(order.status === "cancelled" && payState(order) === "unpaid") && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${PAY_BADGE[payState(order)]}`}>
+                            {PAY_ICON[payState(order)]} {PAYMENT_STATE_LABEL[payState(order)]}
+                            {order.payment_method ? ` · ${order.payment_method}` : ""}
                           </span>
                         )}
                         {order.status === "cancelled" && amountHeld(order) > 0 && (
@@ -398,12 +411,6 @@ export default function HistoryPage() {
                           <>
                             <span className="text-muted-foreground">·</span>
                             <span className="text-[11px] text-muted-foreground">{order.item_count} item{order.item_count === 1 ? "" : "s"}</span>
-                          </>
-                        )}
-                        {order.payment_method && (
-                          <>
-                            <span className="text-muted-foreground">·</span>
-                            <span className="text-[11px] text-muted-foreground">{order.payment_method}</span>
                           </>
                         )}
                         {order.staff_name && (
@@ -453,7 +460,7 @@ export default function HistoryPage() {
                           )}
                           <div className="flex justify-between pt-1.5 border-t border-white/5">
                             <span className="text-xs text-muted-foreground">
-                              {Number(order.amount_paid) < Number(order.total) && order.status !== "cancelled"
+                              {payState(order) === "part_paid" && order.status !== "cancelled"
                                 ? `Paid ${formatCurrency(order.amount_paid)} of`
                                 : "Total"}
                             </span>
@@ -463,7 +470,7 @@ export default function HistoryPage() {
                       )}
 
                       <div className="flex gap-2">
-                        {order.status !== "paid" && order.status !== "cancelled" && Number(order.amount_paid) < Number(order.total) && (
+                        {order.status !== "paid" && order.status !== "cancelled" && (payState(order) === "unpaid" || payState(order) === "part_paid") && (
                           <button
                             onClick={() => handleTakePayment(order)}
                             className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all no-select flex items-center justify-center gap-2"

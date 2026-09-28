@@ -14,7 +14,7 @@ describe("closeDayReminder", () => {
     expect(closeDayReminder("2026-09-28T08:00:00Z", at("2026-09-28T23:30:00Z"))).toBeNull(); // Tue 00:30, still open
   });
 
-  it("reminds after closing time until the 5am day change", () => {
-    expect(closeDayReminder("2026-09-28T08:00:00Z", at("2026-09-29T00:30:00Z"))).toBe("afterClose"); // Tue 01:30
+  it("no longer nags at closing time on the same trading day", () => {
+    expect(closeDayReminder("2026-09-28T08:00:00Z", at("2026-09-29T00:30:00Z"))).toBeNull(); // Tue 01:30
   });
 });

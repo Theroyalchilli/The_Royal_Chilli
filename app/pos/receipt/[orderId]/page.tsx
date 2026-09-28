@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getOrderForReceipt } from "@/lib/receipt";
-import { isFullyPaid } from "@/lib/payment-status";
+import { paymentState } from "@/lib/payment-status";
 import AutoPrint from "./AutoPrint";
 import PrintNav from "./PrintNav";
 
@@ -25,8 +25,11 @@ export default async function ReceiptPrintPage({
   const placeLabel = order.order_type === "dine_in"
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
     : order.order_type.toUpperCase();
-  const balanceDue = Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100;
-  const isPaid = isFullyPaid(order);
+  const refunded = payments.reduce((s, p) => s + (Number(p.amount) < 0 ? -Number(p.amount) : 0), 0);
+  const state = paymentState(order, refunded);
+  const balanceDue = state === "unpaid" || state === "part_paid" ? Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100 : 0;
+  const isPaid = state === "paid";
+  const statusLine = { paid: "✓ PAID", part_paid: "BALANCE DUE", unpaid: "UNPAID", refunded: "REFUNDED", part_refunded: "PART REFUNDED" }[state];
 
   return (
     <>
@@ -38,7 +41,7 @@ export default async function ReceiptPrintPage({
         <p className="center small">020 8797 3044</p>
         <div className="divider" />
         <p className="center bold">RECEIPT</p>
-        <p className={`center bold ${isPaid ? "paid" : "due"}`}>{isPaid ? "✓ PAID" : balanceDue > 0.01 ? "BALANCE DUE" : "UNPAID"}</p>
+        <p className={`center bold ${isPaid ? "paid" : "due"}`}>{statusLine}</p>
         <div className="divider" />
 
         <p className="bold big">{placeLabel}</p>
@@ -96,6 +99,9 @@ export default async function ReceiptPrintPage({
               <span className="bold">{money(p.amount)}</span>
             </div>
           ))
+        )}
+        {refunded > 0.009 && (
+          <div className="row bold"><span>Total Refunded</span><span>{money(refunded)}</span></div>
         )}
         {balanceDue > 0.01 && (
           <div className="row bold due"><span>Balance Due</span><span>{money(balanceDue)}</span></div>

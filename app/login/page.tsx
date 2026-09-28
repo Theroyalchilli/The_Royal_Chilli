@@ -12,6 +12,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  // "Set up this device as a till" — managers only; staff then sign in on
+  // this device with their 4-digit PIN (/pin). Pre-ticked from /pin's link.
+  const [pairTill, setPairTill] = useState(false);
+
+  useEffect(() => {
+    setPairTill(new URLSearchParams(window.location.search).get("pair") === "1");
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -30,13 +37,13 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), password, pair_till: pairTill }),
       });
       const data = await res.json();
       if (res.ok) {
         // Employees work the till; manager/hr/admin land straight on the
         // role-based Staff Hub welcome screen instead of going via /pos.
-        router.push(data.user?.role === "employee" ? "/pos" : "/staff");
+        router.push(data.user?.role === "employee" || pairTill ? "/pos" : "/staff");
       } else {
         setError(data.error || "Invalid username or password");
         setPassword("");
@@ -97,6 +104,13 @@ export default function LoginPage() {
               className="w-full bg-surface-hover border border-border rounded-lg px-4 py-3 text-foreground text-base focus:outline-none focus:border-red-500"
             />
           </div>
+
+          <label className="flex items-start gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={pairTill} onChange={(e) => setPairTill(e.target.checked)} className="mt-0.5" />
+            <span>
+              <span className="font-semibold text-foreground">Set up this device as a till</span> — staff then sign in here with their 4-digit PIN (managers only).
+            </span>
+          </label>
 
           {error && (
             <div className="bg-red-100 border border-red-300 rounded-xl p-3 text-center text-red-700 text-sm" role="alert">

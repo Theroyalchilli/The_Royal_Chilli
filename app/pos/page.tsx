@@ -13,7 +13,7 @@ import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
 import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import CloseDayReminder from "@/components/pos/CloseDayReminder";
-import { SESSION_CHANGED_EVENT } from "@/components/pos/TillLock";
+import BusyModeControl from "@/components/pos/BusyModeControl";
 import ZReportView from "@/components/pos/ZReportView";
 import type { ZReport } from "@/lib/z-report";
 import type {
@@ -157,15 +157,6 @@ export default function POSPage() {
     loadMenuData();
     loadSession();
     checkTillStatus();
-  }, []);
-
-  // A PIN switch on the till lock (components/pos/TillLock) changes who's
-  // signed in — pick up their name and role without reloading the page.
-  useEffect(() => {
-    const onChange = () => { loadSession(); };
-    window.addEventListener(SESSION_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(SESSION_CHANGED_EVENT, onChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Runs regardless of which tab is active — OnlineOrdersPanel only mounts
@@ -639,9 +630,10 @@ export default function POSPage() {
     refreshTables();
   };
 
+  // A paired till goes back to the PIN pad; any other device to the password login.
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    const data = await fetch("/api/auth/logout", { method: "POST" }).then((r) => r.json()).catch(() => ({}));
+    window.location.replace(data.till ? "/pin" : "/login");
   };
 
   const handleCashOut = async () => {
@@ -709,8 +701,15 @@ export default function POSPage() {
         const data = await res.json().catch(() => ({}));
         if (data.report) setEodData(data.report);
         setEodClosed(true);
-        setEodPrintStatus("");
         setTillPeriod(null);
+        // Close Day prints the Z report straight away, then signs out.
+        const periodId = data.report?.period_id ?? data.period?.id;
+        let printed = false;
+        if (periodId) {
+          printed = await fetch(`/api/work-periods/${periodId}/z-report`, { method: "POST" }).then((r) => r.ok).catch(() => false);
+        }
+        setEodPrintStatus(printed ? "Z report sent to printer ✓ — logging out…" : "Couldn't send the Z report to the printer — tap Print Z Report, then Log out.");
+        if (printed) setTimeout(handleLogout, 4000);
       } else {
         const data = await res.json().catch(() => ({}));
         setEodError(data.error || "Failed to close the day. Try again.");
@@ -897,20 +896,6 @@ export default function POSPage() {
                 <span className="text-[10px] text-muted-foreground capitalize bg-elevated px-1.5 py-0.5 rounded">{session.role}</span>
               </div>
             )}
-            {tillChecked && !tillFetchFailed && (
-              tillPeriod ? (
-                <div title={`Opened ${new Date(tillPeriod.opened_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · Float £${tillPeriod.opening_cash.toFixed(2)}`}
-                  className="hidden xl:flex items-center gap-1.5 mr-1 px-2.5 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  <span className="text-green-700 text-[11px] font-bold">Till Open</span>
-                </div>
-              ) : (
-                <div className="hidden xl:flex items-center gap-1.5 mr-1 px-2.5 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                  <span className="text-red-700 text-[11px] font-bold">Till Closed</span>
-                </div>
-              )
-            )}
             {session && session.role !== "employee" && (
               <button onClick={() => router.push("/staff")}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
@@ -943,19 +928,20 @@ export default function POSPage() {
                 </span>
               )}
             </button>
-            {isManager && (
-              <button onClick={openEndOfDay}
-                className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-300 transition-colors">
-                🌙 End of Day
-              </button>
-            )}
-            <button onClick={handleLogout}
-              className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg border border-red-300 transition-colors">
-              Logout
+            <button onClick={openEndOfDay}
+              className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-300 transition-colors">
+              🌙 End of Day
             </button>
           </div>
 
-          {/* Mobile: More menu + logout */}
+          {/* Online ordering (busy mode) — every screen size, just before Logout */}
+          <BusyModeControl />
+          <button onClick={handleLogout}
+            className="hidden lg:block px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg border border-red-300 transition-colors">
+            Logout
+          </button>
+
+          {/* Mobile: More menu (with logout) */}
           <div className="relative lg:hidden">
             <button onClick={() => setShowMobileMenu((v) => !v)}
               className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
@@ -969,11 +955,6 @@ export default function POSPage() {
                     <div className="px-3 py-2 border-b border-border">
                       <p className="text-foreground text-xs font-semibold">{session.name}</p>
                       <p className="text-muted-foreground text-[10px] capitalize">{session.role}</p>
-                      {tillChecked && !tillFetchFailed && (
-                        <p className={`text-[10px] font-bold mt-0.5 ${tillPeriod ? "text-green-600" : "text-red-600"}`}>
-                          {tillPeriod ? "🟢 Till Open" : "🔴 Till Closed"}
-                        </p>
-                      )}
                     </div>
                   )}
                   {session && session.role !== "employee" && (
@@ -1009,12 +990,10 @@ export default function POSPage() {
                       </span>
                     )}
                   </button>
-                  {isManager && (
-                    <button onClick={() => { setShowMobileMenu(false); openEndOfDay(); }}
-                      className="w-full text-left px-3 py-2 text-indigo-700 text-xs font-semibold hover:bg-surface-hover">
-                      🌙 End of Day
-                    </button>
-                  )}
+                  <button onClick={() => { setShowMobileMenu(false); openEndOfDay(); }}
+                    className="w-full text-left px-3 py-2 text-indigo-700 text-xs font-semibold hover:bg-surface-hover">
+                    🌙 End of Day
+                  </button>
                   <button onClick={handleLogout}
                     className="w-full text-left px-3 py-2 text-red-700 text-xs font-semibold hover:bg-surface-hover border-t border-border">
                     Logout
@@ -1534,10 +1513,10 @@ export default function POSPage() {
                   </button>
                   {eodPrintStatus && <p className="text-center text-xs font-semibold text-muted-foreground">{eodPrintStatus}</p>}
                   <button
-                    onClick={() => setEndOfDayOpen(false)}
+                    onClick={handleLogout}
                     className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors"
                   >
-                    Done
+                    Log out now
                   </button>
                 </div>
               ) : (

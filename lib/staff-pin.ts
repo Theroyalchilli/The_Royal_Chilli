@@ -2,10 +2,10 @@ import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import type { SessionUser } from "@/lib/types";
 
-// 4-digit till PINs (staff.pin_hash, bcrypt). The till runs signed in all day
-// (a manager logs in each morning); staff switch to themselves with a PIN so
+// 4-digit till PINs (staff.pin_hash, bcrypt). On a paired till (lib/till-
+// device.ts) staff sign in with just their PIN (app/api/auth/pin-login), so
 // every order, payment, void, discount and Close Day is recorded against the
-// right person (app/api/auth/pin). A manager's PIN also approves refunds.
+// right person. A manager's PIN also approves refunds.
 
 export const PIN_PATTERN = /^\d{4}$/;
 export const MANAGER_ROLES: SessionUser["role"][] = ["admin", "manager"];
@@ -30,9 +30,9 @@ export async function hashPin(pin: string): Promise<string> {
 }
 
 // ---------- wrong-PIN throttle ----------
-// 5 wrong tries lock the PIN pad for a minute, per signed-in till. Kept in
-// memory (per server instance) — the PIN endpoint also requires the till to
-// already be signed in, so it can't be tried from outside.
+// 5 wrong tries lock the PIN pad for a minute, per till. Kept in
+// memory (per server instance) — PIN sign-in also only works on a paired
+// till, so it can't be tried from outside.
 const LOCK_MS = 60_000;
 const MAX_TRIES = 5;
 const failures = new Map<string, { count: number; lockedUntil: number }>();

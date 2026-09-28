@@ -1,6 +1,6 @@
 import { getOrderForPrint } from "@/lib/kot";
 import { getOrderForReceipt } from "@/lib/receipt";
-import { isFullyPaid } from "@/lib/payment-status";
+import { paymentState } from "@/lib/payment-status";
 import { zReportLines } from "@/lib/z-report";
 import { siteContent } from "@/lib/site-content";
 import { getZReport } from "@/lib/z-report-db";
@@ -186,8 +186,11 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
   if (!data) return null;
   const { order, items, payments } = data;
 
-  const balanceDue = Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100;
-  const isPaid = isFullyPaid(order);
+  // A refund leaves nothing owed, so a refunded order never shows a balance.
+  const refunded = payments.reduce((s, p) => s + (Number(p.amount) < 0 ? -Number(p.amount) : 0), 0);
+  const state = paymentState(order, refunded);
+  const balanceDue = state === "unpaid" || state === "part_paid" ? Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100 : 0;
+  const statusLine = { paid: "PAID", part_paid: "BALANCE DUE", unpaid: "UNPAID", refunded: "REFUNDED", part_refunded: "PART REFUNDED" }[state];
   const place = order.order_type === "dine_in"
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
     : String(order.order_type).toUpperCase();
@@ -198,7 +201,7 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
   t.push({ text: "020 8797 3044", align: "center" });
   t.push({ text: DIVIDER });
   t.push({ text: "RECEIPT", align: "center", bold: true });
-  t.push({ text: isPaid ? "PAID" : balanceDue > 0.01 ? "BALANCE DUE" : "UNPAID", align: "center", bold: true });
+  t.push({ text: statusLine, align: "center", bold: true });
   t.push({ text: DIVIDER });
   t.push({ text: place, bold: true, size: "tall" });
   t.push({ text: row(`Order ${order.order_number}`, londonTime(order.created_at, true)) });
@@ -231,6 +234,7 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
       t.push({ text: row(label, money(p.amount)) });
     }
   }
+  if (refunded > 0.009) t.push({ text: row("Total Refunded", money(refunded)), bold: true });
   if (balanceDue > 0.01) t.push({ text: row("Balance Due", money(balanceDue)), bold: true });
   t.push({ text: DIVIDER });
   t.push({ text: "Thank you for dining with us.", align: "center" });

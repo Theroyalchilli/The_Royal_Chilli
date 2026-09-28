@@ -7,10 +7,12 @@ import { refundTransaction, sumupTransactionFromReference } from "@/lib/sumup";
 
 // A refund is just another row in `payments`, with a negative amount — same
 // pattern as a normal payment, so the existing trigger that keeps
-// orders.amount_paid in sync handles it for free. Deliberately never touches
-// orders.status: even a partially-refunded order stays `paid` — it's a
-// financial correction, often happening long after the customer's left, and
-// reverting status could wrongly re-trigger table/kitchen-facing logic.
+// orders.amount_paid in sync handles it for free. A paid order keeps its
+// `paid` status (a financial correction, often long after the customer's
+// left). The one status change: an order still in progress (open / in the
+// kitchen / ready — typically a paid online order) that's now refunded in
+// full is closed as cancelled, so it leaves the Kitchen Display and History
+// stops offering "Take Payment" on it.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,7 +53,7 @@ export async function POST(
 
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("id, total, amount_paid, customer_id")
+      .select("id, total, amount_paid, customer_id, status, table_id")
       .eq("id", id)
       .single();
     if (fetchError || !order) {
@@ -98,6 +100,15 @@ export async function POST(
     }
 
     const { data: refreshed } = await supabase.from("orders").select("total, amount_paid").eq("id", id).single();
+
+    const inProgress = ["open", "sent_to_kitchen", "ready"].includes(String(order.status));
+    const fullyRefunded = refreshed != null && Number(refreshed.amount_paid) <= 0.009;
+    if (inProgress && fullyRefunded) {
+      await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
+      if (order.table_id) {
+        await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
+      }
+    }
 
     return NextResponse.json({
       success: true,

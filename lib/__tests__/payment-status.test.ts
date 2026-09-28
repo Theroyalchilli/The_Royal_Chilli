@@ -1,6 +1,6 @@
 // "Is it paid?" by money received, not orders.status — an online-paid order
 // stays "sent_to_kitchen" until the kitchen's done with it.
-import { amountHeld, isFullyPaid } from "@/lib/payment-status";
+import { amountHeld, isFullyPaid, paymentState } from "@/lib/payment-status";
 
 describe("isFullyPaid", () => {
   it("counts an online-paid order still in the kitchen as paid", () => {
@@ -26,5 +26,19 @@ describe("amountHeld", () => {
   it("is zero once refunded", () => {
     expect(amountHeld({ status: "cancelled", total: 14.95, amount_paid: 0 })).toBe(0);
     expect(amountHeld({ status: "cancelled", total: 14.95, amount_paid: null })).toBe(0);
+  });
+});
+
+describe("paymentState", () => {
+  it("reads a fully refunded online order as refunded, not unpaid", () => {
+    expect(paymentState({ status: "ready", total: 3.45, amount_paid: 0 }, 3.45)).toBe("refunded");
+  });
+  it("reads a partly refunded order as part refunded", () => {
+    expect(paymentState({ status: "paid", total: 20, amount_paid: 15 }, 5)).toBe("part_refunded");
+  });
+  it("paid, part paid and unpaid", () => {
+    expect(paymentState({ status: "ready", total: 10, amount_paid: 10 }, 0)).toBe("paid");
+    expect(paymentState({ status: "open", total: 10, amount_paid: 4 }, 0)).toBe("part_paid");
+    expect(paymentState({ status: "open", total: 10, amount_paid: 0 }, 0)).toBe("unpaid");
   });
 });

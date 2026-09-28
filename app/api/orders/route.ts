@@ -97,8 +97,13 @@ export async function GET(req: NextRequest) {
 
       const methodLabel: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
       const methodMap: Record<number, Set<string>> = {};
+      const refundedMap: Record<number, number> = {};
       for (const p of paymentRows || []) {
-        if (Number(p.amount) <= 0) continue; // a refund isn't "how this order was paid"
+        if (Number(p.amount) < 0) {
+          refundedMap[p.order_id] = (refundedMap[p.order_id] || 0) - Number(p.amount);
+          continue; // a refund isn't "how this order was paid"
+        }
+        if (Number(p.amount) === 0) continue;
         (methodMap[p.order_id] ??= new Set()).add(methodLabel[p.method] ?? p.method);
       }
 
@@ -106,6 +111,7 @@ export async function GET(req: NextRequest) {
         ...o,
         item_count: itemCountMap[o.id] || 0,
         payment_method: methodMap[o.id] ? [...methodMap[o.id]].join(" + ") : null,
+        refunded_amount: Math.round((refundedMap[o.id] || 0) * 100) / 100,
       }));
     }
 

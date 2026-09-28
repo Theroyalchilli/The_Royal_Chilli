@@ -792,8 +792,8 @@ function formFromStaff(s: Staff): InfoForm {
   };
 }
 
-// The staff member's 4-digit till PIN (components/pos/TillLock): staff switch
-// the till to themselves with it; a manager's PIN also approves refunds.
+// The staff member's 4-digit till PIN (app/pin): staff sign in at a paired
+// till with it; a manager's PIN also approves refunds.
 function TillPinField({ staffId }: { staffId: number }) {
   const { toast } = useToast();
   const [pin, setPin] = useState("");

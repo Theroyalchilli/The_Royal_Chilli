@@ -19,3 +19,24 @@ export function amountHeld(order: Money): number {
   const paid = Number(order.amount_paid || 0);
   return paid > PENNY ? Math.round(paid * 100) / 100 : 0;
 }
+
+// One word for the money side of an order, for History badges and receipts.
+// `refunded` is the total handed back (refund rows are negative payments);
+// amount_paid is already net of it. A full refund of an order that was paid
+// reads "refunded", not "unpaid" — nothing is owed.
+export type PaymentState = "paid" | "part_paid" | "unpaid" | "refunded" | "part_refunded";
+
+export function paymentState(order: Money, refunded: number): PaymentState {
+  const held = amountHeld(order);
+  if (refunded > PENNY) return held > PENNY ? "part_refunded" : "refunded";
+  if (isFullyPaid(order)) return "paid";
+  return held > PENNY ? "part_paid" : "unpaid";
+}
+
+export const PAYMENT_STATE_LABEL: Record<PaymentState, string> = {
+  paid: "Paid",
+  part_paid: "Part paid",
+  unpaid: "Unpaid",
+  refunded: "Refunded",
+  part_refunded: "Part refunded",
+};

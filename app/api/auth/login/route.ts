@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { createSession, getSessionCookieOptions } from "@/lib/auth";
+import { isManagerRole } from "@/lib/staff-pin";
+import { createTillToken, tillCookieOptions, TILL_COOKIE } from "@/lib/till-device";
 import type { Staff } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password } = await req.json();
+    const { username, password, pair_till } = await req.json();
 
     if (!username || !password) {
       return NextResponse.json(
@@ -49,6 +51,11 @@ export async function POST(req: NextRequest) {
     });
 
     response.cookies.set(cookieName, token, options);
+    // "Set up this device as a till" — a manager pairs it once, then staff
+    // sign in here with their PIN (lib/till-device.ts).
+    if (pair_till && isManagerRole(staff.role)) {
+      response.cookies.set(TILL_COOKIE, await createTillToken(staff.id), tillCookieOptions());
+    }
     return response;
   } catch (error) {
     console.error("Login error:", error);

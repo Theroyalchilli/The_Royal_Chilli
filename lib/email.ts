@@ -37,7 +37,9 @@ const SERIF = "Georgia, 'Times New Roman', serif";
 const SANS = "Arial, Helvetica, sans-serif";
 const money = (n: number) => `£${n.toFixed(2)}`;
 
-async function sendBrevoEmail(to: string, subject: string, html: string) {
+// `unsubscribeUrl` marks a marketing email: adds the List-Unsubscribe header
+// (Gmail/Outlook show their own "Unsubscribe" button) alongside the footer link.
+async function sendBrevoEmail(to: string, subject: string, html: string, unsubscribeUrl?: string) {
   if (!BREVO_API_KEY) return;
   try {
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -47,7 +49,13 @@ async function sendBrevoEmail(to: string, subject: string, html: string) {
         "content-type": "application/json",
         "api-key": BREVO_API_KEY,
       },
-      body: JSON.stringify({ sender: FROM, to: [{ email: to }], subject, htmlContent: html }),
+      body: JSON.stringify({
+        sender: FROM,
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        ...(unsubscribeUrl ? { headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` } } : {}),
+      }),
     });
     if (!res.ok) {
       console.error("Brevo send failed:", res.status, await res.text());
@@ -542,7 +550,7 @@ export async function sendOrderReadyEmail(
 // from us (lib/order-notifications.ts, daily cron).
 export async function sendReviewRequestEmail(
   to: string | null | undefined,
-  data: { customerName: string; reviewUrl: string }
+  data: { customerName: string; reviewUrl: string; unsubscribeUrl?: string }
 ) {
   if (!to) return;
   const body = `
@@ -555,7 +563,192 @@ export async function sendReviewRequestEmail(
     </td></tr>
     <tr><td align="center" style="padding:12px 32px 28px;">
       <a href="${data.reviewUrl}" style="display:inline-block; background:${C.chilli}; color:#fff; text-decoration:none; font-family:${SANS}; font-size:15px; font-weight:700; padding:12px 28px; border-radius:8px;">Leave a review</a>
-      <div style="font-family:${SANS}; font-size:11px; color:${C.muted}; margin-top:16px;">You're receiving this because you asked to hear from us. Reply "unsubscribe" and we'll stop.</div>
+      ${data.unsubscribeUrl
+        ? unsubscribeFooter(data.unsubscribeUrl)
+        : `<div style="font-family:${SANS}; font-size:11px; color:${C.muted}; margin-top:16px;">You're receiving this because you asked to hear from us. Reply "unsubscribe" and we'll stop.</div>`}
     </td></tr>`;
-  await sendBrevoEmail(to, "How was your meal at The Royal Chilli?", shell(body));
+  await sendBrevoEmail(to, "How was your meal at The Royal Chilli?", shell(body), data.unsubscribeUrl);
+}
+
+// ---------- Rewards Club ----------
+
+// Names and codes come from customers — escape before they go into HTML.
+const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const firstName = (name: string) => esc((name || "there").trim().split(" ")[0] || "there");
+const ukDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "long" });
+
+function button(href: string, label: string) {
+  return `<a href="${esc(href)}" style="display:inline-block; background:${C.chilli}; color:#fff; text-decoration:none; font-family:${SANS}; font-size:15px; font-weight:700; padding:12px 28px; border-radius:8px;">${label}</a>`;
+}
+
+function codeBox(label: string, code: string, note: string) {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px dashed ${C.gold}; border-radius:10px;">
+      <tr><td align="center" style="padding:22px;">
+        ${cardLabel(label)}
+        <div style="font-family:${SANS}; font-size:28px; font-weight:700; letter-spacing:4px; color:${C.chilli}; margin-top:8px;">${esc(code)}</div>
+        <div style="font-family:${SANS}; font-size:12px; color:${C.muted}; margin-top:8px; line-height:1.5;">${note}</div>
+      </td></tr>
+    </table>`;
+}
+
+const howItWorks = `
+  <div style="font-family:${SANS}; font-size:13px; color:${C.muted}; line-height:1.9;">
+    🍛 <strong style="color:${C.ink};">10 points for every £1</strong> — dine-in, collection or delivery<br />
+    ⭐ <strong style="color:${C.ink};">Double points Tuesday to Thursday</strong><br />
+    🎁 <strong style="color:${C.ink};">100 points = £1 off</strong> when you dine in — up to £10 a visit<br />
+    🔁 Bonus points on your 2nd, 3rd and every 5th visit
+  </div>`;
+
+function unsubscribeFooter(url: string) {
+  return `<div style="font-family:${SANS}; font-size:11px; color:${C.muted}; margin-top:16px;">You're receiving this because you asked to hear about offers and rewards. <a href="${esc(url)}" style="color:${C.muted};">Unsubscribe</a></div>`;
+}
+
+// Sent to everyone who joins (website sign-up or at the till, if they gave
+// an email): the welcome voucher code, their points, how it works, and their
+// Bring a Friend link.
+export async function sendWelcomeEmail(
+  to: string | null | undefined,
+  data: {
+    customerName: string;
+    signupPoints: number;
+    voucherCode: string | null;
+    voucherValidFrom: string | null;
+    voucherExpiresAt: string | null;
+    referralLink: string | null;
+    accountUrl: string;
+  },
+) {
+  if (!to) return;
+  const voucher = data.voucherCode
+    ? `<tr><td style="padding:8px 32px 8px;">${codeBox(
+        "Your welcome gift · 20% off dine-in",
+        data.voucherCode,
+        `Show this code when you pay for a dine-in meal (up to £20 off).${data.voucherValidFrom ? `<br />Use it from ${ukDate(data.voucherValidFrom)}` : ""}${data.voucherExpiresAt ? ` · valid until ${ukDate(data.voucherExpiresAt)}` : ""}`,
+      )}</td></tr>`
+    : "";
+  const friend = data.referralLink
+    ? `<tr><td style="padding:16px 32px 8px;">
+        ${cardLabel("Bring a friend")}
+        <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:6px; line-height:1.6;">
+          Share your link — your friend gets 200 points and 20% off, and you get <strong style="color:${C.ink};">£5 off</strong> when they visit.<br />
+          <a href="${esc(data.referralLink)}" style="color:${C.chilli};">${esc(data.referralLink)}</a>
+        </div>
+      </td></tr>`
+    : "";
+  const body = `
+    <tr><td style="padding:28px 32px 8px;">
+      ${cardLabel("Welcome to the Rewards Club")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">You're in, ${firstName(data.customerName)}!</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        We've added <strong style="color:${C.ink};">${data.signupPoints} points</strong> to your account to get you started.
+      </div>
+    </td></tr>
+    ${voucher}
+    <tr><td style="padding:16px 32px 8px;">${cardLabel("How it works")}<div style="margin-top:6px;">${howItWorks}</div></td></tr>
+    ${friend}
+    <tr><td align="center" style="padding:16px 32px 28px;">${button(data.accountUrl, "See my rewards")}</td></tr>`;
+  await sendBrevoEmail(to, "Welcome to The Royal Chilli Rewards Club 🎁", shell(body));
+}
+
+// The morning after someone's first visit (opted-in only): points earned,
+// balance, their welcome voucher if still unused, and the review link.
+export async function sendThankYouEmail(
+  to: string | null | undefined,
+  data: {
+    customerName: string;
+    pointsEarned: number;
+    balance: number;
+    voucherCode: string | null;
+    voucherExpiresAt: string | null;
+    reviewUrl: string | null;
+    accountUrl: string;
+    unsubscribeUrl: string;
+  },
+) {
+  if (!to) return;
+  const voucher = data.voucherCode
+    ? `<tr><td style="padding:8px 32px 8px;">${codeBox(
+        "Don't forget · 20% off your next dine-in visit",
+        data.voucherCode,
+        data.voucherExpiresAt ? `Valid until ${ukDate(data.voucherExpiresAt)}` : "",
+      )}</td></tr>`
+    : "";
+  const body = `
+    <tr><td style="padding:28px 32px 8px;">
+      ${cardLabel("Thank you")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Thanks for visiting, ${firstName(data.customerName)}!</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        ${data.pointsEarned > 0 ? `You earned <strong style="color:${C.ink};">${data.pointsEarned} points</strong>. ` : ""}You now have
+        <strong style="color:${C.ink};">${data.balance} points</strong> — worth £${(data.balance / 100).toFixed(2)} off a dine-in meal.
+        Come back for your <strong style="color:${C.ink};">2nd-visit bonus</strong>, and remember points are doubled Tuesday to Thursday.
+      </div>
+    </td></tr>
+    ${voucher}
+    <tr><td align="center" style="padding:16px 32px 28px;">
+      ${data.reviewUrl ? `<div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-bottom:12px;">Enjoyed it? A quick Google review helps a small, local restaurant more than you'd think.</div>${button(data.reviewUrl, "Leave a review")}<br /><br />` : ""}
+      <a href="${esc(data.accountUrl)}" style="font-family:${SANS}; font-size:13px; color:${C.chilli};">See my rewards</a>
+      ${unsubscribeFooter(data.unsubscribeUrl)}
+    </td></tr>`;
+  await sendBrevoEmail(to, "Thanks for visiting The Royal Chilli", shell(body), data.unsubscribeUrl);
+}
+
+// 10 days after the first visit, if they haven't been back (opted-in only).
+export async function sendNudgeEmail(
+  to: string | null | undefined,
+  data: {
+    customerName: string;
+    balance: number;
+    secondVisitBonus: number;
+    voucherCode: string | null;
+    voucherExpiresAt: string | null;
+    accountUrl: string;
+    unsubscribeUrl: string;
+  },
+) {
+  if (!to) return;
+  const voucher = data.voucherCode
+    ? `<tr><td style="padding:8px 32px 8px;">${codeBox(
+        "Still waiting for you · 20% off dine-in",
+        data.voucherCode,
+        data.voucherExpiresAt ? `Use it before ${ukDate(data.voucherExpiresAt)}` : "",
+      )}</td></tr>`
+    : "";
+  const body = `
+    <tr><td style="padding:28px 32px 8px;">
+      ${cardLabel("We'd love to see you again")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Come back soon, ${firstName(data.customerName)}</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        You've got <strong style="color:${C.ink};">${data.balance} points</strong> waiting${data.secondVisitBonus > 0 ? `, and your next visit earns a
+        <strong style="color:${C.ink};">${data.secondVisitBonus}-point 2nd-visit bonus</strong>` : ""}. Pop in Tuesday to Thursday for double points.
+      </div>
+    </td></tr>
+    ${voucher}
+    <tr><td align="center" style="padding:16px 32px 28px;">
+      ${button("https://www.google.com/maps?cid=3983787686224519813", "Find us")}
+      <div style="margin-top:12px;"><a href="${esc(data.accountUrl)}" style="font-family:${SANS}; font-size:13px; color:${C.chilli};">See my rewards</a></div>
+      ${unsubscribeFooter(data.unsubscribeUrl)}
+    </td></tr>`;
+  await sendBrevoEmail(to, "We'd love to see you again at The Royal Chilli", shell(body), data.unsubscribeUrl);
+}
+
+// To the member who shared their link, when their friend's first visit
+// unlocks the £5 voucher (about their own account, so sent regardless of
+// marketing consent).
+export async function sendReferralUnlockedEmail(
+  to: string | null | undefined,
+  data: { customerName: string; friendName: string; code: string; expiresAt: string; accountUrl: string },
+) {
+  if (!to) return;
+  const body = `
+    <tr><td style="padding:28px 32px 8px;">
+      ${cardLabel("Bring a Friend")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Your £5 is unlocked, ${firstName(data.customerName)}!</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        ${firstName(data.friendName)} came in for their first visit — thanks for bringing them. Here's £5 off your next dine-in meal.
+      </div>
+    </td></tr>
+    <tr><td style="padding:8px 32px 8px;">${codeBox("Show this code at the till", data.code, `Dine-in · valid until ${ukDate(data.expiresAt)}`)}</td></tr>
+    <tr><td align="center" style="padding:16px 32px 28px;">${button(data.accountUrl, "See my rewards")}</td></tr>`;
+  await sendBrevoEmail(to, "Your £5 Bring a Friend reward is ready", shell(body));
 }

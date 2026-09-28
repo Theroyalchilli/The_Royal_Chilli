@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
-import { sendReviewRequests } from "@/lib/order-notifications";
+import { runDailyMemberEmails } from "@/lib/rewards-emails";
 
-// Daily: "How was your meal?" emails for yesterday's trading day, to
-// customers who opted in (lib/order-notifications.ts).
+// Daily: after-visit emails for yesterday's trading day (first-visit
+// thank-you, or "how was your meal?") and the 10-day "come back" nudges —
+// opted-in customers only (lib/rewards-emails.ts).
 export async function GET(req: NextRequest) {
   if (!isAuthorizedCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json(await sendReviewRequests());
+  return NextResponse.json(await runDailyMemberEmails());
 }

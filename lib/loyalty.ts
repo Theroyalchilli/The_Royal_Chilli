@@ -356,26 +356,28 @@ export function notYetValidMessage(validFrom: string | null | undefined, now: Da
  * Sign-up points (Rewards Club: 200). Once per customer — never a second
  * time, even if an old guest row is later claimed by signing up.
  */
-export async function issueSignupPoints(customerId: number): Promise<void> {
+export async function issueSignupPoints(customerId: number): Promise<boolean> {
   try {
     const points = await getLoyaltySetting("loyalty_signup_points", 0);
-    if (points <= 0) return;
+    if (points <= 0) return false;
     const { data: already } = await supabase
       .from("loyalty_transactions")
       .select("id")
       .eq("customer_id", customerId)
       .eq("reason", "welcome_bonus")
       .limit(1);
-    if (already && already.length > 0) return;
-    await supabase.from("loyalty_transactions").insert({
+    if (already && already.length > 0) return false;
+    const { error } = await supabase.from("loyalty_transactions").insert({
       customer_id: customerId,
       points_delta: points,
       reason: "welcome_bonus",
       reference_type: "signup",
       expires_at: await getPointsExpiryTimestamp(),
     });
+    return !error;
   } catch (err) {
     console.error(`Sign-up points not given to customer ${customerId}:`, err);
+    return false;
   }
 }
 

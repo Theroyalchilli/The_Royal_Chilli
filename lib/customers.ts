@@ -13,6 +13,7 @@ import {
 } from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
 import { awardVisitBonus } from "@/lib/visits";
+import { sendReferralUnlockedFor, sendWelcomeFor } from "@/lib/rewards-emails";
 
 // Every column except password_hash — use this instead of select("*") on
 // customers anywhere the result reaches an HTTP response, staff or public.
@@ -62,8 +63,9 @@ export async function signupCustomer(
     if (error) return { ok: false, error: "Failed to create account" };
     // Rewards Club welcome: sign-up points + the 20% dine-in voucher (next
     // visit). Not a *new* customer, so no Bring a Friend reward for anyone.
-    await issueSignupPoints(existing.id);
+    const isNew = await issueSignupPoints(existing.id);
     await issueWelcomeVoucher(existing.id);
+    if (isNew) await sendWelcomeFor(existing.id);
     return { ok: true, customer: data as Customer };
   }
 
@@ -84,6 +86,7 @@ export async function signupCustomer(
   await issueSignupPoints(data.id);
   await issueWelcomeVoucher(data.id);
   if (referrerId) await issueReferralVoucher(referrerId, data.id);
+  await sendWelcomeFor(data.id);
   return { ok: true, customer: data as Customer };
 }
 
@@ -190,8 +193,9 @@ export async function joinMemberAtTill(input: {
     .eq("reason", "welcome_bonus")
     .limit(1);
   const alreadyMember = !!(had && had.length);
-  await issueSignupPoints(customerId);
+  const isNew = await issueSignupPoints(customerId);
   await issueWelcomeVoucher(customerId);
+  if (isNew) await sendWelcomeFor(customerId); // only if they gave an email
   return { ok: true, customerId, alreadyMember };
 }
 
@@ -359,5 +363,6 @@ async function checkReferralCompletion(customerId: number, orderTotal: number) {
     .select("id");
   if (!marked || marked.length === 0) return;
 
-  await unlockReferralVoucher(customerId);
+  const referrerId = await unlockReferralVoucher(customerId);
+  if (referrerId) await sendReferralUnlockedFor(referrerId, customerId);
 }

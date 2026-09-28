@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
+import { londonDayRangeUtc } from "@/lib/london-date";
 
 // Admin-facing redemption activity log (doc §20 "Redemptions — view and
 // filter redemption activity"). Most recent first, capped — this is a log
@@ -20,8 +21,8 @@ export async function GET(req: NextRequest) {
     .order("issued_at", { ascending: false })
     .limit(100);
   if (to) {
-    const endOfDay = new Date(`${to}T23:59:59.999`);
-    if (!isNaN(endOfDay.getTime())) query = query.lte("issued_at", endOfDay.toISOString());
+    // End of that UK calendar day (not UTC).
+    if (/^\d{4}-\d{2}-\d{2}$/.test(to)) query = query.lte("issued_at", londonDayRangeUtc(to).end);
   }
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to fetch redemptions" }, { status: 500 });

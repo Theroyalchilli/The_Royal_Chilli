@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { RestaurantTable } from "@/lib/types";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
+import { londonDateStr } from "@/lib/london-date";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 
 const tableStatusCfg = {
@@ -35,13 +36,15 @@ interface Reservation {
   source?: string;
 }
 
+// Reservation dates are UK calendar dates (lib/london-date.ts), not UTC —
+// otherwise between midnight and 1am in summer "Today" showed yesterday.
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return londonDateStr();
 }
 
 function tomorrowStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
+  const d = new Date(`${londonDateStr()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
 

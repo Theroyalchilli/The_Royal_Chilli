@@ -14,6 +14,7 @@ import CustomerDetailsModal from "@/components/pos/CustomerDetailsModal";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import CloseDayReminder from "@/components/pos/CloseDayReminder";
 import BusyModeControl from "@/components/pos/BusyModeControl";
+import { londonDateStr } from "@/lib/london-date";
 import ZReportView from "@/components/pos/ZReportView";
 import type { ZReport } from "@/lib/z-report";
 import type {
@@ -187,7 +188,7 @@ export default function POSPage() {
     const fetchReservationBadge = async () => {
       try {
         const lastSeen = localStorage.getItem("pos_reservations_last_seen") || "1970-01-01T00:00:00.000Z";
-        const today = new Date().toISOString().slice(0, 10);
+        const today = londonDateStr();
         const res = await fetch(`/api/reservations?from=${today}`, { cache: "no-store" });
         const data = await res.json();
         const list: { created_at: string }[] = data.reservations || [];

@@ -4,6 +4,7 @@ import { notifyOrderReady } from "@/lib/order-notifications";
 import supabase from "@/lib/supabase";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { getSessionFromRequest } from "@/lib/auth";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,14 +53,15 @@ export async function GET(req: NextRequest) {
 
     // "Modified" ticket: this table already had an earlier order today, so
     // this ticket represents items added mid-visit, not a fresh table.
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // "Today" = this trading day, 5am–5am UK — a table still eating after
+    // midnight is the same visit, not a fresh table.
+    const tradingStart = tradingRangeUtc(tradingDayStr()).start;
     const { data: todaysTableOrders } = await supabase
       .from("orders")
       .select("table_id, created_at")
       .not("table_id", "is", null)
       .neq("status", "cancelled")
-      .gte("created_at", todayStart.toISOString())
+      .gte("created_at", tradingStart)
       .order("created_at", { ascending: true });
 
     const firstOrderTimeByTable = new Map<number, string>();

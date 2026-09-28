@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { calculateZReport, snapshotZReport } from "@/lib/z-report-db";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
 // GET — the current open work period plus its live Z report (lib/z-report.ts),
 // which the End of Day screen shows before closing.
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 // PUT — close the current open work period. If none is open (the till was
 // never explicitly "opened"), one is created retroactively backdated to the
-// start of today, and today's orders that predate it get linked to it, so
+// start of today's trading day (5am UK), and that day's orders that predate it get linked to it, so
 // closing the day is a single action — no separate "open" step required.
 export async function PUT(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -50,14 +51,14 @@ export async function PUT(req: NextRequest) {
   if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
 
   if (!period) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // This trading day, 5am–5am UK (lib/london-date.ts) — not UTC midnight.
+    const trading = tradingRangeUtc(tradingDayStr());
 
     const { data: created, error: createError } = await supabase
       .from("work_periods")
       .insert({
         opened_by: staff_id ?? session.id,
-        opened_at: todayStart.toISOString(),
+        opened_at: trading.start,
         opening_cash: opening_cash ?? 0,
         status: "open",
       })
@@ -69,14 +70,12 @@ export async function PUT(req: NextRequest) {
 
     // Backfill today's orders that predate this period so cash reconciliation
     // reports pick them up.
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
     await supabase
       .from("orders")
       .update({ work_period_id: period.id })
       .is("work_period_id", null)
-      .gte("created_at", todayStart.toISOString())
-      .lte("created_at", todayEnd.toISOString());
+      .gte("created_at", trading.start)
+      .lte("created_at", trading.end);
   }
 
   // Every order this shift must be resolved to paid, cancelled, or

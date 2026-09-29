@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type Matrix = Record<string, Record<string, boolean>>;
 const FIXED = new Set(["admin", "employee"]); // admin always on, employee always off
@@ -351,6 +352,9 @@ function FeaturedDishesPanel() {
 
 export default function SettingsView({ canEditPermissions }: { canEditPermissions: boolean }) {
   const [tab, setTab] = useState<"general" | "permissions">("general");
+  // The top menu's "Roles & Permissions" links here with ?tab=permissions.
+  const tabParam = useSearchParams().get("tab");
+  useEffect(() => { setTab(tabParam === "permissions" ? "permissions" : "general"); }, [tabParam]);
   const [companyName, setCompanyName] = useState("");
   const [currency, setCurrency] = useState("GBP");
   const [weekStartDay, setWeekStartDay] = useState("Monday");

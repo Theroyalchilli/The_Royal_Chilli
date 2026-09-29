@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Staff Hub top menu (components/staff/StaffShell.tsx): a group's list shows
+   when clicked (.open) and, with a mouse, on hover — the ::before bridge
+   covers the gap so it doesn't close on the way down. Touch keeps tap-to-open. */
+.hub-dd { display: none; }
+.hub-mi.open .hub-dd { display: block; }
+@media (hover: hover) and (pointer: fine) {
+  .hub-mi:hover .hub-dd { display: block; }
+  .hub-dd::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+}
+
 @layer base {
   /* Cream + red theme — the only theme; there is no dark mode. */
   :root {

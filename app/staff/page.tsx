@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/auth";
 import { getDashboardData } from "@/lib/staff-dashboard";
+import { getAdminDashboard, RANGES, type RangeKey } from "@/lib/admin-dashboard";
 import StaffDashboard, { KpiCard } from "@/components/staff/StaffDashboard";
+import AdminDashboard from "@/components/staff/AdminDashboard";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
@@ -13,22 +15,42 @@ function greeting(): string {
   return "Good evening";
 }
 
-export default async function StaffHubPage() {
+// Admins get the sales & costs dashboard; managers and HR keep their
+// day-to-day operations view.
+export default async function StaffHubPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   const session = await getSession();
   const role = session?.role;
-  const data = role ? await getDashboardData(role) : { kpis: [], alerts: [] };
-  const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const today = new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const firstName = session?.name?.split(" ")[0] ?? session?.name;
 
+  const header = (
+    <div className="mb-[18px]">
+      <h1 style={heading} className="text-foreground text-[26px] font-semibold tracking-[-0.02em]">
+        {greeting()}, {firstName}
+      </h1>
+      <p className="mt-[3px] text-sm text-muted-foreground">{today}</p>
+    </div>
+  );
+
+  if (role === "admin") {
+    const { range } = await searchParams;
+    const key: RangeKey = range && range in RANGES ? (range as RangeKey) : "this_week";
+    const data = await getAdminDashboard(key);
+    return (
+      <div className="px-4 pb-12 pt-6 md:px-6">
+        <div className="mx-auto max-w-[1240px]">
+          {header}
+          <AdminDashboard data={data} />
+        </div>
+      </div>
+    );
+  }
+
+  const data = role ? await getDashboardData(role) : { kpis: [], alerts: [] };
   return (
     <div className="px-4 py-6 md:px-6 md:py-7">
       <div className="mx-auto max-w-[1200px]">
-        <div className="mb-[22px]">
-          <h1 style={heading} className="text-foreground text-[27px] font-semibold tracking-[-0.02em]">
-            {greeting()}, {firstName}
-          </h1>
-          <p className="mt-[3px] text-sm text-muted-foreground">{today}</p>
-        </div>
+        {header}
 
         {data.kpis.length > 0 && (
           <div className="mb-[18px] grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-[14px]">

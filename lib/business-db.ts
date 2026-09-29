@@ -1,6 +1,6 @@
 import supabase from "@/lib/supabase";
 
-// Tables whose rows belong to one business (migration 076). Everything else —
+// Tables whose rows belong to one business (migrations 076, 078). Everything else —
 // staff, HR records, customers, the rewards scheme, suppliers, settings — is
 // shared across the group.
 export const BUSINESS_TABLES = new Set([
@@ -12,7 +12,7 @@ export const BUSINESS_TABLES = new Set([
   "fs_check_type", "fs_check_log", "fs_temp_type", "fs_temp_log",
   "fs_delivery_check", "fs_problem", "fs_signoff",
   "shifts", "attendance", "timesheets", "payroll_periods", "employee_payslips", "leave_requests",
-  "audit_logs", "loyalty_transactions", "platform_sales",
+  "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
 ]);
 
 type Builder = ReturnType<typeof supabase.from>;

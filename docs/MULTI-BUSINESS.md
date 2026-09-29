@@ -45,7 +45,8 @@ Run in order in the Supabase SQL editor
 | 076 foundation | run 29 Sep 2026 |
 | 077 rows never change business | run 29 Sep 2026 |
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
-| 079 fully separate staff / suppliers / customers | to be written (Phase 2b) |
+| 079 fully separate staff / suppliers / customers, owner login | written + tested — **to run** (safe with the live code) |
+| 080 drop the old group-wide unique rules | before a second business opens |
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)
 
@@ -108,7 +109,7 @@ Run in order in the Supabase SQL editor
   order / booking can't link another business's customer.
 - Go-live order: you run 078 → attendance app pushed → 079 + new code together.
 - Attendance app follows the same rules.
-- Drop the old timesheets unique key (078 kept it) once staff are per business.
+- Before a second business opens (migration 080): drop the old group-wide rules kept by 078/079 — `timesheets (staff_id, period_start, period_end)`, `customers.phone`, `customers_email_account_unique`, `newsletter_subscribers.email`, `loyalty_tiers.name`.
 
 ## Phase 3 (also) — business folders
 

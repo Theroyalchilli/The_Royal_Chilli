@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase
+  const db = bizDb(session.businessId);
+  const { data, error } = await db
     .from("menu_categories")
     .select("*")
     .order("display_order")
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
 
   // Item count per category so the UI can warn before a delete.
-  const { data: items } = await supabase.from("menu_items").select("category_id");
+  const { data: items } = await db.from("menu_items").select("category_id");
   const counts = new Map<number, number>();
   for (const i of items || []) counts.set(i.category_id, (counts.get(i.category_id) || 0) + 1);
 
@@ -31,20 +32,21 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { name, color } = await req.json();
     if (!name || !String(name).trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
     // New category goes to the end.
-    const { data: last } = await supabase
+    const { data: last } = await db
       .from("menu_categories")
       .select("display_order")
       .order("display_order", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("menu_categories")
       .insert({
         name: String(name).trim(),

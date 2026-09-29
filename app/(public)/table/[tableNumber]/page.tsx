@@ -29,6 +29,6 @@ export default async function TablePage({
     );
   }
 
-  const categories = await getActiveMenu();
+  const categories = await getActiveMenu(table.business_id);
   return <DineInOrder tableNumber={table.table_number} categories={categories} initialSelfOrderEnabled={table.self_order_enabled} />;
 }

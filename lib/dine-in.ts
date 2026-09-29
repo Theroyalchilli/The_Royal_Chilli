@@ -9,7 +9,7 @@ const OPEN_STATUSES = ["open", "sent_to_kitchen", "ready"];
 export async function getTableByNumber(tableNumber: string) {
   const { data } = await supabase
     .from("restaurant_tables")
-    .select("id, table_number, capacity, status, self_order_enabled")
+    .select("id, table_number, capacity, status, self_order_enabled, business_id")
     .eq("table_number", tableNumber)
     .maybeSingle();
   return data;
@@ -53,13 +53,14 @@ export async function getOrderItems(orderId: number) {
 }
 
 export async function addItemsToTable(
+  businessId: number,
   tableId: number,
   rawItems: { menu_item_id: number; quantity: number; notes?: string; selected_options?: number[] }[],
   customer?: { accountId?: number | null; phone?: string; name?: string; email?: string; marketingConsent?: boolean }
 ) {
   const itemRows = await Promise.all(
     rawItems.map(async (item) => {
-      const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || [], "collection");
+      const resolved = await resolveItemWithModifiers(businessId, item.menu_item_id, item.selected_options || [], "collection");
       const quantity = Math.max(1, Number(item.quantity) || 1);
       return {
         menu_item_id: resolved.menuItemId,

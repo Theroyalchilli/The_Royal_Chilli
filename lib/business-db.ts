@@ -59,3 +59,17 @@ export function bizDb(businessId: number) {
 }
 
 export type BizDb = ReturnType<typeof bizDb>;
+
+/**
+ * True when every id is a row of `table` belonging to this business — check
+ * this before linking to a parent row (a category, a menu item, a modifier
+ * group) so nothing can be attached to another business's data.
+ */
+export async function allOwned(db: BizDb, table: string, ids: (number | string)[]): Promise<boolean> {
+  const unique = [...new Set(ids.map(Number))];
+  if (unique.length === 0) return true;
+  if (unique.some((id) => !Number.isInteger(id) || id <= 0)) return false;
+  const { data, error } = await db.from(table).select("id").in("id", unique);
+  if (error) throw error;
+  return (data ?? []).length === unique.length;
+}

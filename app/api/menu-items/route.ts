@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase
+  const db = bizDb(session.businessId);
+  const { data, error } = await db
     .from("menu_items")
     .select("*, menu_categories(name)")
     .order("category_id")
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const body = await req.json();
     const {
       category_id, name, description, price, online_price, is_veg, allergens,
@@ -36,8 +38,11 @@ export async function POST(req: NextRequest) {
     if (!category_id || !name || price === undefined) {
       return NextResponse.json({ error: "category_id, name and price are required" }, { status: 400 });
     }
+    if (!(await allOwned(db, "menu_categories", [category_id]))) {
+      return NextResponse.json({ error: "That category isn't on this business's menu" }, { status: 400 });
+    }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("menu_items")
       .insert({
         category_id, name, description: description || null, price,

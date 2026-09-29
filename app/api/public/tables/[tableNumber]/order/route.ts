@@ -29,7 +29,7 @@ export async function POST(
     }
 
     const account = await getCustomerSessionFromRequest(req);
-    const { orderId, itemIds } = await addItemsToTable(table.id, items, {
+    const { orderId, itemIds } = await addItemsToTable(table.business_id, table.id, items, {
       accountId: account?.id ?? null,
       phone: customer_phone,
       name: customer_name,

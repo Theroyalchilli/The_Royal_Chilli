@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getActiveMenu } from "@/lib/menu";
+import { pageBusinessId } from "@/lib/business";
 import OrderMenu from "@/components/site/OrderMenu";
 
 export const revalidate = 60;
@@ -12,6 +13,6 @@ export const metadata: Metadata = {
 export default async function OrderPage() {
   // "online" channel: website prices, and only items flagged online_available
   // (Breakfast / Lunch Combos / Combos are off the website by that flag).
-  const categories = await getActiveMenu("online");
+  const categories = await getActiveMenu(await pageBusinessId(), "online");
   return <OrderMenu categories={categories} />;
 }

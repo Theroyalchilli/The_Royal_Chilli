@@ -8,13 +8,19 @@ type Row = Record<string, unknown>;
 let menuItemRow: Row | null;
 let attachmentRows: Row[];
 let optionRows: Row[];
+let menuItemFilters: [string, unknown][];
 
 jest.mock("../supabase", () => ({
   __esModule: true,
   default: {
     from: (table: string) => {
       if (table === "menu_items") {
-        return { select: () => ({ eq: () => ({ eq: () => ({ single: () => Promise.resolve({ data: menuItemRow, error: null }) }) }) }) };
+        // select → eq(business_id) → eq(id) → eq(active) → single
+        const chain = {
+          eq: (col: string, val: unknown) => { menuItemFilters.push([col, val]); return chain; },
+          single: () => Promise.resolve({ data: menuItemRow, error: null }),
+        };
+        return { select: () => chain };
       }
       if (table === "menu_item_modifier_groups") {
         return { select: () => ({ eq: () => Promise.resolve({ data: attachmentRows, error: null }) }) };
@@ -37,41 +43,47 @@ beforeEach(() => {
   menuItemRow = { id: 42, name: "Chicken Tikka", price: 10, online_price: 12 };
   attachmentRows = [];
   optionRows = [];
+  menuItemFilters = [];
 });
 
 describe("resolveItemWithModifiers", () => {
+  it("only finds dishes on this business's menu", async () => {
+    await resolveItemWithModifiers(2, 42, []);
+    expect(menuItemFilters).toContainEqual(["business_id", 2]);
+  });
+
   it("throws when the menu item isn't active/found", async () => {
     menuItemRow = null;
-    await expect(resolveItemWithModifiers(42, [])).rejects.toThrow("no longer available");
+    await expect(resolveItemWithModifiers(1, 42, [])).rejects.toThrow("no longer available");
   });
 
   it("charges collection the till price and delivery the delivery price", async () => {
-    const collection = await resolveItemWithModifiers(42, [], "collection");
-    const delivery = await resolveItemWithModifiers(42, [], "delivery");
+    const collection = await resolveItemWithModifiers(1, 42, [], "collection");
+    const delivery = await resolveItemWithModifiers(1, 42, [], "delivery");
     expect(collection.unitPrice).toBe(10);
     expect(delivery.unitPrice).toBe(12);
   });
 
   it("refuses a dish marked sold out at the till", async () => {
     menuItemRow = { ...menuItemRow, sold_out_until: new Date(Date.now() + 3600_000).toISOString() };
-    await expect(resolveItemWithModifiers(42, [])).rejects.toThrow("sold out");
+    await expect(resolveItemWithModifiers(1, 42, [])).rejects.toThrow("sold out");
   });
 
   it("charges delivery the till price when no delivery price is set", async () => {
     menuItemRow = { ...menuItemRow, online_price: null };
-    expect((await resolveItemWithModifiers(42, [], "delivery")).unitPrice).toBe(10);
+    expect((await resolveItemWithModifiers(1, 42, [], "delivery")).unitPrice).toBe(10);
   });
 
   it("rejects a modifier option id that isn't actually attached to this item", async () => {
     attachmentRows = [{ group_id: 1, required: false, modifier_groups: group() }];
     optionRows = [{ id: 5, group_id: 1, name: "Mild", price_delta: 0 }];
-    await expect(resolveItemWithModifiers(42, [999])).rejects.toThrow("Invalid modifier selection");
+    await expect(resolveItemWithModifiers(1, 42, [999])).rejects.toThrow("Invalid modifier selection");
   });
 
   it("requires a selection for a required group", async () => {
     attachmentRows = [{ group_id: 1, required: true, modifier_groups: group() }];
     optionRows = [{ id: 5, group_id: 1, name: "Mild", price_delta: 0 }];
-    await expect(resolveItemWithModifiers(42, [])).rejects.toThrow('choose an option for "Spice Level"');
+    await expect(resolveItemWithModifiers(1, 42, [])).rejects.toThrow('choose an option for "Spice Level"');
   });
 
   it("rejects more than one selection on a single-choice group", async () => {
@@ -80,7 +92,7 @@ describe("resolveItemWithModifiers", () => {
       { id: 5, group_id: 1, name: "Mild", price_delta: 0 },
       { id: 6, group_id: 1, name: "Hot", price_delta: 0 },
     ];
-    await expect(resolveItemWithModifiers(42, [5, 6])).rejects.toThrow("Only one option allowed");
+    await expect(resolveItemWithModifiers(1, 42, [5, 6])).rejects.toThrow("Only one option allowed");
   });
 
   it("enforces min/max bounds on a multiple-choice group", async () => {
@@ -90,9 +102,9 @@ describe("resolveItemWithModifiers", () => {
       { id: 6, group_id: 1, name: "Bacon", price_delta: 1.5 },
       { id: 7, group_id: 1, name: "Egg", price_delta: 1 },
     ];
-    await expect(resolveItemWithModifiers(42, [])).rejects.toThrow("Choose at least 1");
-    await expect(resolveItemWithModifiers(42, [5, 6, 7])).rejects.toThrow("Choose at most 2");
-    await expect(resolveItemWithModifiers(42, [5, 6])).resolves.toBeTruthy();
+    await expect(resolveItemWithModifiers(1, 42, [])).rejects.toThrow("Choose at least 1");
+    await expect(resolveItemWithModifiers(1, 42, [5, 6, 7])).rejects.toThrow("Choose at most 2");
+    await expect(resolveItemWithModifiers(1, 42, [5, 6])).resolves.toBeTruthy();
   });
 
   it("sums base price and selected modifier deltas", async () => {
@@ -101,7 +113,7 @@ describe("resolveItemWithModifiers", () => {
       { id: 5, group_id: 1, name: "Cheese", price_delta: 1.5 },
       { id: 6, group_id: 1, name: "Bacon", price_delta: 2 },
     ];
-    const result = await resolveItemWithModifiers(42, [5, 6], "collection");
+    const result = await resolveItemWithModifiers(1, 42, [5, 6], "collection");
     expect(result.unitPrice).toBe(13.5);
     expect(result.selectedModifiers).toHaveLength(2);
   });

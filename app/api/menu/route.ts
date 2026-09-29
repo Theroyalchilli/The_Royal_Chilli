@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { requestBusinessId } from "@/lib/business";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const { data: categories, error: catError } = await supabase
+    const db = bizDb(await requestBusinessId(req));
+    const { data: categories, error: catError } = await db
       .from("menu_categories")
       .select("*")
       .eq("active", 1)
@@ -14,7 +17,7 @@ export async function GET() {
     // This endpoint feeds the POS till menu: only items flagged pos_available,
     // with both `price` (till/collection) and `online_price` (delivery) — the
     // till uses the delivery price for delivery orders (components/pos/MenuPanel).
-    const { data: items, error: itemError } = await supabase
+    const { data: items, error: itemError } = await db
       .from("menu_items")
       .select(`
         *,
@@ -36,7 +39,7 @@ export async function GET() {
       : { data: [] };
     const groupIds = [...new Set((attachments || []).map((a) => a.group_id))];
     const { data: groups } = groupIds.length > 0
-      ? await supabase.from("modifier_groups").select("*").in("id", groupIds)
+      ? await db.from("modifier_groups").select("*").in("id", groupIds)
       : { data: [] };
     const { data: options } = groupIds.length > 0
       ? await supabase.from("modifier_options").select("*").in("group_id", groupIds).order("display_order")

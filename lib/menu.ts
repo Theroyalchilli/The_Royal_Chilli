@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { isSoldOut } from "@/lib/sold-out";
 
 export type MenuItemModifierOption = {
@@ -56,13 +57,15 @@ export type MenuCategory = {
   items: MenuItem[];
 };
 
-// channel decides which availability flag each item is read through: "pos"
+// One business's menu (lib/business.ts). channel decides which availability
+// flag each item is read through: "pos"
 // (default) is the in-house till / dine-in menu, "online" is the website
 // collection/delivery menu. Every item carries both prices (see PriceType);
 // the order type picks which one applies. Categories with no items for the
 // channel are dropped.
-export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuCategory[]> {
-  const { data: categories, error: catErr } = await supabase
+export async function getActiveMenu(businessId: number, channel: MenuChannel = "pos"): Promise<MenuCategory[]> {
+  const db = bizDb(businessId);
+  const { data: categories, error: catErr } = await db
     .from("menu_categories")
     .select("id, name, display_order")
     .eq("active", 1)
@@ -70,7 +73,7 @@ export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuC
   if (catErr) throw catErr;
 
   const availabilityCol = channel === "online" ? "online_available" : "pos_available";
-  const { data: items, error: itemErr } = await supabase
+  const { data: items, error: itemErr } = await db
     .from("menu_items")
     .select("id, category_id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g, sold_out_until")
     .eq("active", 1)
@@ -78,12 +81,17 @@ export async function getActiveMenu(channel: MenuChannel = "pos"): Promise<MenuC
     .order("display_order");
   if (itemErr) throw itemErr;
 
-  const { data: attachments } = await supabase
-    .from("menu_item_modifier_groups")
-    .select("menu_item_id, group_id, required, display_order")
-    .order("display_order");
-  const { data: groups } = await supabase.from("modifier_groups").select("*");
-  const { data: options } = await supabase.from("modifier_options").select("*").order("display_order");
+  // Modifier links/options have no business of their own — take only those
+  // for this business's items and groups.
+  const itemIds = (items || []).map((i) => i.id);
+  const { data: attachments } = itemIds.length > 0
+    ? await supabase.from("menu_item_modifier_groups").select("menu_item_id, group_id, required, display_order").in("menu_item_id", itemIds).order("display_order")
+    : { data: [] };
+  const { data: groups } = await db.from("modifier_groups").select("*");
+  const groupIds = (groups || []).map((g) => g.id);
+  const { data: options } = groupIds.length > 0
+    ? await supabase.from("modifier_options").select("*").in("group_id", groupIds).order("display_order")
+    : { data: [] };
 
   const optionsByGroup = new Map<number, MenuItemModifierOption[]>();
   for (const o of options || []) {

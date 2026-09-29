@@ -88,3 +88,28 @@ export async function linkStaffToBusiness(staffId: number, businessId: number, r
     .upsert({ staff_id: staffId, business_id: businessId, role, active: true }, { onConflict: "staff_id,business_id" });
   if (error) throw error;
 }
+
+/**
+ * The business a public web request is for — decided by the domain it came
+ * in on, so each business's website shows its own menu. Unknown domains
+ * (the vercel.app address, localhost) are The Royal Chilli.
+ */
+export async function websiteBusinessId(host: string | null | undefined): Promise<number> {
+  return (await businessForHost(host))?.id ?? DEFAULT_BUSINESS_ID;
+}
+
+/** websiteBusinessId for a server-rendered page. */
+export async function pageBusinessId(): Promise<number> {
+  const { headers } = await import("next/headers");
+  return websiteBusinessId((await headers()).get("host"));
+}
+
+/**
+ * For routes used by both the till and the website: a signed-in staff member
+ * works for their login's business; anyone else gets the domain's business.
+ */
+export async function requestBusinessId(req: { headers: Headers; cookies: { get(name: string): { value: string } | undefined } }): Promise<number> {
+  const { getSessionFromRequest } = await import("@/lib/auth");
+  const session = await getSessionFromRequest(req as Parameters<typeof getSessionFromRequest>[0]);
+  return session?.businessId ?? websiteBusinessId(req.headers.get("host"));
+}

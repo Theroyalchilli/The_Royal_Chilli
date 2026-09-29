@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { soldOutUntilTomorrow } from "@/lib/sold-out";
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { sold_out } = await req.json().catch(() => ({}));
 
   const sold_out_until = sold_out ? soldOutUntilTomorrow() : null;
-  const { data, error } = await supabase.from("menu_items").update({ sold_out_until }).eq("id", id).select("id, name, sold_out_until").single();
+  const { data, error } = await bizDb(session.businessId).from("menu_items").update({ sold_out_until }).eq("id", id).select("id, name, sold_out_until").single();
   if (error || !data) return NextResponse.json({ error: "Failed to update" }, { status: 500 });
 
   revalidatePath("/order");

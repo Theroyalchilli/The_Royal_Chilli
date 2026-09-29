@@ -1,9 +1,9 @@
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 
 export type FeaturedDish = { id: number; image_url: string; blurb: string | null; name: string; price: number };
 
-export async function getFeaturedDishes(): Promise<FeaturedDish[]> {
-  const { data } = await supabase
+export async function getFeaturedDishes(businessId: number): Promise<FeaturedDish[]> {
+  const { data } = await bizDb(businessId)
     .from("featured_dishes")
     .select("id, image_url, blurb, menu_items(name, price)")
     .order("position");

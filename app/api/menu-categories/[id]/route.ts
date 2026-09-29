@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -12,6 +12,7 @@ export async function PATCH(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const body = await req.json();
 
@@ -24,7 +25,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("menu_categories")
       .update(updates)
       .eq("id", id)
@@ -47,11 +48,12 @@ export async function DELETE(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
 
     // menu_items.category_id has no ON DELETE rule — a category with items
     // would either error or orphan them. Block it and tell the user why.
-    const { count } = await supabase
+    const { count } = await db
       .from("menu_items")
       .select("id", { count: "exact", head: true })
       .eq("category_id", id);
@@ -62,7 +64,7 @@ export async function DELETE(
       );
     }
 
-    const { error } = await supabase.from("menu_categories").delete().eq("id", id);
+    const { error } = await db.from("menu_categories").delete().eq("id", id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error) {

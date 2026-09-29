@@ -5,6 +5,7 @@ import { generateOrderNumber } from "@/lib/orders";
 import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
+import { websiteBusinessId } from "@/lib/business";
 import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen } from "@/lib/hours";
@@ -17,6 +18,8 @@ import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    // The website this order came in on decides whose menu and prices apply.
+    const businessId = await websiteBusinessId(req.headers.get("host"));
     const {
       order_type, // 'takeaway' | 'delivery'
       customer_name,
@@ -74,7 +77,7 @@ export async function POST(req: NextRequest) {
       items.map(async (item: { menu_item_id: number; quantity: number; notes?: string; selected_options?: number[] }) => {
         // Collection pays the till price, delivery the delivery price — decided
         // here from the order type, never from prices the browser sent.
-        const resolved = await resolveItemWithModifiers(item.menu_item_id, item.selected_options || [], priceTypeFor(order_type));
+        const resolved = await resolveItemWithModifiers(businessId, item.menu_item_id, item.selected_options || [], priceTypeFor(order_type));
         const quantity = Math.max(1, Number(item.quantity) || 1);
         return {
           menu_item_id: resolved.menuItemId,

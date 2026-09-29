@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { basePriceFor, type PriceType } from "@/lib/menu";
 import { isSoldOut } from "@/lib/sold-out";
 
@@ -11,7 +12,7 @@ export type ResolvedItem = {
   selectedModifiers: SelectedModifier[];
 };
 
-// Looks up the real menu item + validates the client's modifier selections against
+// Looks up the real menu item — it must be on this business's menu — and validates the client's modifier selections against
 // what's actually attached to that item — quantities, names, and prices are never trusted
 // from the client, same principle as menu item pricing elsewhere in the ordering flow.
 //
@@ -19,11 +20,12 @@ export type ResolvedItem = {
 // website collection) uses price; "delivery" uses online_price, falling back
 // to price (see PriceType in lib/menu.ts).
 export async function resolveItemWithModifiers(
+  businessId: number,
   menuItemId: number,
   selectedOptionIds: number[],
   priceType: PriceType = "collection"
 ): Promise<ResolvedItem> {
-  const { data: menuItem } = await supabase
+  const { data: menuItem } = await bizDb(businessId)
     .from("menu_items")
     .select("id, name, price, online_price, sold_out_until")
     .eq("id", menuItemId)

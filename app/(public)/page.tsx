@@ -6,6 +6,7 @@ import { siteContent } from "@/lib/site-content";
 import { getAboutExcerpt } from "@/lib/our-story";
 import { getHeroContent, getHeroImages } from "@/lib/hero-content";
 import { getFeaturedDishes } from "@/lib/featured-dishes";
+import { pageBusinessId } from "@/lib/business";
 import { formatCurrency } from "@/lib/utils";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
@@ -27,7 +28,7 @@ export default async function HomePage() {
   const about = await getAboutExcerpt();
   const hero = await getHeroContent();
   const heroImages = await getHeroImages();
-  const featuredDishes = await getFeaturedDishes();
+  const featuredDishes = await getFeaturedDishes(await pageBusinessId());
 
   return (
     <div>

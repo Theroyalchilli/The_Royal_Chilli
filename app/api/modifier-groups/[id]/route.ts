@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -12,7 +12,9 @@ export async function PATCH(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
+    if (!(await allOwned(db, "modifier_groups", [id]))) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const { name, selection_type, min_select, max_select, options } = await req.json();
 
     const updates: Record<string, unknown> = {};
@@ -21,18 +23,18 @@ export async function PATCH(
     if (min_select !== undefined) updates.min_select = min_select;
     if (max_select !== undefined) updates.max_select = max_select;
     if (Object.keys(updates).length > 0) {
-      const { error } = await supabase.from("modifier_groups").update(updates).eq("id", id);
+      const { error } = await db.from("modifier_groups").update(updates).eq("id", id);
       if (error) throw error;
     }
 
     // Full-replace the option list, same pattern as recipe ingredients.
     if (Array.isArray(options)) {
-      await supabase.from("modifier_options").delete().eq("group_id", id);
+      await db.from("modifier_options").delete().eq("group_id", id);
       if (options.length > 0) {
         const rows = options.map((o: { name: string; price_delta?: number }, i: number) => ({
           group_id: Number(id), name: o.name, price_delta: o.price_delta || 0, display_order: i,
         }));
-        const { error: optErr } = await supabase.from("modifier_options").insert(rows);
+        const { error: optErr } = await db.from("modifier_options").insert(rows);
         if (optErr) throw optErr;
       }
     }
@@ -53,8 +55,9 @@ export async function DELETE(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
-    const { error } = await supabase.from("modifier_groups").delete().eq("id", id);
+    const { error } = await db.from("modifier_groups").delete().eq("id", id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error) {

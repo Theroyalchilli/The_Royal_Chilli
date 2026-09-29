@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -18,6 +18,7 @@ export async function PATCH(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const body = await req.json();
     const updates: Record<string, unknown> = {};
@@ -26,8 +27,11 @@ export async function PATCH(
     // Postgres as the literal string "true"/"false" and fail with 22P02.
     for (const field of INT_BOOL_FIELDS) if (field in updates) updates[field] = updates[field] ? 1 : 0;
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    if ("category_id" in updates && !(await allOwned(db, "menu_categories", [updates.category_id as number]))) {
+      return NextResponse.json({ error: "That category isn't on this business's menu" }, { status: 400 });
+    }
 
-    const { data, error } = await supabase.from("menu_items").update(updates).eq("id", id).select().single();
+    const { data, error } = await db.from("menu_items").update(updates).eq("id", id).select().single();
     if (error) throw error;
     return NextResponse.json({ success: true, item: data });
   } catch (error) {

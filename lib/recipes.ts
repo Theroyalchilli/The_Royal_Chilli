@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 
 // The one place recipe maths happens. Stock depletion on a sale, recipe-based
 // COGS in Finance and the theoretical side of Inventory → Reconciliation all
@@ -12,12 +13,12 @@ export type RecipeBook = Map<
 
 export type SoldItem = { menu_item_id: number | null; quantity: number; item_price?: number };
 
-/** Active recipes linked to menu items (optionally only these menu items). */
-export async function loadRecipeBook(menuItemIds?: number[]): Promise<RecipeBook> {
+/** A business's active recipes linked to menu items (optionally only these menu items). */
+export async function loadRecipeBook(businessId: number, menuItemIds?: number[]): Promise<RecipeBook> {
   const book: RecipeBook = new Map();
   if (menuItemIds && menuItemIds.length === 0) return book;
 
-  let q = supabase.from("recipes").select("id, menu_item_id, yield_quantity").eq("active", 1).not("menu_item_id", "is", null);
+  let q = bizDb(businessId).from("recipes").select("id, menu_item_id, yield_quantity").eq("active", 1).not("menu_item_id", "is", null);
   if (menuItemIds) q = q.in("menu_item_id", menuItemIds);
   const { data: recipes, error } = await q.order("id");
   if (error) throw error;

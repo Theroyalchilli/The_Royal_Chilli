@@ -2,6 +2,7 @@ import supabase from "@/lib/supabase";
 import { tradingDayStr } from "@/lib/london-date";
 import { PLATFORMS, type PlatformKey } from "@/lib/platforms";
 import { chunked, getPnl, getSalesData, labourCostByDay, r2 } from "@/lib/finance";
+import { bizDb } from "@/lib/business-db";
 
 // Admin dashboard figures (Staff Hub home, admin only). Revenue = our own paid
 // orders (till, QR, website) after discounts, VAT included, minus refunds on
@@ -89,7 +90,7 @@ const OWN_CHANNELS: { key: string; label: string }[] = [
   { key: "delivery", label: "Website delivery" },
 ];
 
-export async function getAdminDashboard(range: RangeKey): Promise<AdminDashboard> {
+export async function getAdminDashboard(businessId: number, range: RangeKey): Promise<AdminDashboard> {
   const today = tradingDayStr();
   const mon = mondayOf(today);
   const sun = addDays(mon, 6);
@@ -99,9 +100,9 @@ export async function getAdminDashboard(range: RangeKey): Promise<AdminDashboard
 
   // One fetch covering last week → this week.
   const [sales14, costByDay, summary] = await Promise.all([
-    getSalesData(lastMon, sun),
-    labourCostByDay(mon, sun),
-    getPnl(sum.from, sum.to),
+    getSalesData(businessId, lastMon, sun),
+    labourCostByDay(businessId, mon, sun),
+    getPnl(businessId, sum.from, sum.to),
   ]);
   const plat14 = sales14.platforms;
 
@@ -179,8 +180,8 @@ export async function getAdminDashboard(range: RangeKey): Promise<AdminDashboard
     .map(([name, v]) => ({ name, revenue: r2(v.revenue), qty: v.qty }))
     .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
-  const { count: yCount, error: yErr } = await supabase.from("platform_sales").select("id", { count: "exact", head: true })
-    .eq("business_id", 1).eq("sales_date", yesterday);
+  const { count: yCount, error: yErr } = await bizDb(businessId).from("platform_sales").select("id", { count: "exact", head: true })
+    .eq("sales_date", yesterday);
 
   return {
     today,

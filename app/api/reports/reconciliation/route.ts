@@ -13,6 +13,6 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
-  const report = await getReconciliationReport(from, to);
+  const report = await getReconciliationReport(session.businessId, from, to);
   return NextResponse.json(report);
 }

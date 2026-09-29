@@ -1,4 +1,5 @@
-import supabase from "@/lib/supabase";
+import { bizDb, type BizDb } from "@/lib/business-db";
+import { staffIdsAt } from "@/lib/business";
 import { getItemSalesInRange } from "@/lib/analytics";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
@@ -78,8 +79,8 @@ const CLOCKIN_GRACE_MIN = 15;
 
 // ── Single shared fetches — each hits its table once per dashboard load. ────
 
-async function paidOrdersInRange(from: string, to: string): Promise<OrderRow[]> {
-  const { data } = await supabase
+async function paidOrdersInRange(db: BizDb, from: string, to: string): Promise<OrderRow[]> {
+  const { data } = await db
     .from("orders")
     .select("id, total, order_type, created_at")
     .eq("is_paid", true)
@@ -88,8 +89,8 @@ async function paidOrdersInRange(from: string, to: string): Promise<OrderRow[]> 
   return data ?? [];
 }
 
-async function attendanceForWeek(week: string[]): Promise<AttendanceRow[]> {
-  const { data } = await supabase
+async function attendanceForWeek(db: BizDb, week: string[]): Promise<AttendanceRow[]> {
+  const { data } = await db
     .from("attendance")
     .select("staff_id, work_date, net_work_seconds, late_seconds, clock_in, clock_out")
     .gte("work_date", week[0])
@@ -97,8 +98,8 @@ async function attendanceForWeek(week: string[]): Promise<AttendanceRow[]> {
   return data ?? [];
 }
 
-async function lowStockList(): Promise<{ name: string; current_stock: number; unit: string }[]> {
-  const { data } = await supabase.from("ingredients").select("name, unit, current_stock, reorder_level").eq("active", 1);
+async function lowStockList(db: BizDb): Promise<{ name: string; current_stock: number; unit: string }[]> {
+  const { data } = await db.from("ingredients").select("name, unit, current_stock, reorder_level").eq("active", 1);
   return (data ?? [])
     .filter((i) => Number(i.current_stock) <= Number(i.reorder_level))
     .map((i) => ({ name: i.name, current_stock: Number(i.current_stock), unit: i.unit }));
@@ -147,12 +148,12 @@ function deriveChannelMix(orders: OrderRow[], week: string[]): SlicePoint[] {
 }
 
 /** Category revenue for a set of orders (already filtered to the window wanted) — one extra pass over their line items, not per-order. */
-async function deriveCategorySales(orderIds: number[], limit = 6): Promise<SlicePoint[]> {
+async function deriveCategorySales(db: BizDb, orderIds: number[], limit = 6): Promise<SlicePoint[]> {
   if (orderIds.length === 0) return [];
   const [items, { data: menuItems }, { data: categories }] = await Promise.all([
     getItemSalesInRange(orderIds),
-    supabase.from("menu_items").select("id, category_id"),
-    supabase.from("menu_categories").select("id, name"),
+    db.from("menu_items").select("id, category_id"),
+    db.from("menu_categories").select("id, name"),
   ]);
   const categoryIdByItem = new Map((menuItems ?? []).map((m) => [m.id, m.category_id]));
   const nameByCategory = new Map((categories ?? []).map((c) => [c.id, c.name]));
@@ -199,10 +200,10 @@ function pctDelta(cur: number, prev: number, goodDir: "up" | "down" = "up"): { p
 }
 
 /** Hours worked + labour cost per day, from closed shifts (not payroll periods, which rarely align to single days). */
-async function deriveDailyCost(attendance: AttendanceRow[], week: string[]): Promise<Map<string, { hours: number; cost: number }>> {
+async function deriveDailyCost(db: BizDb, attendance: AttendanceRow[], week: string[]): Promise<Map<string, { hours: number; cost: number }>> {
   const closed = attendance.filter((r) => r.clock_out);
   const staffIds = [...new Set(closed.map((r) => r.staff_id))];
-  const { data: staffRows } = staffIds.length ? await supabase.from("staff").select("id, pay_rate").in("id", staffIds) : { data: [] };
+  const { data: staffRows } = staffIds.length ? await db.from("staff").select("id, pay_rate").in("id", staffIds) : { data: [] };
   const rateById = new Map((staffRows ?? []).map((s) => [s.id, Number(s.pay_rate ?? 0)]));
   const byDay = new Map<string, { hours: number; cost: number }>();
   for (const r of closed) {
@@ -217,17 +218,17 @@ async function deriveDailyCost(attendance: AttendanceRow[], week: string[]): Pro
 }
 
 /** Shifts still open from a *previous* day — clocked in, never clocked out. Today's still-open shifts are normal "on shift", not a miss. */
-async function missedClockOuts(today: string): Promise<{ staff_id: number; work_date: string }[]> {
-  const { data } = await supabase.from("attendance").select("staff_id, work_date").is("clock_out", null).not("clock_in", "is", null).lt("work_date", today);
+async function missedClockOuts(db: BizDb, today: string): Promise<{ staff_id: number; work_date: string }[]> {
+  const { data } = await db.from("attendance").select("staff_id, work_date").is("clock_out", null).not("clock_in", "is", null).lt("work_date", today);
   return data ?? [];
 }
 
 /** Active staff scheduled (per their default rota) to have started by now, with no clock-in today at all. Simplified — doesn't account for one-off shift overrides. */
-async function missedClockIns(today: string): Promise<{ id: number; name: string; rota_start: string }[]> {
+async function missedClockIns(db: BizDb, here: number[], today: string): Promise<{ id: number; name: string; rota_start: string }[]> {
   const { minutes, weekday } = londonNow();
   const [{ data: staffRows }, { data: clockedIn }] = await Promise.all([
-    supabase.from("staff").select("id, name, rota_start, rota_working_days").eq("active", 1).not("rota_start", "is", null),
-    supabase.from("attendance").select("staff_id").eq("work_date", today).not("clock_in", "is", null),
+    db.from("staff").select("id, name, rota_start, rota_working_days").eq("active", 1).not("rota_start", "is", null).in("id", here),
+    db.from("attendance").select("staff_id").eq("work_date", today).not("clock_in", "is", null),
   ]);
   const clockedInSet = new Set((clockedIn ?? []).map((r) => r.staff_id));
   return (staffRows ?? [])
@@ -237,8 +238,8 @@ async function missedClockIns(today: string): Promise<{ id: number; name: string
     .map((s) => ({ id: s.id, name: s.name, rota_start: s.rota_start!.slice(0, 5) }));
 }
 
-async function todaysReservations(today: string, limit = 6): Promise<ReservationPreview[]> {
-  const { data } = await supabase
+async function todaysReservations(db: BizDb, today: string, limit = 6): Promise<ReservationPreview[]> {
+  const { data } = await db
     .from("reservations")
     .select("customer_name, party_size, reservation_time, status")
     .eq("reservation_date", today)
@@ -249,8 +250,8 @@ async function todaysReservations(today: string, limit = 6): Promise<Reservation
 }
 
 /** Reservation count per day for the week, for the KPI sparkline — one grouped fetch, not one query per day. */
-async function reservationsCountForWeek(week: string[]): Promise<number[]> {
-  const { data } = await supabase
+async function reservationsCountForWeek(db: BizDb, week: string[]): Promise<number[]> {
+  const { data } = await db
     .from("reservations")
     .select("reservation_date")
     .gte("reservation_date", week[0])
@@ -275,7 +276,10 @@ function missedOutPerDay(attendance: AttendanceRow[], week: string[], today: str
 // financial view, Manager gets real-time floor operations, HR gets people
 // & compliance. Orders/attendance are each fetched once per load and every
 // metric derives from that in memory rather than re-querying per chart.
-export async function getDashboardData(role: string): Promise<DashboardData> {
+export async function getDashboardData(businessId: number, role: string): Promise<DashboardData> {
+  const db = bizDb(businessId);
+  // Staff are shared across businesses — people lists are those who work here.
+  const here = await staffIdsAt(businessId);
   const { today } = todayRange();
   const week = lastNDays(7);
 
@@ -284,11 +288,11 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
     const prevWeek = last14.slice(0, 7);
 
     const [orders14, attendance14, lowStock, pendingLeave, pendingCorr] = await Promise.all([
-      paidOrdersInRange(last14[0], last14[last14.length - 1]),
-      attendanceForWeek(last14),
-      lowStockList(),
-      supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      supabase.from("attendance_corrections").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      paidOrdersInRange(db, last14[0], last14[last14.length - 1]),
+      attendanceForWeek(db, last14),
+      lowStockList(db),
+      db.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      db.from("attendance_corrections").select("id", { count: "exact", head: true }).eq("status", "pending"),
     ]);
 
     const trend = deriveTrend(orders14, week);
@@ -297,8 +301,8 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
 
     // These three depend on the batch above but not on each other — run together.
     const [costMap, categorySales] = await Promise.all([
-      deriveDailyCost(attendance14, last14),
-      deriveCategorySales(weekOrderIds),
+      deriveDailyCost(db, attendance14, last14),
+      deriveCategorySales(db, weekOrderIds),
     ]);
 
     const staffCostVsRevenue: CostPoint[] = week.map((d) => ({
@@ -349,14 +353,14 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
   if (role === "manager") {
     const fourWeeksAgo = addDaysStr(today, -27);
     const [orders28, attendance, lowStock, missedOuts, missedIns, reservations, tablesRes, reservationCounts] = await Promise.all([
-      paidOrdersInRange(fourWeeksAgo, today),
-      attendanceForWeek(week),
-      lowStockList(),
-      missedClockOuts(today),
-      missedClockIns(today),
-      todaysReservations(today),
-      supabase.from("restaurant_tables").select("status"),
-      reservationsCountForWeek(week),
+      paidOrdersInRange(db, fourWeeksAgo, today),
+      attendanceForWeek(db, week),
+      lowStockList(db),
+      missedClockOuts(db, today),
+      missedClockIns(db, here, today),
+      todaysReservations(db, today),
+      db.from("restaurant_tables").select("status"),
+      reservationsCountForWeek(db, week),
     ]);
     const orders = orders28.filter((o) => week.includes(dayOf(o)));
 
@@ -366,8 +370,8 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
 
     // These three depend on the batch above but not on each other — run together.
     const [{ data: staffNames }, { data: missedOutNames }, topItems] = await Promise.all([
-      staffIds.length ? supabase.from("staff").select("id, name").in("id", staffIds) : Promise.resolve({ data: [] }),
-      missedOutStaffIds.length ? supabase.from("staff").select("id, name").in("id", missedOutStaffIds) : Promise.resolve({ data: [] }),
+      staffIds.length ? db.from("staff").select("id, name").in("id", staffIds) : Promise.resolve({ data: [] }),
+      missedOutStaffIds.length ? db.from("staff").select("id, name").in("id", missedOutStaffIds) : Promise.resolve({ data: [] }),
       deriveTopItems(orders),
     ]);
     const heatmap = deriveHeatmap(orders28);
@@ -408,14 +412,14 @@ export async function getDashboardData(role: string): Promise<DashboardData> {
   if (role === "hr") {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
     const [headcount, { data: onLeave }, { data: recentHires }, { data: pendingLeaveRows }, { data: roleCounts }, attendance] = await Promise.all([
-      supabase.from("staff").select("id", { count: "exact", head: true }).eq("active", 1),
-      supabase.from("leave_requests").select("id").eq("status", "approved").lte("start_date", today).gte("end_date", today),
-      supabase.from("staff").select("id").eq("active", 1).gte("hire_date", thirtyDaysAgo),
-      supabase.from("leave_requests").select("id, staff:staff!leave_requests_staff_id_fkey(name), leave_type, start_date").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-      supabase.from("staff").select("role").eq("active", 1),
-      attendanceForWeek(week),
+      db.from("staff").select("id", { count: "exact", head: true }).eq("active", 1).in("id", here),
+      db.from("leave_requests").select("id").eq("status", "approved").lte("start_date", today).gte("end_date", today),
+      db.from("staff").select("id").eq("active", 1).gte("hire_date", thirtyDaysAgo).in("id", here),
+      db.from("leave_requests").select("id, staff:staff!leave_requests_staff_id_fkey(name), leave_type, start_date").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
+      db.from("staff").select("role").eq("active", 1).in("id", here),
+      attendanceForWeek(db, week),
     ]);
-    const costByDay = await deriveDailyCost(attendance, week);
+    const costByDay = await deriveDailyCost(db, attendance, week);
     const hoursCostTrend: HoursCostPoint[] = week.map((d) => ({
       date: d,
       label: dayLabel(d),

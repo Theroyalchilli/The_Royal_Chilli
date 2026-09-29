@@ -3,19 +3,21 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { getPaidOrdersInRange } from "@/lib/analytics";
 import { getLabourCost } from "@/lib/finance";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { staffIdsAt } from "@/lib/business";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
-  const orders = await getPaidOrdersInRange(from, to);
+  const orders = await getPaidOrdersInRange(session.businessId, from, to);
   const bySales = new Map<number, { orders: number; revenue: number }>();
   for (const o of orders) {
     if (!o.staff_id) continue;
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
     bySales.set(o.staff_id, cur);
   }
 
-  const { data: staff } = await supabase.from("staff").select("id, name").eq("active", 1);
+  const { data: staff } = await db.from("staff").select("id, name").eq("active", 1).in("id", await staffIdsAt(session.businessId));
   const staffPerformance = (staff || [])
     .map((s) => {
       const stats = bySales.get(s.id) || { orders: 0, revenue: 0 };
@@ -34,7 +36,7 @@ export async function GET(req: NextRequest) {
     .filter((s) => s.orders_handled > 0)
     .sort((a, b) => b.sales - a.sales);
 
-  const labourCost = await getLabourCost(from, to);
+  const labourCost = await getLabourCost(session.businessId, from, to);
 
   return NextResponse.json({ staff_performance: staffPerformance, labour_cost: labourCost });
 }

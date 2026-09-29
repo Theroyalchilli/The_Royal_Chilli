@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
-  const orders = await getPaidOrdersInRange(from, to);
+  const orders = await getPaidOrdersInRange(session.businessId, from, to);
   const refundsByOrder = await getRefundsByOrderId(orders.map((o) => o.id));
   // Net of refunds — a refunded order never has its `total` changed (see
   // getRefundsByOrderId), so revenue here would otherwise still count it at

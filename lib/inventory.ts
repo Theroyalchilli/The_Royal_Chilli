@@ -1,6 +1,7 @@
 import supabase from "@/lib/supabase";
 import { tradingRangeUtc } from "@/lib/london-date";
 import { allRows, chunked, getSalesData, r2 } from "@/lib/finance";
+import { bizDb } from "@/lib/business-db";
 import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
 
 export type ReconciliationLine = {
@@ -49,9 +50,11 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
     .neq("status", "cancelled");
 
   if (!items || items.length === 0) return;
+  const { data: order } = await supabase.from("orders").select("business_id").eq("id", orderId).maybeSingle();
+  if (!order) return;
 
   const menuItemIds = [...new Set(items.map((i) => i.menu_item_id).filter((id): id is number => id != null))];
-  const book = await loadRecipeBook(menuItemIds);
+  const book = await loadRecipeBook(order.business_id, menuItemIds);
   // One movement row per ingredient, even if a dish appears twice in the order.
   const { usage: deltaByIngredient } = recipeUsage(book, items);
 
@@ -131,19 +134,20 @@ export function buildReconciliationReport(
 // stock-take has posted for the period (see SPEC: two different reconciliations).
 // Sales and theoretical usage use the same code as Finance (lib/finance.ts,
 // lib/recipes.ts), so "COGS (theoretical)" here equals Finance's recipe COGS.
-export async function getReconciliationReport(from: string, to: string): Promise<ReconciliationReport> {
+export async function getReconciliationReport(businessId: number, from: string, to: string): Promise<ReconciliationReport> {
+  const db = bizDb(businessId);
   const { start, end } = tradingRangeUtc(from, to);
   const [sales, book, movements, ingredients] = await Promise.all([
-    getSalesData(from, to),
-    loadRecipeBook(),
+    getSalesData(businessId, from, to),
+    loadRecipeBook(businessId),
     // Actual usage: opening + receipts - closing collapses algebraically to just
     // "everything that left the ledger other than a purchase, negated" — the
     // opening/closing balances themselves cancel out. A new ingredient's
     // opening stock isn't usage either, so it's left out too.
     allRows<{ ingredient_id: number; quantity_delta: number; reason: string | null; reference_type: string | null }>((a, b) =>
-      supabase.from("stock_movements").select("ingredient_id, quantity_delta, reason, reference_type")
+      db.from("stock_movements").select("ingredient_id, quantity_delta, reason, reference_type")
         .neq("movement_type", "purchase").gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
-    supabase.from("ingredients").select("id, name, unit, cost_per_unit").then((r) => r.data ?? []),
+    db.from("ingredients").select("id, name, unit, cost_per_unit").then((r) => r.data ?? []),
   ]);
 
   // GP is measured on our own sales, ex-VAT, after refunds — the orders the

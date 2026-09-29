@@ -1,9 +1,12 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { tradingRangeUtc } from "@/lib/london-date";
 import type { PlatformKey } from "@/lib/platforms";
 import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
 
-// The one place money figures are worked out. Finance → Profit & Loss,
+// The one place money figures are worked out — always for one business
+// (each is its own company, with its own P&L and VAT).
+// Finance → Profit & Loss,
 // Finance → VAT and the admin dashboard's summary all read getPnl(), so the
 // same date range always shows the same numbers on every screen.
 //
@@ -57,19 +60,20 @@ export type Refund = { order_id: number; amount: number; vat: number; order_type
 export type PlatformSaleRow = { sales_date: string; platform: PlatformKey; orders: number; sales: number; commission: number };
 export type SalesData = { orders: SaleOrder[]; refunds: Refund[]; cardTaken: number; platforms: PlatformSaleRow[] };
 
-export async function getSalesData(from: string, to: string): Promise<SalesData> {
+export async function getSalesData(businessId: number, from: string, to: string): Promise<SalesData> {
   const { start, end } = tradingRangeUtc(from, to);
+  const db = bizDb(businessId);
   const [orders, refundRows, cardRows, platforms] = await Promise.all([
     allRows<SaleOrder>((a, b) =>
-      supabase.from("orders").select("id, total, tax, order_type, created_at").eq("is_paid", true)
+      db.from("orders").select("id, total, tax, order_type, created_at").eq("is_paid", true)
         .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     allRows<{ order_id: number; amount: number; created_at: string; orders: unknown }>((a, b) =>
-      supabase.from("payments").select("order_id, amount, created_at, orders(total, tax, order_type)").lt("amount", 0)
+      db.from("payments").select("order_id, amount, created_at, orders(total, tax, order_type)").lt("amount", 0)
         .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     allRows<{ amount: number; tip_amount: number | null }>((a, b) =>
-      supabase.from("payments").select("amount, tip_amount").in("method", ["card", "card_online"]).gt("amount", 0)
+      db.from("payments").select("amount, tip_amount").in("method", ["card", "card_online"]).gt("amount", 0)
         .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
-    getPlatformSales(from, to),
+    getPlatformSales(businessId, from, to),
   ]);
 
   const refunds: Refund[] = refundRows.map((p) => {
@@ -90,18 +94,18 @@ export async function getSalesData(from: string, to: string): Promise<SalesData>
   };
 }
 
-export async function getPlatformSales(from: string, to: string): Promise<PlatformSaleRow[]> {
-  const { data, error } = await supabase
+export async function getPlatformSales(businessId: number, from: string, to: string): Promise<PlatformSaleRow[]> {
+  const { data, error } = await bizDb(businessId)
     .from("platform_sales").select("sales_date, platform, orders, sales, commission")
-    .eq("business_id", 1).gte("sales_date", from).lte("sales_date", to);
+    .gte("sales_date", from).lte("sales_date", to);
   // Don't take a whole report down over the platform figures.
   if (error) { console.error("platform_sales:", error.message); return []; }
   return (data ?? []).map((r) => ({ ...r, orders: Number(r.orders), sales: Number(r.sales), commission: Number(r.commission) }));
 }
 
 // ── Costs ────────────────────────────────────────────────────────────────────
-export async function getIngredientPurchases(from: string, to: string): Promise<number> {
-  const { data, error } = await supabase
+export async function getIngredientPurchases(businessId: number, from: string, to: string): Promise<number> {
+  const { data, error } = await bizDb(businessId)
     .from("purchase_orders")
     .select("total_cost")
     .eq("status", "received")
@@ -116,9 +120,10 @@ export async function getIngredientPurchases(from: string, to: string): Promise<
 // actually been run and would silently understate this (overstating profit)
 // until then. Per work date, so the dashboard's daily bars and the P&L total
 // come from the same numbers.
-export async function labourCostByDay(from: string, to: string): Promise<Map<string, number>> {
+// Shifts worked at this business (staff are shared; each shift belongs to one).
+export async function labourCostByDay(businessId: number, from: string, to: string): Promise<Map<string, number>> {
   const rows = await allRows<{ staff_id: number; work_date: string; net_work_seconds: number | null }>((a, b) =>
-    supabase.from("attendance").select("staff_id, work_date, net_work_seconds")
+    bizDb(businessId).from("attendance").select("staff_id, work_date, net_work_seconds")
       .gte("work_date", from).lte("work_date", to).not("clock_out", "is", null).order("id").range(a, b));
   const ids = [...new Set(rows.map((r) => r.staff_id))];
   const { data: staff, error } = ids.length ? await supabase.from("staff").select("id, pay_rate").in("id", ids) : { data: [], error: null };
@@ -132,14 +137,14 @@ export async function labourCostByDay(from: string, to: string): Promise<Map<str
   return byDay;
 }
 
-export async function getLabourCost(from: string, to: string): Promise<number> {
-  const byDay = await labourCostByDay(from, to);
+export async function getLabourCost(businessId: number, from: string, to: string): Promise<number> {
+  const byDay = await labourCostByDay(businessId, from, to);
   return r2([...byDay.values()].reduce((s, n) => s + n, 0));
 }
 
-export async function getOtherExpenses(from: string, to: string): Promise<{ total: number; vatApplicableTotal: number }> {
+export async function getOtherExpenses(businessId: number, from: string, to: string): Promise<{ total: number; vatApplicableTotal: number }> {
   const data = await allRows<{ amount: number; vat_applicable: number }>((a, b) =>
-    supabase.from("expenses").select("amount, vat_applicable").gte("expense_date", from).lte("expense_date", to).order("id").range(a, b));
+    bizDb(businessId).from("expenses").select("amount, vat_applicable").gte("expense_date", from).lte("expense_date", to).order("id").range(a, b));
   const total = r2(data.reduce((s, e) => s + Number(e.amount), 0));
   const vatApplicableTotal = r2(data.filter((e) => e.vat_applicable).reduce((s, e) => s + Number(e.amount), 0));
   return { total, vatApplicableTotal };
@@ -148,7 +153,7 @@ export async function getOtherExpenses(from: string, to: string): Promise<{ tota
 // Real (accrual) cost of goods sold for our own orders: every item sold,
 // costed at its recipe. Items with no recipe cost nothing here, so it comes
 // with a coverage % (share of item sales that had a recipe).
-export async function getRecipeCogs(orderIds: number[]): Promise<{ cogs: number; coveragePct: number }> {
+export async function getRecipeCogs(businessId: number, orderIds: number[]): Promise<{ cogs: number; coveragePct: number }> {
   if (orderIds.length === 0) return { cogs: 0, coveragePct: 0 };
   const items = await chunked(orderIds, async (ids) => {
     const { data, error } = await supabase.from("order_items").select("menu_item_id, item_price, quantity")
@@ -156,7 +161,7 @@ export async function getRecipeCogs(orderIds: number[]): Promise<{ cogs: number;
     if (error) throw error;
     return data ?? [];
   });
-  const book = await loadRecipeBook();
+  const book = await loadRecipeBook(businessId);
   const { cogs, costedRevenue, itemRevenue } = recipeUsage(book, items);
   return { cogs: r2(cogs), coveragePct: itemRevenue > 0 ? Math.round((costedRevenue / itemRevenue) * 1000) / 10 : 0 };
 }
@@ -237,14 +242,14 @@ export function buildPnl(i: PnlInputs): Pnl {
   };
 }
 
-export async function getPnl(from: string, to: string): Promise<Pnl> {
+export async function getPnl(businessId: number, from: string, to: string): Promise<Pnl> {
   const [sales, ingredients, staff, expenses, vatRate] = await Promise.all([
-    getSalesData(from, to),
-    getIngredientPurchases(from, to),
-    getLabourCost(from, to),
-    getOtherExpenses(from, to),
+    getSalesData(businessId, from, to),
+    getIngredientPurchases(businessId, from, to),
+    getLabourCost(businessId, from, to),
+    getOtherExpenses(businessId, from, to),
     getVatRate(),
   ]);
-  const recipe = await getRecipeCogs(sales.orders.map((o) => o.id));
+  const recipe = await getRecipeCogs(businessId, sales.orders.map((o) => o.id));
   return buildPnl({ from, to, vatRate, sales, ingredients, staff, expenses, recipe });
 }

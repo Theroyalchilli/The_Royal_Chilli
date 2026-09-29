@@ -35,7 +35,7 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
   if (role === "admin") {
     const { range } = await searchParams;
     const key: RangeKey = range && range in RANGES ? (range as RangeKey) : "this_week";
-    const data = await getAdminDashboard(key);
+    const data = await getAdminDashboard(session!.businessId, key);
     return (
       <div className="px-4 pb-12 pt-6 md:px-6">
         <div className="mx-auto max-w-[1240px]">
@@ -46,7 +46,7 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
     );
   }
 
-  const data = role ? await getDashboardData(role) : { kpis: [], alerts: [] };
+  const data = session && role ? await getDashboardData(session.businessId, role) : { kpis: [], alerts: [] };
   return (
     <div className="px-4 py-6 md:px-6 md:py-7">
       <div className="mx-auto max-w-[1200px]">

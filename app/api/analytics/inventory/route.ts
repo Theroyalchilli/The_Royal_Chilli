@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { tradingRangeUtc } from "@/lib/london-date";
@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   let movements;
   try {
     movements = await allRows<{ ingredient_id: number; movement_type: string; quantity_delta: number; ingredient: unknown }>((a, b) =>
-      supabase.from("stock_movements")
+      db.from("stock_movements")
         .select("ingredient_id, movement_type, quantity_delta, ingredient:ingredients(name, unit, cost_per_unit, current_stock, reorder_level)")
         .in("movement_type", ["waste", "usage"]).gte("created_at", start).lte("created_at", end).order("id").range(a, b));
   } catch {

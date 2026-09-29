@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
@@ -9,11 +9,12 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageFinance(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
-  let query = supabase.from("expenses").select("*").order("expense_date", { ascending: false });
+  let query = db.from("expenses").select("*").order("expense_date", { ascending: false });
   if (from) query = query.gte("expense_date", from);
   if (to) query = query.lte("expense_date", to);
 
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageFinance(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { category, description, amount, vat_applicable, expense_date, receipt_reference, allow_duplicate } = await req.json();
     if (!category || !description || !amount) {
       return NextResponse.json({ error: "category, description and amount are required" }, { status: 400 });
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     // Same expense typed twice would be counted twice in the P&L — ask first.
     if (!allow_duplicate) {
-      const { data: same } = await supabase.from("expenses").select("id")
+      const { data: same } = await db.from("expenses").select("id")
         .eq("expense_date", expense_date || londonDateStr()).eq("category", category)
         .eq("amount", Math.round(Number(amount) * 100) / 100).ilike("description", String(description).trim()).limit(1);
       if (same && same.length > 0) {
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("expenses")
       .insert({
         category, description: String(description).trim(), amount: Math.round(Number(amount) * 100) / 100,

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
   try {
-    return NextResponse.json(await getPnl(from, to));
+    return NextResponse.json(await getPnl(session.businessId, from, to));
   } catch (e) {
     console.error("P&L error:", e);
     return NextResponse.json({ error: "Failed to work out profit & loss" }, { status: 500 });

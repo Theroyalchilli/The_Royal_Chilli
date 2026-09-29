@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { loadRecipeBook } from "@/lib/recipes";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { getPaidOrdersInRange, getItemSalesInRange } from "@/lib/analytics";
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
-  const orders = await getPaidOrdersInRange(from, to);
+  const orders = await getPaidOrdersInRange(session.businessId, from, to);
   const items = await getItemSalesInRange(orders.map((o) => o.id));
 
   const byItem = new Map<string, { menu_item_id: number | null; quantity_sold: number; revenue: number }>();
@@ -25,19 +25,10 @@ export async function GET(req: NextRequest) {
     byItem.set(i.item_name, cur);
   }
 
-  // Recipe cost per menu_item, for profit margin.
-  const { data: recipes } = await supabase.from("recipes").select("id, menu_item_id");
-  const { data: recipeIngredients } = await supabase.from("recipe_ingredients").select("recipe_id, quantity, ingredient:ingredients(cost_per_unit)");
-  const costByRecipe = new Map<number, number>();
-  for (const ri of recipeIngredients || []) {
-    const ing = ri.ingredient as unknown as { cost_per_unit: number } | null;
-    const cost = Number(ri.quantity) * Number(ing?.cost_per_unit ?? 0);
-    costByRecipe.set(ri.recipe_id, (costByRecipe.get(ri.recipe_id) || 0) + cost);
-  }
-  const costByMenuItem = new Map<number, number>();
-  for (const r of recipes || []) {
-    if (r.menu_item_id) costByMenuItem.set(r.menu_item_id, costByRecipe.get(r.id) || 0);
-  }
+  // Recipe cost per portion, for profit margin — the shared recipe
+  // calculator (lib/recipes.ts), so it matches Finance and stock depletion.
+  const book = await loadRecipeBook(session.businessId);
+  const costByMenuItem = new Map<number, number>([...book].map(([menuItemId, r]) => [menuItemId, r.costPerPortion]));
 
   const ranked = Array.from(byItem.entries())
     .map(([item_name, v]) => {

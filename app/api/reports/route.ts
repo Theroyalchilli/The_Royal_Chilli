@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { getRefundsByOrderId } from "@/lib/analytics";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const { searchParams } = new URL(req.url);
     const today = tradingDayStr();
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     const { start: dayStart, end: dayEnd } = tradingRangeUtc(from, to);
 
     // Fetch all non-cancelled orders for the day
-    const { data: orders, error: ordersError } = await supabase
+    const { data: orders, error: ordersError } = await db
       .from("orders")
       .select("id, total, discount, status, is_paid, order_type, created_at, customer_id")
       .gte("created_at", dayStart)
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     // Cancelled orders — excluded from every stat above by design, but worth
     // its own rate so a spike in cancellations doesn't hide inside "revenue looks fine".
-    const { count: cancelledCount } = await supabase
+    const { count: cancelledCount } = await db
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("status", "cancelled")
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
     let newCustomers = customerIds.length;
     let returningCustomers = 0;
     if (customerIds.length > 0) {
-      const { data: priorOrders } = await supabase
+      const { data: priorOrders } = await db
         .from("orders")
         .select("customer_id")
         .in("customer_id", customerIds)
@@ -139,7 +140,7 @@ export async function GET(req: NextRequest) {
     let voidValue = 0;
 
     if (orderIds.length > 0) {
-      const { data: orderItems, error: itemsError } = await supabase
+      const { data: orderItems, error: itemsError } = await db
         .from("order_items")
         .select("order_id, item_name, item_price, quantity, status")
         .in("order_id", orderIds);
@@ -174,7 +175,7 @@ export async function GET(req: NextRequest) {
     // original order's day here, not the day it was actually collected.
     let paymentSplit: { method: string; count: number; total: number }[] = [];
     if (orderIds.length > 0) {
-      const { data: payments, error: paymentsError } = await supabase
+      const { data: payments, error: paymentsError } = await db
         .from("payments")
         .select("method, amount, order_id")
         .in("order_id", orderIds);

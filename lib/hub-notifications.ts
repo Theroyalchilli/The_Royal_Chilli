@@ -1,4 +1,4 @@
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import type { StaffRole } from "@/lib/types";
 import { canAccess } from "@/lib/permissions";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
@@ -7,7 +7,8 @@ import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 // Worked out fresh each time the Hub loads — nothing is stored.
 export type HubNotice = { icon: string; text: string; sub?: string; href: string };
 
-export async function getHubNotifications(role: StaffRole): Promise<HubNotice[]> {
+export async function getHubNotifications(businessId: number, role: StaffRole): Promise<HubNotice[]> {
+  const db = bizDb(businessId);
   const today = tradingDayStr();
   const d = new Date(today + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() - 1);
@@ -15,15 +16,15 @@ export async function getHubNotifications(role: StaffRole): Promise<HubNotice[]>
   const isManagement = role === "admin" || role === "manager";
 
   const [ingredients, leave, corrections, openDay, platforms] = await Promise.all([
-    canAccess(role, "inventory") ? supabase.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
+    canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
     canAccess(role, "hr") || canAccess(role, "attendance")
-      ? supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
+      ? db.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
     canAccess(role, "attendance")
-      ? supabase.from("attendance_corrections").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
+      ? db.from("attendance_corrections").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
     isManagement
-      ? supabase.from("work_periods").select("id", { count: "exact", head: true }).eq("status", "open").lt("opened_at", tradingRangeUtc(today).start) : null,
+      ? db.from("work_periods").select("id", { count: "exact", head: true }).eq("status", "open").lt("opened_at", tradingRangeUtc(today).start) : null,
     canAccess(role, "finance")
-      ? supabase.from("platform_sales").select("id", { count: "exact", head: true }).eq("business_id", 1).eq("sales_date", yesterday) : null,
+      ? db.from("platform_sales").select("id", { count: "exact", head: true }).eq("sales_date", yesterday) : null,
   ]);
 
   const out: HubNotice[] = [];

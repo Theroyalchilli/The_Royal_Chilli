@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 
 // Every currently-outstanding Pay Later order, across all dates — the
@@ -12,8 +12,9 @@ export async function GET(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
-    const { data: orders, error } = await supabase
+    const { data: orders, error } = await db
       .from("orders")
       .select(`
         id, order_number, order_type, total, amount_paid, customer_name, customer_phone,

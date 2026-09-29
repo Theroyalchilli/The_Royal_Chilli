@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
 import { allRows } from "@/lib/finance";
@@ -13,6 +13,7 @@ import type { ZReport } from "@/lib/z-report";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session || !canManageFinance(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const month = req.nextUrl.searchParams.get("month") ?? "";
   if (!/^\d{4}-\d{2}$/.test(month)) return NextResponse.json({ error: "month=YYYY-MM is required" }, { status: 400 });
@@ -25,11 +26,11 @@ export async function GET(req: NextRequest) {
   type PayRow = { order_id: number; method: string; amount: number; tip_amount: number | null; reference: string | null; created_at: string; orders: unknown };
   type OrderRow = { id: number; created_at: string; tax: number; discount: number | null };
   const [payments, orders, { data: periods }] = await Promise.all([
-    allRows<PayRow>((a, b) => supabase.from("payments").select("order_id, method, amount, tip_amount, reference, created_at, orders(order_number, total, tax)")
+    allRows<PayRow>((a, b) => db.from("payments").select("order_id, method, amount, tip_amount, reference, created_at, orders(order_number, total, tax)")
       .gte("created_at", start).lte("created_at", end).order("created_at").order("id").range(a, b)),
-    allRows<OrderRow>((a, b) => supabase.from("orders").select("id, created_at, tax, discount").eq("is_paid", true)
+    allRows<OrderRow>((a, b) => db.from("orders").select("id, created_at, tax, discount").eq("is_paid", true)
       .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
-    supabase.from("work_periods").select("id, opened_at, closed_at, close_note, z_report").eq("status", "closed").gte("closed_at", start).lte("closed_at", end).order("closed_at"),
+    db.from("work_periods").select("id, opened_at, closed_at, close_note, z_report").eq("status", "closed").gte("closed_at", start).lte("closed_at", end).order("closed_at"),
   ]);
 
   const r2 = (n: number) => Math.round(n * 100) / 100;

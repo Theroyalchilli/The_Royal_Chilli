@@ -65,7 +65,7 @@ export default async function StaffHubLayout({
     },
   ].filter((g, i) => i === 0 || g.items.length > 0);
 
-  const notices = await getHubNotifications(session.role).catch(() => []);
+  const notices = await getHubNotifications(session.businessId, session.role).catch(() => []);
 
   return (
     <StaffShell user={{ name: session.name, role: session.role }} nav={nav} notices={notices}>

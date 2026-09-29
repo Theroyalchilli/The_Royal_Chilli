@@ -1,8 +1,9 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { tradingRangeUtc } from "@/lib/london-date";
 
-export async function getPaidOrdersInRange(from: string, to: string) {
-  const { data, error } = await supabase
+export async function getPaidOrdersInRange(businessId: number, from: string, to: string) {
+  const { data, error } = await bizDb(businessId)
     .from("orders")
     .select("id, total, staff_id, created_at")
     .eq("is_paid", true)

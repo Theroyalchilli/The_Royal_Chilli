@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!from || !to) return NextResponse.json({ error: "from and to are required" }, { status: 400 });
 
   try {
-    const p = await getPnl(from, to);
+    const p = await getPnl(session.businessId, from, to);
     return NextResponse.json({ from, to, vat_rate: p.vat_rate, sales: p.sales, vat: p.vat });
   } catch (e) {
     console.error("VAT error:", e);

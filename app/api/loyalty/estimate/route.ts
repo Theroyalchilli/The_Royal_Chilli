@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { estimatePurchasePoints } from "@/lib/customers";
 import { getCashCreditInfo } from "@/lib/loyalty";
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   // Points and vouchers are dine-in only (Rewards Club)
   let canSpend = true;
   if (orderId) {
-    const { data: order } = await supabase.from("orders").select("order_type").eq("id", orderId).maybeSingle();
+    const { data: order } = await bizDb(session.businessId).from("orders").select("order_type").eq("id", orderId).maybeSingle();
     canSpend = order?.order_type === "dine_in";
   }
 

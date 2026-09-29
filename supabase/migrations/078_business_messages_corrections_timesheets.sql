@@ -7,6 +7,10 @@
 --   was working for when they asked).
 -- • timesheets: unique per business (someone at two businesses will have a
 --   timesheet at each for the same pay period).
+-- • loyalty_transactions: points earned or spent on an order record that
+--   order's business (customers and the rewards scheme are shared; this is
+--   what a later "points earned here, spent there" report between the
+--   companies reads).
 -- Existing rows are all The Royal Chilli (business 1). Safe to re-run.
 
 BEGIN;
@@ -37,5 +41,20 @@ BEGIN
     ALTER TABLE timesheets ADD CONSTRAINT timesheets_business_unique UNIQUE (business_id, staff_id, period_start, period_end);
   END IF;
 END $$;
+
+-- Points entries tied to an order take the order's business.
+CREATE OR REPLACE FUNCTION loyalty_business_from_order() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE bid int;
+BEGIN
+  IF NEW.reference_type IN ('order', 'cash_credit', 'visit_bonus') AND NEW.reference_id IS NOT NULL THEN
+    SELECT business_id INTO bid FROM orders WHERE id = NEW.reference_id;
+    IF bid IS NOT NULL THEN NEW.business_id := bid; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS trg_inherit_business ON loyalty_transactions;
+CREATE TRIGGER trg_inherit_business BEFORE INSERT ON loyalty_transactions
+  FOR EACH ROW EXECUTE FUNCTION loyalty_business_from_order();
 
 COMMIT;

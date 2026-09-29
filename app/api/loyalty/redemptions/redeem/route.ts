@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
 import { notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDiscount, type RewardTerms } from "@/lib/loyalty";
@@ -45,7 +46,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "REWARD_EXPIRED", message: "This code has expired" }, { status: 400 });
     }
 
-    const { data: order, error: orderErr } = await supabase
+    // The till's own business's order only.
+    const { data: order, error: orderErr } = await bizDb(session.businessId)
       .from("orders")
       .select("id, status, is_paid, order_type, subtotal, total")
       .eq("id", order_id)

@@ -33,7 +33,7 @@ jest.mock("@/lib/supabase", () => ({
 import { POST } from "@/app/api/orders/[id]/service-charge/route";
 import { authedRequest } from "@/app/api/_test-helpers";
 
-const manager: SessionUser = { id: 2, name: "A Manager", role: "manager" };
+const manager: SessionUser = { id: 2, name: "A Manager", role: "manager", businessId: 1 };
 
 async function setServiceCharge(orderId: string, pct: number) {
   const req = await authedRequest(`http://localhost/api/orders/${orderId}/service-charge`, manager, {

@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import type { SessionUser } from "./types";
+import { DEFAULT_BUSINESS_ID } from "./business-id";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "royal-chilli-pos-fallback-secret-key-2024"
@@ -15,6 +16,7 @@ export async function createSession(user: SessionUser): Promise<string> {
     id: user.id,
     name: user.name,
     role: user.role,
+    bid: user.businessId,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -36,11 +38,14 @@ async function verify(token: string | undefined): Promise<SessionUser | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
-    const { id, name, role } = payload;
+    const { id, name, role, bid } = payload;
     if (typeof id !== "number" || typeof name !== "string" || !VALID_ROLES.has(role as SessionUser["role"])) {
       return null;
     }
-    return { id, name, role: role as SessionUser["role"] };
+    // Logins from before multi-business (and the attendance app's tokens,
+    // until it's updated) don't say — they're The Royal Chilli.
+    const businessId = typeof bid === "number" && Number.isInteger(bid) && bid > 0 ? bid : DEFAULT_BUSINESS_ID;
+    return { id, name, role: role as SessionUser["role"], businessId };
   } catch {
     return null;
   }

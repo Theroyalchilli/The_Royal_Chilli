@@ -232,6 +232,8 @@ export interface SessionUser {
   id: number;
   name: string;
   role: StaffRole;
+  /** The business this login is working for (lib/business.ts). */
+  businessId: number;
 }
 
 export interface CartItem {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSession, getSessionCookieOptions } from "@/lib/auth";
 import { clearPinFailures, findStaffByPin, pinLockedFor, recordPinFailure } from "@/lib/staff-pin";
 import { tillFromRequest } from "@/lib/till-device";
+import { staffBusinessIds } from "@/lib/business";
 
 // POST { pin } — sign in at the till with a 4-digit PIN. Only on a paired
 // till (lib/till-device.ts); anywhere else staff use username + password.
@@ -23,10 +24,16 @@ export async function POST(req: NextRequest) {
     recordPinFailure(key);
     return NextResponse.json({ error: "Wrong PIN" }, { status: 401 });
   }
+  // A PIN only works on the tills of businesses the person works at.
+  if (!(await staffBusinessIds(staff.id)).includes(till.businessId)) {
+    recordPinFailure(key);
+    return NextResponse.json({ error: "You're not set up to work at this business." }, { status: 403 });
+  }
   clearPinFailures(key);
 
+  const user = { ...staff, businessId: till.businessId };
   const { name, options } = getSessionCookieOptions();
-  const res = NextResponse.json({ user: staff });
-  res.cookies.set(name, await createSession(staff), options);
+  const res = NextResponse.json({ user });
+  res.cookies.set(name, await createSession(user), options);
   return res;
 }

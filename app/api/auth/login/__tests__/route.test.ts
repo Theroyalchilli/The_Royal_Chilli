@@ -18,6 +18,9 @@ jest.mock("@/lib/supabase", () => ({
   },
 }));
 
+let businessId: number | null = 1;
+jest.mock("@/lib/business", () => ({ __esModule: true, loginBusinessId: () => Promise.resolve(businessId) }));
+
 import { POST } from "@/app/api/auth/login/route";
 
 function jsonRequest(body: unknown) {
@@ -29,6 +32,7 @@ function jsonRequest(body: unknown) {
 }
 
 beforeEach(async () => {
+  businessId = 1;
   staffRow = {
     id: 1, name: "Test Manager", role: "manager", active: 1,
     password_hash: await bcrypt.hash("correct-horse", 10),
@@ -45,7 +49,7 @@ describe("POST /api/auth/login", () => {
     const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse" }));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.user).toEqual({ id: 1, name: "Test Manager", role: "manager" });
+    expect(body.user).toEqual({ id: 1, name: "Test Manager", role: "manager", businessId: 1 });
     expect(res.cookies.get("pos_session")).toBeTruthy();
   });
 
@@ -65,5 +69,12 @@ describe("POST /api/auth/login", () => {
 
     expect(unknownRes.status).toBe(401);
     expect(unknownBody.error).toBe(wrongPassBody.error);
+  });
+
+  it("403s when the account isn't set up at any business", async () => {
+    businessId = null;
+    const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse" }));
+    expect(res.status).toBe(403);
+    expect(res.cookies.get("pos_session")).toBeFalsy();
   });
 });

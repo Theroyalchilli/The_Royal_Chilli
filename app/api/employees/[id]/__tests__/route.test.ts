@@ -39,11 +39,14 @@ jest.mock("@/lib/supabase", () => ({
   },
 }));
 
+const linked: unknown[][] = [];
+jest.mock("@/lib/business", () => ({ __esModule: true, linkStaffToBusiness: (...a: unknown[]) => { linked.push(a); return Promise.resolve(); } }));
+
 import { PATCH } from "@/app/api/employees/[id]/route";
 import { authedRequest } from "@/app/api/_test-helpers";
 
-const manager: SessionUser = { id: 2, name: "A Manager", role: "manager" };
-const admin: SessionUser = { id: 1, name: "An Admin", role: "admin" };
+const manager: SessionUser = { id: 2, name: "A Manager", role: "manager", businessId: 1 };
+const admin: SessionUser = { id: 1, name: "An Admin", role: "admin", businessId: 1 };
 
 async function patch(user: SessionUser | null, targetId: string, body: unknown) {
   const req = await authedRequest(`http://localhost/api/employees/${targetId}`, user, {
@@ -84,6 +87,7 @@ describe("PATCH /api/employees/[id] — privilege-escalation guard", () => {
     const res = await patch(admin, "5", { role: "hr" });
     expect(res.status).toBe(200);
     expect(updatedRow).toEqual({ role: "hr" });
+    expect(linked).toContainEqual([5, 1, "hr"]); // role at this business kept in step
   });
 
   it("401s when there's no session at all", async () => {

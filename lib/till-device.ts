@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { NextRequest } from "next/server";
+import { DEFAULT_BUSINESS_ID } from "./business-id";
 
 // A "paired till": a device a manager has signed in on once with their
 // password and ticked "set up as a till". It gets a long-lived pos_till
@@ -15,10 +16,11 @@ const JWT_SECRET = new TextEncoder().encode(
 export const TILL_COOKIE = "pos_till";
 const TILL_MAX_AGE = 60 * 60 * 24 * 730; // 2 years
 
-export type TillDevice = { deviceId: string; pairedBy: number };
+// businessId: the business this till belongs to — PIN sign-ins here work for it.
+export type TillDevice = { deviceId: string; pairedBy: number; businessId: number };
 
-export async function createTillToken(pairedBy: number): Promise<string> {
-  return new SignJWT({ kind: "till_device", did: crypto.randomUUID(), paired_by: pairedBy })
+export async function createTillToken(pairedBy: number, businessId: number): Promise<string> {
+  return new SignJWT({ kind: "till_device", did: crypto.randomUUID(), paired_by: pairedBy, bid: businessId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("730d")
@@ -30,7 +32,9 @@ export async function verifyTillToken(token: string | undefined): Promise<TillDe
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.kind !== "till_device" || typeof payload.did !== "string" || typeof payload.paired_by !== "number") return null;
-    return { deviceId: payload.did, pairedBy: payload.paired_by };
+    // Tills paired before multi-business are The Royal Chilli's.
+    const bid = typeof payload.bid === "number" && payload.bid > 0 ? payload.bid : DEFAULT_BUSINESS_ID;
+    return { deviceId: payload.did, pairedBy: payload.paired_by, businessId: bid };
   } catch {
     return null;
   }

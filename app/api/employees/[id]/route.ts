@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { linkStaffToBusiness } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
 
 const PROFILE_FIELDS =
@@ -81,6 +82,9 @@ export async function PATCH(
       .select(PROFILE_FIELDS)
       .single();
     if (error) throw error;
+
+    // Keep their role at this business in step (lib/business.ts).
+    if (typeof updates.role === "string") await linkStaffToBusiness(Number(id), session.businessId, updates.role);
 
     // Never write the password hash itself into the audit trail.
     const { password_hash: _omit, ...auditableChanges } = updates;

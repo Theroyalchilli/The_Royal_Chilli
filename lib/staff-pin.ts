@@ -15,7 +15,7 @@ type PinStaff = { id: number; name: string; role: SessionUser["role"]; pin_hash:
 
 // The active staff member whose PIN this is, or null. Checks every active
 // staff member's hash (a handful of people), so PINs must be unique.
-export async function findStaffByPin(pin: string, exceptId?: number): Promise<SessionUser | null> {
+export async function findStaffByPin(pin: string, exceptId?: number): Promise<Omit<SessionUser, "businessId"> | null> {
   if (!PIN_PATTERN.test(pin)) return null;
   const { data } = await supabase.from("staff").select("id, name, role, pin_hash").eq("active", 1).not("pin_hash", "is", null);
   for (const s of (data ?? []) as PinStaff[]) {

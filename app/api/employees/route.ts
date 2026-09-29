@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { linkStaffToBusiness } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
 
 const PROFILE_FIELDS =
@@ -101,6 +102,8 @@ export async function POST(req: NextRequest) {
       .select(PROFILE_FIELDS)
       .single();
     if (updateErr) throw updateErr;
+
+    await linkStaffToBusiness(created.id, session.businessId, role);
 
     await supabase.from("audit_logs").insert({
       staff_id: session.id,

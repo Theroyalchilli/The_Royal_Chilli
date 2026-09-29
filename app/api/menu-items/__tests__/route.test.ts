@@ -24,8 +24,8 @@ jest.mock("@/lib/supabase", () => ({
 import { POST } from "@/app/api/menu-items/route";
 import { authedRequest } from "@/app/api/_test-helpers";
 
-const manager: SessionUser = { id: 2, name: "A Manager", role: "manager" };
-const employee: SessionUser = { id: 3, name: "An Employee", role: "employee" };
+const manager: SessionUser = { id: 2, name: "A Manager", role: "manager", businessId: 1 };
+const employee: SessionUser = { id: 3, name: "An Employee", role: "employee", businessId: 1 };
 
 async function post(user: SessionUser | null, body: unknown) {
   const req = await authedRequest("http://localhost/api/menu-items", user, {

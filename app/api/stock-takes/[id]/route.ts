@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 
@@ -10,12 +10,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
 
-  const { data: stockTake, error: stErr } = await supabase.from("stock_takes").select("*").eq("id", id).single();
+  const { data: stockTake, error: stErr } = await db.from("stock_takes").select("*").eq("id", id).single();
   if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
 
-  const { data: lines, error: linesErr } = await supabase
+  const { data: lines, error: linesErr } = await db
     .from("stock_take_lines")
     .select("*, ingredient:ingredients(name, unit)")
     .eq("stock_take_id", id)

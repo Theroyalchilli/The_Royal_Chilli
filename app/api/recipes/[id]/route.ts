@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { mergeRecipeLines, recipeForDish } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
@@ -12,12 +12,13 @@ export async function GET(
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
 
-  const { data: recipe, error } = await supabase.from("recipes").select("*, menu_item:menu_items(name, price)").eq("id", id).single();
+  const { data: recipe, error } = await db.from("recipes").select("*, menu_item:menu_items(name, price)").eq("id", id).single();
   if (error || !recipe) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
 
-  const { data: ingredients } = await supabase
+  const { data: ingredients } = await db
     .from("recipe_ingredients")
     .select("*, ingredient:ingredients(name, unit, cost_per_unit)")
     .eq("recipe_id", id);
@@ -52,11 +53,19 @@ export async function PATCH(
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const { menu_item_id, name, yield_quantity, yield_unit, notes, ingredients } = await req.json();
 
+    if (!(await allOwned(db, "recipes", [id]))) return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
+    if (menu_item_id && !(await allOwned(db, "menu_items", [menu_item_id]))) {
+      return NextResponse.json({ error: "That dish isn't on this business's menu" }, { status: 400 });
+    }
+    if (Array.isArray(ingredients) && !(await allOwned(db, "ingredients", ingredients.map((i: { ingredient_id: number }) => i.ingredient_id).filter(Boolean)))) {
+      return NextResponse.json({ error: "One of those ingredients isn't this business's" }, { status: 400 });
+    }
     if (menu_item_id) {
-      const taken = await recipeForDish(Number(menu_item_id), Number(id));
+      const taken = await recipeForDish(session.businessId, Number(menu_item_id), Number(id));
       if (taken) return NextResponse.json({ error: `That dish already has a recipe ("${taken.name}")` }, { status: 409 });
     }
 
@@ -68,15 +77,15 @@ export async function PATCH(
     if (notes !== undefined) updates.notes = notes;
 
     if (Object.keys(updates).length > 0) {
-      const { error } = await supabase.from("recipes").update(updates).eq("id", id);
+      const { error } = await db.from("recipes").update(updates).eq("id", id);
       if (error) throw error;
     }
 
     if (Array.isArray(ingredients)) {
-      await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
+      await db.from("recipe_ingredients").delete().eq("recipe_id", id);
       const rows = mergeRecipeLines(Number(id), ingredients);
       if (rows.length > 0) {
-        const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
+        const { error: riErr } = await db.from("recipe_ingredients").insert(rows);
         if (riErr) throw riErr;
       }
     }

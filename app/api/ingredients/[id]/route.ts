@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
@@ -17,6 +17,7 @@ export async function PATCH(
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const body = await req.json();
     const updates: Record<string, unknown> = {};
@@ -25,11 +26,11 @@ export async function PATCH(
     if (typeof updates.name === "string") {
       updates.name = updates.name.trim().replace(/\s+/g, " ");
       if (!updates.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
-      const existing = await findActiveByName("ingredients", updates.name as string, Number(id));
+      const existing = await findActiveByName("ingredients", updates.name as string, Number(id), session.businessId);
       if (existing) return NextResponse.json({ error: `"${existing.name}" is already an ingredient` }, { status: 409 });
     }
 
-    const { data, error } = await supabase.from("ingredients").update(updates).eq("id", id).select().single();
+    const { data, error } = await db.from("ingredients").update(updates).eq("id", id).select().single();
     if (error) throw error;
     return NextResponse.json({ success: true, ingredient: data });
   } catch (error) {

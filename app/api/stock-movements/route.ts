@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 import { tradingRangeUtc } from "@/lib/london-date";
@@ -9,13 +9,14 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
   const ingredientId = searchParams.get("ingredient_id");
   const movementType = searchParams.get("movement_type");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
-  let query = supabase
+  let query = db
     .from("stock_movements")
     .select("*, ingredient:ingredients(name, unit), staff:staff!stock_movements_staff_id_fkey(name)")
     .order("created_at", { ascending: false })
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { ingredient_id, movement_type, quantity, reason } = await req.json();
     if (!ingredient_id || !movement_type || !quantity) {
       return NextResponse.json({ error: "ingredient_id, movement_type and quantity are required" }, { status: 400 });
@@ -54,10 +56,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This endpoint only records waste, adjustment, or usage — purchases are recorded via receiving a purchase order" }, { status: 400 });
     }
 
+    if (!(await allOwned(db, "ingredients", [ingredient_id]))) {
+
+      return NextResponse.json({ error: "That ingredient isn't this business's" }, { status: 400 });
+
+    }
+
+
     // Waste and usage always reduce stock; a manual adjustment can go either way (client sends the signed delta).
     const delta = movement_type === "adjustment" ? Number(quantity) : -Math.abs(Number(quantity));
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("stock_movements")
       .insert({ ingredient_id, movement_type, quantity_delta: delta, reason: reason || null, staff_id: session.id })
       .select()

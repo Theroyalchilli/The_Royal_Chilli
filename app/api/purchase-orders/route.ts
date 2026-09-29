@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb, type BizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
@@ -9,10 +9,10 @@ import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 // collides on the unique constraint) the moment any of today's purchase
 // orders is deleted rather than just cancelled. Same fix as
 // lib/orders.ts's generateOrderNumber().
-async function generatePoNumber(): Promise<string> {
+async function generatePoNumber(db: BizDb): Promise<string> {
   const dateStr = londonDateStr().replace(/-/g, "");
   const prefix = `PO-${dateStr}-`;
-  const { data: rows } = await supabase
+  const { data: rows } = await db
     .from("purchase_orders")
     .select("order_number")
     .gte("created_at", londonDayRangeUtc(londonDateStr()).start)
@@ -31,10 +31,11 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
 
-  let query = supabase.from("purchase_orders").select("*, supplier:suppliers(name)").order("created_at", { ascending: false });
+  let query = db.from("purchase_orders").select("*, supplier:suppliers(name)").order("created_at", { ascending: false });
   if (status) query = query.eq("status", status);
 
   const { data, error } = await query;
@@ -52,11 +53,15 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { supplier_id, expected_date, notes, items, status } = await req.json();
     if (!supplier_id || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "supplier_id and at least one item are required" }, { status: 400 });
     }
 
+    if (!(await allOwned(db, "ingredients", items.map((i: { ingredient_id: number }) => i.ingredient_id)))) {
+      return NextResponse.json({ error: "One of those ingredients isn't this business's" }, { status: 400 });
+    }
     const totalCost = items.reduce((sum: number, i: { quantity: number; unit_cost: number }) => sum + i.quantity * i.unit_cost, 0);
 
     // generatePoNumber() isn't locked against a concurrent request landing on
@@ -65,8 +70,8 @@ export async function POST(req: NextRequest) {
     let po: { id: number } | null = null;
     let poErr: { code?: string; message?: string } | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const orderNumber = await generatePoNumber();
-      const result = await supabase
+      const orderNumber = await generatePoNumber(db);
+      const result = await db
         .from("purchase_orders")
         .insert({
           order_number: orderNumber,
@@ -91,7 +96,7 @@ export async function POST(req: NextRequest) {
       quantity: i.quantity,
       unit_cost: i.unit_cost,
     }));
-    const { error: itemsErr } = await supabase.from("purchase_order_items").insert(itemRows);
+    const { error: itemsErr } = await db.from("purchase_order_items").insert(itemRows);
     if (itemsErr) throw itemsErr;
 
     return NextResponse.json({ success: true, purchaseOrder: po }, { status: 201 });

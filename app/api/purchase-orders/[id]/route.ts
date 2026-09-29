@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 
@@ -11,12 +11,13 @@ export async function GET(
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
 
-  const { data: po, error: poErr } = await supabase.from("purchase_orders").select("*, supplier:suppliers(name)").eq("id", id).single();
+  const { data: po, error: poErr } = await db.from("purchase_orders").select("*, supplier:suppliers(name)").eq("id", id).single();
   if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
 
-  const { data: items, error: itemsErr } = await supabase
+  const { data: items, error: itemsErr } = await db
     .from("purchase_order_items")
     .select("*, ingredient:ingredients(name, unit)")
     .eq("purchase_order_id", id);
@@ -40,6 +41,7 @@ export async function PATCH(
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const { status, expected_date, notes } = await req.json();
 
@@ -49,7 +51,7 @@ export async function PATCH(
     if (notes !== undefined) updates.notes = notes;
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
-    const { data, error } = await supabase.from("purchase_orders").update(updates).eq("id", id).select().single();
+    const { data, error } = await db.from("purchase_orders").update(updates).eq("id", id).select().single();
     if (error) throw error;
     return NextResponse.json({ success: true, purchaseOrder: data });
   } catch (error) {

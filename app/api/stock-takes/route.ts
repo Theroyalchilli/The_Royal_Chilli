@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase
+  const db = bizDb(session.businessId);
+  const { data, error } = await db
     .from("stock_takes")
     .select("*, counted_staff:staff!stock_takes_counted_by_fkey(name)")
     .order("opened_at", { ascending: false });
@@ -30,16 +31,17 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { location } = await req.json().catch(() => ({ location: "all" }));
 
-    const { data: stockTake, error: stErr } = await supabase
+    const { data: stockTake, error: stErr } = await db
       .from("stock_takes")
       .insert({ location: location || "all", counted_by: session.id })
       .select()
       .single();
     if (stErr) throw stErr;
 
-    const { data: ingredients, error: ingErr } = await supabase.from("ingredients").select("id, current_stock").eq("active", 1);
+    const { data: ingredients, error: ingErr } = await db.from("ingredients").select("id, current_stock").eq("active", 1);
     if (ingErr) throw ingErr;
 
     if ((ingredients || []).length > 0) {
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
         ingredient_id: i.id,
         system_qty: i.current_stock,
       }));
-      const { error: lineErr } = await supabase.from("stock_take_lines").insert(lineRows);
+      const { error: lineErr } = await db.from("stock_take_lines").insert(lineRows);
       if (lineErr) throw lineErr;
     }
 

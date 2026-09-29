@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
@@ -15,15 +15,16 @@ export async function POST(
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const { items } = await req.json(); // [{ item_id, received_quantity, expiry_date }]
 
-    const { data: po, error: poErr } = await supabase.from("purchase_orders").select("*").eq("id", id).single();
+    const { data: po, error: poErr } = await db.from("purchase_orders").select("*").eq("id", id).single();
     if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
     if (po.status === "received") return NextResponse.json({ error: "Already received" }, { status: 400 });
     if (po.status === "cancelled") return NextResponse.json({ error: "Cannot receive a cancelled order" }, { status: 400 });
 
-    const { data: poItems, error: itemsErr } = await supabase.from("purchase_order_items").select("*").eq("purchase_order_id", id);
+    const { data: poItems, error: itemsErr } = await db.from("purchase_order_items").select("*").eq("purchase_order_id", id);
     if (itemsErr) throw itemsErr;
 
     const overrides = new Map((items || []).map((i: { item_id: number; received_quantity?: number; expiry_date?: string }) => [i.item_id, i]));
@@ -36,12 +37,12 @@ export async function POST(
       const receivedQty = Math.max(0, Number(override?.received_quantity ?? item.quantity));
       receivedCost += receivedQty * Number(item.unit_cost);
 
-      await supabase.from("purchase_order_items").update({
+      await db.from("purchase_order_items").update({
         received_quantity: receivedQty,
         expiry_date: override?.expiry_date || null,
       }).eq("id", item.id);
 
-      await supabase.from("stock_movements").insert({
+      await db.from("stock_movements").insert({
         ingredient_id: item.ingredient_id,
         movement_type: "purchase",
         quantity_delta: receivedQty,
@@ -52,10 +53,10 @@ export async function POST(
       });
 
       // Last-known cost, used for recipe costing.
-      await supabase.from("ingredients").update({ cost_per_unit: item.unit_cost }).eq("id", item.ingredient_id);
+      await db.from("ingredients").update({ cost_per_unit: item.unit_cost }).eq("id", item.ingredient_id);
     }
 
-    const { data: updatedPo, error: updateErr } = await supabase
+    const { data: updatedPo, error: updateErr } = await db
       .from("purchase_orders")
       .update({ status: "received", received_date: londonDateStr(), total_cost: Math.round(receivedCost * 100) / 100 })
       .eq("id", id)

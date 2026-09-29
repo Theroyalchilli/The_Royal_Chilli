@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canApproveStockTakes } from "@/lib/permissions";
 
@@ -12,15 +12,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!session || !canApproveStockTakes(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
 
-    const { data: stockTake, error: stErr } = await supabase.from("stock_takes").select("status").eq("id", id).single();
+    const { data: stockTake, error: stErr } = await db.from("stock_takes").select("status").eq("id", id).single();
     if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
     if (stockTake.status !== "submitted") {
       return NextResponse.json({ error: `Stock take is ${stockTake.status}, not submitted` }, { status: 400 });
     }
 
-    const { data: reopened, error: reopenErr } = await supabase
+    const { data: reopened, error: reopenErr } = await db
       .from("stock_takes")
       .update({ status: "open" })
       .eq("id", id)

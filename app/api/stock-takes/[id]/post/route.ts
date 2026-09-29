@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canApproveStockTakes } from "@/lib/permissions";
 
@@ -16,15 +16,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!session || !canApproveStockTakes(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
 
-    const { data: stockTake, error: stErr } = await supabase.from("stock_takes").select("status").eq("id", id).single();
+    const { data: stockTake, error: stErr } = await db.from("stock_takes").select("status").eq("id", id).single();
     if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
     if (stockTake.status !== "submitted") {
       return NextResponse.json({ error: `Stock take is ${stockTake.status}, not submitted` }, { status: 400 });
     }
 
-    const { data: lines, error: linesErr } = await supabase
+    const { data: lines, error: linesErr } = await db
       .from("stock_take_lines")
       .select("*, ingredient:ingredients(cost_per_unit)")
       .eq("stock_take_id", id);
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const varianceValue = Math.round(varianceQty * Number(ing?.cost_per_unit ?? 0) * 100) / 100;
 
       if (varianceQty !== 0) {
-        const { error: moveErr } = await supabase.from("stock_movements").insert({
+        const { error: moveErr } = await db.from("stock_movements").insert({
           ingredient_id: line.ingredient_id,
           movement_type: "adjustment",
           quantity_delta: varianceQty,
@@ -49,11 +50,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (moveErr) throw moveErr;
       }
 
-      const { error: updErr } = await supabase.from("stock_take_lines").update({ variance_value: varianceValue }).eq("id", line.id);
+      const { error: updErr } = await db.from("stock_take_lines").update({ variance_value: varianceValue }).eq("id", line.id);
       if (updErr) throw updErr;
     }
 
-    const { data: posted, error: postErr } = await supabase
+    const { data: posted, error: postErr } = await db
       .from("stock_takes")
       .update({ status: "posted", posted_at: new Date().toISOString(), posted_by: session.id })
       .eq("id", id)

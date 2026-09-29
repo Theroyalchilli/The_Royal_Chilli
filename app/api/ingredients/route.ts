@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
@@ -9,11 +9,12 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageInventory(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
   const lowStockOnly = searchParams.get("low_stock") === "1";
   const search = searchParams.get("search");
 
-  let query = supabase
+  let query = db
     .from("ingredients")
     .select("*, supplier:suppliers(name)")
     .eq("active", 1)
@@ -38,12 +39,13 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageInventory(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { name, unit, reorder_level, reorder_quantity, cost_per_unit, supplier_id, opening_stock } = await req.json();
     if (!name || !String(name).trim() || !unit) return NextResponse.json({ error: "Name and unit are required" }, { status: 400 });
-    const existing = await findActiveByName("ingredients", String(name));
+    const existing = await findActiveByName("ingredients", String(name), undefined, session.businessId);
     if (existing) return NextResponse.json({ error: `"${existing.name}" is already an ingredient — use Adjust on it instead` }, { status: 409 });
 
-    const { data: ingredient, error } = await supabase
+    const { data: ingredient, error } = await db
       .from("ingredients")
       .insert({
         name: String(name).trim().replace(/\s+/g, " "), unit,
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
 
     if (opening_stock && Number(opening_stock) > 0) {
-      await supabase.from("stock_movements").insert({
+      await db.from("stock_movements").insert({
         ingredient_id: ingredient.id,
         movement_type: "adjustment",
         quantity_delta: Number(opening_stock),
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { data: fresh } = await supabase.from("ingredients").select("*").eq("id", ingredient.id).single();
+    const { data: fresh } = await db.from("ingredients").select("*").eq("id", ingredient.id).single();
     return NextResponse.json({ success: true, ingredient: fresh }, { status: 201 });
   } catch (error) {
     console.error("Ingredient create error:", error);

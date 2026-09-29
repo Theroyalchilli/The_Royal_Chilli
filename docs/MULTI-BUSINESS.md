@@ -6,10 +6,20 @@ One system for several businesses: **The Royal Chilli (1)**, **Melt House (2)**,
 with `business_id`. Decided 2026-09-29.
 
 - Mixed business types → per-business module switches (`businesses.modules`).
-- Shared across the group: staff (can work at several), customers + rewards
-  scheme, suppliers.
+- **Every business is fully independent (decided 29 Sep 2026, replacing the
+  earlier "shared staff / customers / suppliers"):** each creates its own staff,
+  suppliers and customers (with their own rewards scheme). Someone working at
+  two businesses has a staff record at each; a customer of two has two accounts.
+- **Group admin = the owner only:** one dashboard across all businesses, and a
+  switcher to work inside any of them. A business's own "admin" sees only it.
+- Usernames are unique across the whole group (one login page).
+- **One shared core + a folder per business:** `businesses/<slug>/` holds that
+  business's logo, colours, website pages, wording and any feature only it
+  needs — editing it changes only that business. (A full separate copy per
+  business was considered and rejected: every fix 4×, four databases, no
+  single admin view.)
 - Each business is a separate company: own VAT number, Stripe/SumUp, accounts,
-  payroll (per employer).
+  payroll.
 
 ## Where it's up to
 
@@ -17,9 +27,10 @@ with `business_id`. Decided 2026-09-29.
 |---|---|---|
 | 1 | Foundation: `businesses`, `staff_businesses`, `business_id` on 36 tables, triggers (migrations 076, 077) | **Done** |
 | 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** — attendance app waiting on migration 078 |
-| 3 | Per-business settings + branding | Not started |
-| 4 | Group admin: business switcher, group dashboard, businesses admin screen | Not started |
-| 5 | Shared staff / customers / suppliers across businesses | Not started |
+| 2b | **Next:** fully separate staff, suppliers, customers + rewards (migration 079) and the owner's group admin (switcher, combined dashboard) | Not started |
+| 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
+| 4 | Businesses admin screen (add a business, module switches, payments, printers) | Not started |
+| 5 | ~~Shared staff / customers / suppliers~~ — replaced by 2b (everything separate) | Dropped |
 | 6 | Websites + domains per business | Not started |
 | 7 | Launch Melt House, then ABCD, EFGH | Not started |
 
@@ -59,7 +70,7 @@ with `business_id`. Decided 2026-09-29.
 15. Clock in / out on your phone.
 16. Manager: rota, attendance, timesheets, approvals load.
 
-## Phase 3 — per-business settings + branding (next)
+## Phase 3 — per-business settings + branding
 
 - `app_settings` is global today → per-business settings (keep Royal Chilli's
   current values as business 1): VAT rate stays group-wide.
@@ -73,29 +84,30 @@ with `business_id`. Decided 2026-09-29.
 - Printer: CloudPRNT key per business (today one `CLOUDPRNT_KEY`; the printer
   URL already takes `?b=<business id>`).
 
-## Phase 4 — group admin
+## Phase 2b — fully separate businesses + group admin (next)
 
-- Business switcher in the Staff Hub header (group admin only); managers
-  locked to their business(es) via `staff_businesses`.
-- Group dashboard: each business side by side + combined (sales, profit,
-  staff cost %, platforms).
-- Businesses admin screen: add a business, module switches, logo, payments,
-  printers.
-- Menus/screens hide switched-off modules.
+- Migration 079: `business_id` on staff, suppliers, customers (+ addresses),
+  loyalty tiers, rewards, redemptions, newsletter subscribers; existing rows →
+  Royal Chilli. Customer phone / email unique **per business**; usernames stay
+  unique across the group; voucher and referral codes stay unique across the group.
+- HR records, documents, PINs, rota and pay follow their staff member's business.
+- Code: staff, HR, PIN, supplier, customer, account (website login) and rewards
+  routes go through `bizDb`; the `staff_businesses` links and "works here"
+  checks are replaced by the staff row's own business.
+- Group admin: an owner-only flag; business switcher in the Staff Hub header
+  (act fully inside any business); combined dashboard across all businesses.
+- Attendance app follows the same rules.
+- Drop the old timesheets unique key (078 kept it) once staff are per business.
 
-## Phase 5 — shared staff, customers, suppliers
+## Phase 3 (also) — business folders
 
-- Add an existing staff member to another business (role per business;
-  `staff.role` is still the source of truth today — `staff_businesses.role` is
-  kept in step on change).
-- Usual rota pattern per business (today it's on the shared `staff` row).
-- Pay rate per employer (today `staff.pay_rate`).
-- Drop the old timesheets unique (`staff_id, period_start, period_end`) once
-  someone works at two businesses (078 left it in place).
-- Rewards settlement report: points earned at one business, spent at another
-  (`loyalty_transactions.business_id`, `loyalty_redemptions.redeemed_order_id`).
-- Privacy policy + sign-up wording: the companies share customer details
-  (UK GDPR — check with a solicitor).
+- `businesses/<slug>/`: logo, colours, website pages and wording, receipt
+  header/footer, email templates, and any feature only that business uses.
+
+## Phase 4 — businesses admin screen
+
+- Add a business, module switches, logo, payments, printers.
+- Menus and screens hide switched-off modules.
 
 ## Phase 6 — domains
 

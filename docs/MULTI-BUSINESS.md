@@ -94,8 +94,16 @@ with `business_id`. Decided 2026-09-29.
 - Code: staff, HR, PIN, supplier, customer, account (website login) and rewards
   routes go through `bizDb`; the `staff_businesses` links and "works here"
   checks are replaced by the staff row's own business.
-- Group admin: an owner-only flag; business switcher in the Staff Hub header
-  (act fully inside any business); combined dashboard across all businesses.
+- Group admin: an owner-only flag on a **new separate owner login** (e.g.
+  username `owner`); the existing "Royalchilli" admin stays Royal Chilli's own
+  admin. Business switcher in the Staff Hub header ("Working in: … ▾", act
+  fully inside any business, every action logged under the owner's name);
+  group dashboard (each business side by side + combined total).
+- A new business's rewards scheme starts as a **copy of Royal Chilli's**
+  (tiers, rewards, points rules), then that business edits it.
+- Safety rules: a purchase order can't use another business's supplier; an
+  order / booking can't link another business's customer.
+- Go-live order: you run 078 → attendance app pushed → 079 + new code together.
 - Attendance app follows the same rules.
 - Drop the old timesheets unique key (078 kept it) once staff are per business.
 

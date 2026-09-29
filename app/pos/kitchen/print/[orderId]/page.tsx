@@ -13,7 +13,8 @@ export default async function KotPrintPage({
   if (!session) redirect("/login");
 
   const data = await getOrderForPrint(Number((await params).orderId));
-  if (!data) {
+  // Only an order of the business this login is working for.
+  if (!data || (data.order as { business_id?: number }).business_id !== session.businessId) {
     return <div style={{ padding: 20, fontFamily: "monospace" }}>Order not found.</div>;
   }
   const { order, items } = data;

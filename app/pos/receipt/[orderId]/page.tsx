@@ -17,7 +17,8 @@ export default async function ReceiptPrintPage({
   if (!session) redirect("/login");
 
   const data = await getOrderForReceipt(Number((await params).orderId));
-  if (!data) {
+  // Only an order of the business this login is working for.
+  if (!data || data.order.business_id !== session.businessId) {
     return <div style={{ padding: 20, fontFamily: "monospace" }}>Order not found.</div>;
   }
   const { order, items, payments } = data;

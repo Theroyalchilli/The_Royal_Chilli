@@ -46,7 +46,7 @@ Run in order in the Supabase SQL editor
 | 077 rows never change business | run 29 Sep 2026 |
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
 | 079 fully separate staff / suppliers / customers, owner login | run 29 Sep 2026 — Phase 2b code pushed after it; owner login `owner` (staff #26) created |
-| 080 business setup (details, owner-only bank / payment keys, per-business settings) | written + tested — **to run** (safe with the live code) |
+| 080 business setup (details, owner-only bank / payment keys, per-business settings) | run 29 Sep 2026 — Business setup page live (960ecc7) |
 | 081 drop the old group-wide unique rules | before a second business opens |
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)

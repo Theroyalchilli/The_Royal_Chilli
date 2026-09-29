@@ -26,7 +26,7 @@ with `business_id`. Decided 2026-09-29.
 | Phase | What | Status |
 |---|---|---|
 | 1 | Foundation: `businesses`, `staff_businesses`, `business_id` on 36 tables, triggers (migrations 076, 077) | **Done** |
-| 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** — attendance app waiting on migration 078 |
+| 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** (both apps live) |
 | 2b | **Next:** fully separate staff, suppliers, customers + rewards (migration 079) and the owner's group admin (switcher, combined dashboard) | Not started |
 | 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
 | 4 | Businesses admin screen (add a business, module switches, payments, printers) | Not started |
@@ -34,15 +34,18 @@ with `business_id`. Decided 2026-09-29.
 | 6 | Websites + domains per business | Not started |
 | 7 | Launch Melt House, then ABCD, EFGH | Not started |
 
-## Waiting on you
+## Migrations
 
-1. **Run migration 078** in the Supabase SQL editor:
-   `supabase/migrations/078_business_messages_corrections_timesheets.sql`
-   (safe with either version of the attendance app live).
-2. Tell Claude — then:
-   - push `royal-chilli-attendance` commit `395ce85` (attendance app per business), and
-   - add `"staff_messages", "attendance_corrections"` to `BUSINESS_TABLES` in
-     `lib/business-db.ts` here, and push.
+Run in order in the Supabase SQL editor
+(https://supabase.com/dashboard/project/xmsgkshtgtdkdbmkhmep/sql/new), from
+`supabase/migrations/`:
+
+| Migration | Status |
+|---|---|
+| 076 foundation | run 29 Sep 2026 |
+| 077 rows never change business | run 29 Sep 2026 |
+| 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
+| 079 fully separate staff / suppliers / customers | to be written (Phase 2b) |
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)
 

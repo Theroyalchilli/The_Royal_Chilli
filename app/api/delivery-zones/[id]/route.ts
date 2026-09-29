@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageDrivers } from "@/lib/permissions";
 
@@ -12,6 +12,7 @@ export async function PATCH(
     if (!session || !canManageDrivers(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const body = await req.json();
     const updates: Record<string, unknown> = {};
@@ -22,7 +23,7 @@ export async function PATCH(
     if (body.active !== undefined) updates.active = body.active;
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
-    const { data, error } = await supabase.from("delivery_zones").update(updates).eq("id", id).select().single();
+    const { data, error } = await db.from("delivery_zones").update(updates).eq("id", id).select().single();
     if (error) throw error;
     return NextResponse.json({ success: true, zone: data });
   } catch (error) {
@@ -40,8 +41,9 @@ export async function DELETE(
     if (!session || !canManageDrivers(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
-    const { error } = await supabase.from("delivery_zones").delete().eq("id", id);
+    const { error } = await db.from("delivery_zones").delete().eq("id", id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error) {

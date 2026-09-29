@@ -6,7 +6,8 @@ import CookieConsent from "@/components/site/CookieConsent";
 import PromoBanner from "@/components/site/PromoBanner";
 import { buildRestaurantSchema } from "@/lib/schema";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { pageBusinessId } from "@/lib/business";
 import { SITE_URL } from "@/lib/site-url";
 
 // Every page under this layout reads staff-editable content (opening hours,
@@ -30,7 +31,8 @@ export default async function PublicLayout({ children }: { children: React.React
   const schema = buildRestaurantSchema(siteUrl, openingHours);
   const hoursSummary = summarizeOpeningHours(openingHours);
 
-  const { data: promo } = await supabase
+  // This website's own business's banner.
+  const { data: promo } = await bizDb(await pageBusinessId())
     .from("promotions")
     .select("title, description, link_url")
     .eq("active", true)

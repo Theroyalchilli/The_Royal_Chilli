@@ -20,6 +20,17 @@ DROP TRIGGER IF EXISTS trg_match_business ON reservations;
 CREATE TRIGGER trg_match_business BEFORE INSERT OR UPDATE ON reservations FOR EACH ROW
   EXECUTE FUNCTION check_business_match('restaurant_tables', 'table_id');
 DROP TRIGGER IF EXISTS trg_inherit_business ON loyalty_redemptions;
+-- points entries: back to 078 (order's business only)
+CREATE OR REPLACE FUNCTION loyalty_business_from_order() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE bid int;
+BEGIN
+  IF NEW.reference_type IN ('order', 'cash_credit', 'visit_bonus') AND NEW.reference_id IS NOT NULL THEN
+    SELECT business_id INTO bid FROM orders WHERE id = NEW.reference_id;
+    IF bid IS NOT NULL THEN NEW.business_id := bid; END IF;
+  END IF;
+  RETURN NEW;
+END $$;
 
 -- unique rules
 DROP INDEX IF EXISTS customers_business_email_account_unique;

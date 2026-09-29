@@ -20,7 +20,7 @@
 --    customer; a purchase order, ingredient or delivery check can't use
 --    another business's supplier; rota, attendance, timesheets, leave and
 --    payslips can't use another business's staff; points and vouchers follow
---    their customer's business. Rows never change business (077).
+--    their customer's business (or the order's). Rows never change business (077).
 --
 -- Safe to re-run. Rollback: 079_independent_businesses_ROLLBACK.sql.
 
@@ -69,6 +69,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS customers_business_email_account_unique
   ON customers (business_id, lower(email)) WHERE password_hash IS NOT NULL;
 
 -- ── children follow their parent's business ──────────────────────────────────
+-- Points entries: an order's entries take the order's business (078); any
+-- other entry (sign-up bonus, birthday, manual adjustment, expiry, merge)
+-- takes its customer's business.
+CREATE OR REPLACE FUNCTION loyalty_business_from_order() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE bid int;
+BEGIN
+  IF NEW.reference_type IN ('order', 'cash_credit', 'visit_bonus') AND NEW.reference_id IS NOT NULL THEN
+    SELECT business_id INTO bid FROM orders WHERE id = NEW.reference_id;
+  END IF;
+  IF bid IS NULL AND NEW.customer_id IS NOT NULL THEN
+    SELECT business_id INTO bid FROM customers WHERE id = NEW.customer_id;
+  END IF;
+  IF bid IS NOT NULL THEN NEW.business_id := bid; END IF;
+  RETURN NEW;
+END $$;
+
 DROP TRIGGER IF EXISTS trg_inherit_business ON loyalty_redemptions;
 CREATE TRIGGER trg_inherit_business BEFORE INSERT OR UPDATE ON loyalty_redemptions
   FOR EACH ROW EXECUTE FUNCTION inherit_business_id('customers', 'customer_id');

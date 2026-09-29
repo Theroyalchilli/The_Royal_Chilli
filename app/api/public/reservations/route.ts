@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { websiteBusinessId } from "@/lib/business";
 import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { sendReservationConfirmationEmail } from "@/lib/email";
@@ -24,8 +26,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Real capacity check against the actual table count — not a guess.
-    const { count: tableCount } = await supabase.from("restaurant_tables").select("*", { count: "exact", head: true });
-    const { count: bookedCount } = await supabase
+    const db = bizDb(await websiteBusinessId(req.headers.get("host")));
+    const { count: tableCount } = await db.from("restaurant_tables").select("*", { count: "exact", head: true });
+    const { count: bookedCount } = await db
       .from("reservations")
       .select("*", { count: "exact", head: true })
       .eq("reservation_date", reservation_date)
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
       depositAmount = setting ? Number(setting.value) : 0;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("reservations")
       .insert({
         customer_id: customerId,

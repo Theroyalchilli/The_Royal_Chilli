@@ -22,13 +22,17 @@ const statusLabel: Record<string, string> = {
 
 export default function DineInOrder({
   tableNumber,
+  businessParam,
   categories,
   initialSelfOrderEnabled,
 }: {
   tableNumber: string;
+  /** ?b= from the QR link, passed on so the server finds the same business's table. */
+  businessParam?: string | null;
   categories: MenuCategory[];
   initialSelfOrderEnabled: boolean;
 }) {
+  const bq = businessParam ? `?b=${encodeURIComponent(businessParam)}` : "";
   const [pending, setPending] = useState<PendingLine[]>([]);
   const [pickerFor, setPickerFor] = useState<MenuItem | null>(null);
   const [order, setOrder] = useState<OrderSummary>(null);
@@ -78,7 +82,7 @@ export default function DineInOrder({
       } catch {
         // ignore — saving to the API still works without local persistence
       }
-      await fetch(`/api/public/tables/${tableNumber}/customer`, {
+      await fetch(`/api/public/tables/${tableNumber}/customer${bq}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: loyaltyPhone, name: loyaltyName, email: loyaltyEmail || undefined, marketing_consent: loyaltyConsent }),
@@ -92,7 +96,7 @@ export default function DineInOrder({
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`/api/public/tables/${tableNumber}`);
+      const res = await fetch(`/api/public/tables/${tableNumber}${bq}`);
       const data = await res.json();
       if (res.ok) {
         setOrder(data.order);
@@ -143,7 +147,7 @@ export default function DineInOrder({
     if (pending.length === 0) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/public/tables/${tableNumber}/order`, {
+      const res = await fetch(`/api/public/tables/${tableNumber}/order${bq}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -169,7 +173,7 @@ export default function DineInOrder({
   async function sendRequest(type: "waiter" | "bill") {
     setRequestMsg("");
     try {
-      await fetch(`/api/public/tables/${tableNumber}/request`, {
+      await fetch(`/api/public/tables/${tableNumber}/request${bq}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type }),

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTableByNumber, getOpenOrderForTable, getOrderItems } from "@/lib/dine-in";
+import { websiteBusinessId } from "@/lib/business";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ tableNumber: string }> }
 ) {
   const { tableNumber } = await params;
-  const table = await getTableByNumber(tableNumber);
+  const businessId = await websiteBusinessId(req.headers.get("host"), req.nextUrl.searchParams.get("b"));
+  const table = await getTableByNumber(businessId, tableNumber);
   if (!table) {
     return NextResponse.json({ error: "Table not found" }, { status: 404 });
   }

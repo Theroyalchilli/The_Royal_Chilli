@@ -94,7 +94,13 @@ export async function linkStaffToBusiness(staffId: number, businessId: number, r
  * in on, so each business's website shows its own menu. Unknown domains
  * (the vercel.app address, localhost) are The Royal Chilli.
  */
-export async function websiteBusinessId(host: string | null | undefined): Promise<number> {
+export async function websiteBusinessId(host: string | null | undefined, pick?: string | null): Promise<number> {
+  // ?b=<slug> — for a business whose QR codes / links use a shared address
+  // (no domain of its own yet). Only an active business can be picked.
+  if (pick) {
+    const b = (await listBusinesses()).find((x) => x.active && x.slug === pick.trim().toLowerCase());
+    if (b) return b.id;
+  }
   return (await businessForHost(host))?.id ?? DEFAULT_BUSINESS_ID;
 }
 

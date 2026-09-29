@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTableByNumber, getOpenOrderForTable } from "@/lib/dine-in";
+import { websiteBusinessId } from "@/lib/business";
 import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
@@ -15,7 +16,8 @@ export async function POST(
 ) {
   try {
     const { tableNumber } = await params;
-    const table = await getTableByNumber(tableNumber);
+    const businessId = await websiteBusinessId(req.headers.get("host"), req.nextUrl.searchParams.get("b"));
+    const table = await getTableByNumber(businessId, tableNumber);
     if (!table) return NextResponse.json({ error: "Table not found" }, { status: 404 });
 
     const { phone, name, email, marketing_consent } = await req.json();

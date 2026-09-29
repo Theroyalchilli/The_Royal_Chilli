@@ -7,8 +7,10 @@ import { customerForOrder } from "@/lib/customers";
 
 const OPEN_STATUSES = ["open", "sent_to_kitchen", "ready"];
 
-export async function getTableByNumber(tableNumber: string) {
-  const { data } = await supabase
+// Table numbers repeat across businesses (each has its own table 5) — the
+// QR code's domain (or ?b=) says whose.
+export async function getTableByNumber(businessId: number, tableNumber: string) {
+  const { data } = await bizDb(businessId)
     .from("restaurant_tables")
     .select("id, table_number, capacity, status, self_order_enabled, business_id")
     .eq("table_number", tableNumber)

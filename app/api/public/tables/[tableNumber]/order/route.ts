@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { getTableByNumber, addItemsToTable, getOpenOrderForTable, getOrderItems } from "@/lib/dine-in";
+import { websiteBusinessId } from "@/lib/business";
 import { queueKitchenTicketSafely } from "@/lib/print-queue";
 
 export async function POST(
@@ -9,7 +10,8 @@ export async function POST(
 ) {
   try {
     const { tableNumber } = await params;
-    const table = await getTableByNumber(tableNumber);
+    const businessId = await websiteBusinessId(req.headers.get("host"), req.nextUrl.searchParams.get("b"));
+    const table = await getTableByNumber(businessId, tableNumber);
     if (!table) {
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }

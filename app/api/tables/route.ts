@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { londonNowDateAndMinutes } from "@/lib/hours";
@@ -22,8 +22,9 @@ export async function GET(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
-    const { data: tables, error } = await supabase
+    const { data: tables, error } = await db
       .from("restaurant_tables")
       .select("*")
       .order("table_number");
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
     // Oldest active order per table = when it actually became occupied,
     // for the attention-SLA timer (not just the "occupied" status flag,
     // which a busy shift can forget to clear).
-    const { data: activeOrders } = await supabase
+    const { data: activeOrders } = await db
       .from("orders")
       .select("table_id, created_at")
       .not("table_id", "is", null)
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { dateStr: todayStr, minutesOfDay: nowMinutes } = londonNowDateAndMinutes();
-    const { data: todaysReservations } = await supabase
+    const { data: todaysReservations } = await db
       .from("reservations")
       .select("reservation_time")
       .eq("reservation_date", todayStr)
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const { table_number, capacity, location } = await req.json();
 
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Capacity must be at least 1" }, { status: 400 });
     }
 
-    const { data: clash } = await supabase
+    const { data: clash } = await db
       .from("restaurant_tables")
       .select("id")
       .eq("table_number", number)
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Table "${number}" already exists` }, { status: 409 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("restaurant_tables")
       .insert({
         table_number: number,
@@ -130,6 +132,7 @@ export async function PUT(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const { id, status, capacity, location, table_number, self_order_enabled } = await req.json();
 
@@ -158,7 +161,7 @@ export async function PUT(req: NextRequest) {
       if (!number) {
         return NextResponse.json({ error: "Table number is required" }, { status: 400 });
       }
-      const { data: clash } = await supabase
+      const { data: clash } = await db
         .from("restaurant_tables")
         .select("id")
         .eq("table_number", number)
@@ -170,7 +173,7 @@ export async function PUT(req: NextRequest) {
       updateFields.table_number = number;
     }
 
-    const { error } = await supabase
+    const { error } = await db
       .from("restaurant_tables")
       .update(updateFields)
       .eq("id", id);
@@ -193,6 +196,7 @@ export async function DELETE(req: NextRequest) {
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const id = Number(req.nextUrl.searchParams.get("id"));
     if (!id) {
@@ -203,8 +207,8 @@ export async function DELETE(req: NextRequest) {
     // DELETE rule — a table that's ever been used can't be removed without
     // orphaning history. Rename it instead.
     const [{ count: orderCount }, { count: resvCount }] = await Promise.all([
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("table_id", id),
-      supabase.from("reservations").select("id", { count: "exact", head: true }).eq("table_id", id),
+      db.from("orders").select("id", { count: "exact", head: true }).eq("table_id", id),
+      db.from("reservations").select("id", { count: "exact", head: true }).eq("table_id", id),
     ]);
     if ((orderCount ?? 0) > 0 || (resvCount ?? 0) > 0) {
       return NextResponse.json(
@@ -213,7 +217,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const { error } = await supabase.from("restaurant_tables").delete().eq("id", id);
+    const { error } = await db.from("restaurant_tables").delete().eq("id", id);
     if (error) throw error;
 
     return NextResponse.json({ success: true });

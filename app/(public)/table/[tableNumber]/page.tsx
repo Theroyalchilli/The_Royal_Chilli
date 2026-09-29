@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { getTableByNumber } from "@/lib/dine-in";
 import { getActiveMenu } from "@/lib/menu";
+import { headers } from "next/headers";
+import { websiteBusinessId } from "@/lib/business";
 import DineInOrder from "@/components/site/DineInOrder";
 
 // QR-only entry point — not meant to be found via search.
@@ -11,11 +13,15 @@ export const metadata: Metadata = {
 
 export default async function TablePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ tableNumber: string }>;
+  searchParams: Promise<{ b?: string }>;
 }) {
   const { tableNumber } = await params;
-  const table = await getTableByNumber(tableNumber);
+  const { b } = await searchParams;
+  const businessId = await websiteBusinessId((await headers()).get("host"), b);
+  const table = await getTableByNumber(businessId, tableNumber);
 
   if (!table) {
     return (
@@ -30,5 +36,5 @@ export default async function TablePage({
   }
 
   const categories = await getActiveMenu(table.business_id);
-  return <DineInOrder tableNumber={table.table_number} categories={categories} initialSelfOrderEnabled={table.self_order_enabled} />;
+  return <DineInOrder tableNumber={table.table_number} businessParam={b ?? null} categories={categories} initialSelfOrderEnabled={table.self_order_enabled} />;
 }

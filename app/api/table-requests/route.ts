@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -7,8 +7,9 @@ export async function GET(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("table_requests")
     .select("id, type, status, created_at, restaurant_tables(table_number)")
     .eq("status", "pending")
@@ -32,13 +33,14 @@ export async function PATCH(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
 
   const { id } = await req.json();
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from("table_requests")
     .update({ status: "resolved", resolved_at: new Date().toISOString() })
     .eq("id", id);

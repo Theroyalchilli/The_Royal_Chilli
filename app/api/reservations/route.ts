@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { sendReservationConfirmationEmail } from "@/lib/email";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
@@ -11,13 +11,14 @@ export async function GET(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
     const from = searchParams.get("from");
     const status = searchParams.get("status");
 
-    let query = supabase
+    let query = db
       .from("reservations")
       .select(`
         *,
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const body = await req.json();
     const {
@@ -90,7 +92,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    if (table_id && !(await allOwned(db, "restaurant_tables", [table_id]))) {
+      return NextResponse.json({ error: "That table isn't this business's" }, { status: 400 });
+    }
+
+    const { data, error } = await db
       .from("reservations")
       .insert({
         customer_name,
@@ -134,6 +140,7 @@ export async function PUT(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const { id, status, table_id, notes } = await req.json();
 
@@ -152,11 +159,15 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    if (table_id && !(await allOwned(db, "restaurant_tables", [table_id]))) {
+      return NextResponse.json({ error: "That table isn't this business's" }, { status: 400 });
+    }
+
     const updatePayload: Record<string, unknown> = { status };
     if (table_id !== undefined) updatePayload.table_id = table_id;
     if (notes !== undefined) updatePayload.notes = notes;
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("reservations")
       .update(updatePayload)
       .eq("id", id)
@@ -169,12 +180,12 @@ export async function PUT(req: NextRequest) {
     const reservation = data as { table_id: number | null };
     if (reservation.table_id) {
       if (status === "seated") {
-        await supabase
+        await db
           .from("restaurant_tables")
           .update({ status: "occupied" })
           .eq("id", reservation.table_id);
       } else if (status === "cancelled" || status === "no_show") {
-        await supabase
+        await db
           .from("restaurant_tables")
           .update({ status: "available", self_order_enabled: false })
           .eq("id", reservation.table_id);

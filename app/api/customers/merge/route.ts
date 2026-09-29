@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { canManageCrm } from "@/lib/permissions";
 import { mergeCustomers } from "@/lib/customer-merge";
 
@@ -12,6 +13,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}));
   const keepId = Number(b.keep_id);
   const dropIds: number[] = Array.isArray(b.drop_ids) ? b.drop_ids.map(Number).filter((n: number) => n && n !== keepId) : [];
+  if (!(await allOwned(bizDb(session.businessId), "customers", [keepId, ...dropIds]))) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   if (!keepId || dropIds.length === 0) return NextResponse.json({ error: "Choose one record to keep and at least one to merge in" }, { status: 400 });
 
   for (const dropId of dropIds) {

@@ -1,5 +1,5 @@
 // One customer, one record: phone formats and the mobile-OR-email match.
-type Row = { id: number; name: string; phone: string | null; email: string | null; loyalty_points: number; password_hash: string | null; merged_into?: number | null };
+type Row = { id: number; business_id?: number; name: string; phone: string | null; email: string | null; loyalty_points: number; password_hash: string | null; merged_into?: number | null };
 let rows: Row[] = [];
 
 jest.mock("@/lib/supabase", () => {
@@ -42,29 +42,34 @@ describe("match on mobile OR email", () => {
   const ravi: Row = { id: 2, name: "Ravi", phone: "07700333444", email: null, loyalty_points: 100, password_hash: null };
   const emailOnly: Row = { id: 3, name: "Sam", phone: null, email: "sam@mail.com", loyalty_points: 500, password_hash: "x" };
   const guestPhone: Row = { id: 4, name: "Sam", phone: "07700555666", email: null, loyalty_points: 0, password_hash: null };
-  beforeEach(() => { rows = [priya, ravi, emailOnly, guestPhone]; });
+  beforeEach(() => { rows = [priya, ravi, emailOnly, guestPhone].map((r) => ({ ...r, business_id: 1 })); });
 
   it("nothing matches → none", async () => {
-    expect((await findMember("07700999999", "new@mail.com")).kind).toBe("none");
+    expect((await findMember(1, "07700999999", "new@mail.com")).kind).toBe("none");
   });
   it("mobile typed differently still finds them", async () => {
-    const m = await findMember("+44 7700 111 222", null);
+    const m = await findMember(1, "+44 7700 111 222", null);
     expect(m).toMatchObject({ kind: "match", by: "phone", member: { id: 1 } });
   });
   it("a new number with a known email → the same person, by email", async () => {
-    const m = await findMember("07700999999", "PRIYA@mail.com");
+    const m = await findMember(1, "07700999999", "PRIYA@mail.com");
     expect(m).toMatchObject({ kind: "match", by: "email", member: { id: 1 } });
   });
   it("mobile and email on two different people → conflict, not mergeable", async () => {
-    const m = await findMember("07700333444", "priya@mail.com");
+    const m = await findMember(1, "07700333444", "priya@mail.com");
     expect(m).toMatchObject({ kind: "conflict", phoneMember: { id: 2 }, emailMember: { id: 1 }, mergeable: false });
   });
   it("phone-only guest + email-only account → conflict that's safe to merge", async () => {
-    const m = await findMember("07700555666", "sam@mail.com");
+    const m = await findMember(1, "07700555666", "sam@mail.com");
     expect(m).toMatchObject({ kind: "conflict", mergeable: true, phoneMember: { id: 4 }, emailMember: { id: 3 } });
   });
   it("merged records are ignored", async () => {
-    rows = [{ ...ravi, merged_into: 1 }];
-    expect((await findMember("07700333444", null)).kind).toBe("none");
+    rows = [{ ...ravi, business_id: 1, merged_into: 1 }];
+    expect((await findMember(1, "07700333444", null)).kind).toBe("none");
+  });
+  it("only matches customers of the same business", async () => {
+    rows = [{ ...ravi, business_id: 2 }];
+    expect((await findMember(1, "07700333444", null)).kind).toBe("none");
+    expect((await findMember(2, "07700333444", null)).kind).toBe("match");
   });
 });

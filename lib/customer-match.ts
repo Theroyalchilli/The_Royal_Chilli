@@ -1,4 +1,4 @@
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { phoneKey } from "@/lib/phone";
 
 // One customer, one record: whenever someone joins, orders, books or is
@@ -40,18 +40,19 @@ const summary = (r: Row): MemberSummary => ({
   has_account: !!r.password_hash,
 });
 
-export async function findByPhone(phone: string | null | undefined): Promise<MemberSummary | null> {
+// Every business has its own customers (migration 079) — matching is always within one.
+export async function findByPhone(businessId: number, phone: string | null | undefined): Promise<MemberSummary | null> {
   const key = phoneKey(phone);
   if (!key) return null;
-  const { data } = await supabase.from("customers").select(COLS).eq("phone", key).is("merged_into", null).limit(1).maybeSingle();
+  const { data } = await bizDb(businessId).from("customers").select(COLS).eq("phone", key).is("merged_into", null).limit(1).maybeSingle();
   return data ? summary(data as Row) : null;
 }
 
 /** Several guest rows can share an email (a household); a website account wins, then the oldest. */
-export async function findByEmail(email: string | null | undefined): Promise<MemberSummary | null> {
+export async function findByEmail(businessId: number, email: string | null | undefined): Promise<MemberSummary | null> {
   const clean = String(email ?? "").trim().toLowerCase();
   if (!clean) return null;
-  const { data } = await supabase
+  const { data } = await bizDb(businessId)
     .from("customers")
     .select(COLS)
     .ilike("email", clean.replace(/[\\%_]/g, (c) => `\\${c}`))
@@ -62,8 +63,8 @@ export async function findByEmail(email: string | null | undefined): Promise<Mem
   return pick ? summary(pick) : null;
 }
 
-export async function findMember(phone: string | null | undefined, email: string | null | undefined): Promise<MemberMatch> {
-  const [byPhone, byEmail] = await Promise.all([findByPhone(phone), findByEmail(email)]);
+export async function findMember(businessId: number, phone: string | null | undefined, email: string | null | undefined): Promise<MemberMatch> {
+  const [byPhone, byEmail] = await Promise.all([findByPhone(businessId, phone), findByEmail(businessId, email)]);
   if (byPhone && byEmail) {
     if (byPhone.id === byEmail.id) return { kind: "match", member: byPhone, by: "both" };
     const mergeable = !byPhone.has_account && !byPhone.email && !byEmail.phone;

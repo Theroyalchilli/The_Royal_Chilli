@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
 import { getActiveTiers, tierForSpend, computeSegment } from "@/lib/crm";
@@ -11,17 +11,18 @@ export async function GET(req: NextRequest) {
   if (!session || !canViewCrm(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search");
 
-  let query = supabase.from("customers").select(CUSTOMER_SAFE_FIELDS).is("merged_into", null).order("created_at", { ascending: false });
+  let query = db.from("customers").select(CUSTOMER_SAFE_FIELDS).is("merged_into", null).order("created_at", { ascending: false });
   if (search) query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
 
   const { data: customers, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
 
-  const { data: paidOrders } = await supabase.from("orders").select("customer_id, total, created_at").eq("is_paid", true).not("customer_id", "is", null);
+  const { data: paidOrders } = await db.from("orders").select("customer_id, total, created_at").eq("is_paid", true).not("customer_id", "is", null);
   // visits = trading days with a paid order (two bills one night = one visit)
   const spendByCustomer = new Map<number, { spend: number; days: Set<string>; lastVisit: string | null }>();
   for (const o of paidOrders || []) {
@@ -32,8 +33,8 @@ export async function GET(req: NextRequest) {
     spendByCustomer.set(o.customer_id, cur);
   }
 
-  const tiers = await getActiveTiers();
-  const { data: winbackSetting } = await supabase.from("app_settings").select("value").eq("key", "loyalty_winback_days").maybeSingle();
+  const tiers = await getActiveTiers(session.businessId);
+  const { data: winbackSetting } = await db.from("app_settings").select("value").eq("key", "loyalty_winback_days").maybeSingle();
   const winbackDays = Number(winbackSetting?.value ?? 45);
   const now = Date.now();
 
@@ -60,18 +61,19 @@ export async function POST(req: NextRequest) {
     if (!session || !canViewCrm(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { name, phone, email, date_of_birth, address, referred_by_code } = await req.json();
     if (!name || !phone) return NextResponse.json({ error: "Name and phone are required" }, { status: 400 });
 
     let referredByCustomerId: number | null = null;
     if (referred_by_code) {
-      const { data: referrer } = await supabase.from("customers").select("id").eq("referral_code", referred_by_code).maybeSingle();
+      const { data: referrer } = await db.from("customers").select("id").eq("referral_code", referred_by_code).maybeSingle();
       referredByCustomerId = referrer?.id ?? null;
     }
 
     const referralCode = `RC${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
-    const { data: customer, error } = await supabase
+    const { data: customer, error } = await db
       .from("customers")
       .insert({
         name, phone, email: email || null, date_of_birth: date_of_birth || null, address: address || null,

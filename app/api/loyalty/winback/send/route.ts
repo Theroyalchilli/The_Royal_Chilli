@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageCrm } from "@/lib/permissions";
 import { issueRedemption } from "@/lib/loyalty";
@@ -15,10 +15,11 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageCrm(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { customer_id, reward_id } = await req.json();
     if (!customer_id || !reward_id) return NextResponse.json({ error: "customer_id and reward_id are required" }, { status: 400 });
 
-    const { data: customer } = await supabase.from("customers").select("id, name, email, marketing_consent").eq("id", customer_id).single();
+    const { data: customer } = await db.from("customers").select("id, name, email, marketing_consent").eq("id", customer_id).single();
     if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     if (!customer.marketing_consent) {
       return NextResponse.json({ error: "This customer hasn't opted into marketing emails" }, { status: 400 });

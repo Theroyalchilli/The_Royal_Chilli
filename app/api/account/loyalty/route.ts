@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { customerBusinessId } from "@/lib/crm";
+import { bizDb } from "@/lib/business-db";
 import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 
@@ -17,7 +19,7 @@ export async function GET(req: NextRequest) {
     supabase.from("app_settings").select("value").eq("key", "loyalty_share_message").maybeSingle(),
   ]);
 
-  const { data: rewards } = await supabase
+  const { data: rewards } = await bizDb(await customerBusinessId(session.id))
     .from("loyalty_rewards")
     .select("id, name, description, points_cost, discount_amount")
     .eq("active", 1)

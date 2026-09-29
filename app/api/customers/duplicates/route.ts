@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageCrm } from "@/lib/permissions";
 import { countVisits } from "@/lib/crm";
@@ -12,12 +12,13 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session || !canManageCrm(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
-  const { data: customers } = await supabase
+  const { data: customers } = await db
     .from("customers")
     .select("id, name, phone, email, password_hash, loyalty_points, created_at")
     .is("merged_into", null);
-  const { data: orders } = await supabase.from("orders").select("customer_id, created_at").eq("is_paid", true).not("customer_id", "is", null);
+  const { data: orders } = await db.from("orders").select("customer_id, created_at").eq("is_paid", true).not("customer_id", "is", null);
 
   const ordersBy = new Map<number, { created_at: string }[]>();
   for (const o of orders ?? []) ordersBy.set(o.customer_id, [...(ordersBy.get(o.customer_id) ?? []), o]);

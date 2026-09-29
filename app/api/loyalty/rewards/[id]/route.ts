@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageCrm } from "@/lib/permissions";
 
@@ -12,6 +12,7 @@ export async function PATCH(
     if (!session || !canManageCrm(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const body = await req.json();
     const fields = [
@@ -24,7 +25,7 @@ export async function PATCH(
     }
     if (updates.active !== undefined) updates.active = updates.active ? 1 : 0;
 
-    const { data, error } = await supabase.from("loyalty_rewards").update(updates).eq("id", id).select().single();
+    const { data, error } = await db.from("loyalty_rewards").update(updates).eq("id", id).select().single();
     if (error) throw error;
     return NextResponse.json({ success: true, reward: data });
   } catch (error) {

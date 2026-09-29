@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { websiteBusinessId } from "@/lib/business";
 import { isValidEmail } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
@@ -12,7 +13,9 @@ export async function POST(req: NextRequest) {
     const cleanEmail = email.trim().toLowerCase();
     // Re-subscribing with the same email is a no-op, not an error — the
     // visitor doesn't need to know or care whether they'd already signed up.
-    const { error } = await supabase.from("newsletter_subscribers").upsert({ email: cleanEmail }, { onConflict: "email", ignoreDuplicates: true });
+    // Each business has its own newsletter list — the website's business.
+    const { error } = await bizDb(await websiteBusinessId(req.headers.get("host")))
+      .from("newsletter_subscribers").upsert({ email: cleanEmail }, { onConflict: "business_id,email", ignoreDuplicates: true });
     if (error) {
       console.error("Newsletter subscribe error:", error);
       return NextResponse.json({ error: "Something went wrong" }, { status: 500 });

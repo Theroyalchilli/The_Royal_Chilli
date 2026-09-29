@@ -27,7 +27,7 @@ export async function POST(
     if (!order) return NextResponse.json({ success: true, attached: false });
 
     const account = await getCustomerSessionFromRequest(req);
-    const customerId = await customerForOrder(account?.id, String(phone).trim(), name || "Guest", email, marketing_consent === true);
+    const customerId = await customerForOrder(table.business_id, account?.id, String(phone).trim(), name || "Guest", email, marketing_consent === true);
     await supabase
       .from("orders")
       .update({ customer_id: customerId, customer_name: name || null, customer_phone: String(phone).trim() })

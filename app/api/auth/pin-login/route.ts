@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSession, getSessionCookieOptions } from "@/lib/auth";
 import { clearPinFailures, findStaffByPin, pinLockedFor, recordPinFailure } from "@/lib/staff-pin";
 import { tillFromRequest } from "@/lib/till-device";
-import { staffBusinessIds } from "@/lib/business";
 
 // POST { pin } — sign in at the till with a 4-digit PIN. Only on a paired
 // till (lib/till-device.ts); anywhere else staff use username + password.
@@ -19,19 +18,15 @@ export async function POST(req: NextRequest) {
   if (wait > 0) return NextResponse.json({ error: `Too many wrong PINs — try again in ${wait}s.` }, { status: 429 });
 
   const { pin } = await req.json().catch(() => ({}));
-  const staff = await findStaffByPin(String(pin ?? ""));
+  const staff = await findStaffByPin(String(pin ?? ""), till.businessId);
   if (!staff) {
     recordPinFailure(key);
     return NextResponse.json({ error: "Wrong PIN" }, { status: 401 });
   }
-  // A PIN only works on the tills of businesses the person works at.
-  if (!(await staffBusinessIds(staff.id)).includes(till.businessId)) {
-    recordPinFailure(key);
-    return NextResponse.json({ error: "You're not set up to work at this business." }, { status: 403 });
-  }
   clearPinFailures(key);
 
-  const user = { ...staff, businessId: till.businessId };
+  // Only this business's staff (and the owner) are found on its till.
+  const user = { id: staff.id, name: staff.name, role: staff.role, businessId: till.businessId, ...(staff.owner ? { owner: true } : {}) };
   const { name, options } = getSessionCookieOptions();
   const res = NextResponse.json({ user });
   res.cookies.set(name, await createSession(user), options);

@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     const account = await getCustomerSessionFromRequest(req);
-    const customerId = await customerForOrder(account?.id, customer_phone, customer_name, customer_email);
+    const customerId = await customerForOrder(db.businessId, account?.id, customer_phone, customer_name, customer_email);
 
     // Deposits only apply to an actually-held slot — not the waitlist, since
     // there's no table to hold yet.

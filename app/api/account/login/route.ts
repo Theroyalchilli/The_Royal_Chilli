@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { websiteBusinessId } from "@/lib/business";
 import { verifyCustomerLogin } from "@/lib/customers";
 import { createCustomerSession, getCustomerSessionCookieOptions } from "@/lib/customer-auth";
 
@@ -9,7 +10,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
-    const result = await verifyCustomerLogin(email, password);
+    // Accounts belong to the business whose website this is.
+    const result = await verifyCustomerLogin(await websiteBusinessId(req.headers.get("host")), email, password);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 401 });
     }

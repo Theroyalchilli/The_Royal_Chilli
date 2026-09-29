@@ -1,8 +1,8 @@
 import supabase from "@/lib/supabase";
 import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
 
-// Several businesses (The Royal Chilli, Melt House, …) run on this one system
-// (migration 076). Each staff login and each paired till carries the business
+// Several independent businesses (The Royal Chilli, Melt House, …) run on
+// this one system (migrations 076–079). Each staff login and each paired till carries the business
 // it's working for; server code reads and writes that business's rows through
 // lib/business-db.ts. Anything that doesn't say which business it is — an
 // older login, a token from the attendance app — is The Royal Chilli.
@@ -62,31 +62,33 @@ export async function businessForHost(host: string | null | undefined): Promise<
   return (await listBusinesses()).find((b) => b.domain && bareHost(b.domain) === h) ?? null;
 }
 
-/** Active businesses this staff member works at, in display order. */
-export async function staffBusinessIds(staffId: number): Promise<number[]> {
-  const { data, error } = await supabase.from("staff_businesses").select("business_id").eq("staff_id", staffId).eq("active", true);
+// Every business is independent (migration 079): each staff member belongs to
+// exactly one business (staff.business_id). The group owner (staff.is_owner)
+// belongs to none and can work inside any business.
+
+/** A staff member's business, and whether they're the group owner. */
+export async function staffHome(staffId: number): Promise<{ businessId: number | null; isOwner: boolean }> {
+  const { data, error } = await supabase.from("staff").select("business_id, is_owner").eq("id", staffId).maybeSingle();
   if (error) throw error;
-  const ids = new Set((data ?? []).map((r) => r.business_id as number));
-  return (await listBusinesses()).filter((b) => ids.has(b.id)).map((b) => b.id);
+  return { businessId: (data?.business_id as number | null) ?? null, isOwner: !!data?.is_owner };
+}
+
+/** Businesses this staff member can work in: their own, or every business for the owner. */
+export async function staffBusinessIds(staffId: number): Promise<number[]> {
+  const home = await staffHome(staffId);
+  if (home.isOwner) return (await listBusinesses()).map((b) => b.id);
+  return home.businessId != null ? [home.businessId] : [];
 }
 
 /**
- * Which business a password login works for: the one whose domain they're on
- * if they work there, otherwise the first one they work at. null = they aren't
- * set up at any business.
+ * Which business a password login works for: their own business; for the
+ * owner, the business whose website they're on (else The Royal Chilli).
+ * null = not set up at any business.
  */
 export async function loginBusinessId(staffId: number, host: string | null | undefined): Promise<number | null> {
-  const ids = await staffBusinessIds(staffId);
-  if (ids.length === 0) return null;
-  const onDomain = await businessForHost(host);
-  return onDomain && ids.includes(onDomain.id) ? onDomain.id : ids[0];
-}
-
-/** Link a (new) staff member to a business, or update their role there. */
-export async function linkStaffToBusiness(staffId: number, businessId: number, role: string): Promise<void> {
-  const { error } = await supabase.from("staff_businesses")
-    .upsert({ staff_id: staffId, business_id: businessId, role, active: true }, { onConflict: "staff_id,business_id" });
-  if (error) throw error;
+  const home = await staffHome(staffId);
+  if (home.isOwner) return (await businessForHost(host))?.id ?? DEFAULT_BUSINESS_ID;
+  return home.businessId;
 }
 
 /**
@@ -120,11 +122,11 @@ export async function requestBusinessId(req: { headers: Headers; cookies: { get(
   return session?.businessId ?? websiteBusinessId(req.headers.get("host"));
 }
 
-/** Ids of the (shared) staff who work at this business. */
+/** Ids of this business's own staff (the owner isn't on any business's staff list). */
 export async function staffIdsAt(businessId: number): Promise<number[]> {
-  const { data, error } = await supabase.from("staff_businesses").select("staff_id").eq("business_id", businessId).eq("active", true);
+  const { data, error } = await supabase.from("staff").select("id").eq("business_id", businessId);
   if (error) throw error;
-  return (data ?? []).map((r) => r.staff_id as number);
+  return (data ?? []).map((r) => r.id as number);
 }
 
 /** Short prefix for this business's order numbers: RC-20260929-001, MH-…  */

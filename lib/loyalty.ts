@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getActiveTiers, tierForSpend } from "@/lib/crm";
 import { londonDateStr, londonWallTimeUtc, TRADING_DAY_START_HOUR, tradingDayStr } from "@/lib/london-date";
 
@@ -130,16 +131,17 @@ export async function issueRedemption(
 ): Promise<IssueRedemptionResult> {
   const { data: customer, error: custErr } = await supabase
     .from("customers")
-    .select("id, loyalty_points")
+    .select("id, loyalty_points, business_id")
     .eq("id", customerId)
     .single();
   if (custErr || !customer) return { ok: false, error: "Customer not found" };
 
-  const { data: reward, error: rewardErr } = await supabase
+  // Only a reward from the customer's own business's scheme.
+  const { data: reward, error: rewardErr } = await bizDb(customer.business_id)
     .from("loyalty_rewards")
     .select("*")
     .eq("id", rewardId)
-    .single();
+    .maybeSingle();
   if (rewardErr || !reward) return { ok: false, error: "Reward not found" };
   if (!reward.active) return { ok: false, error: "This reward is no longer available" };
 
@@ -154,7 +156,7 @@ export async function issueRedemption(
   if (reward.eligible_tier_id) {
     const { data: paidOrders } = await supabase.from("orders").select("total").eq("customer_id", customerId).eq("is_paid", true);
     const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
-    const tiers = await getActiveTiers();
+    const tiers = await getActiveTiers(customer.business_id);
     const customerTier = tierForSpend(tiers, lifetimeSpend);
     const requiredTier = tiers.find((t) => t.id === reward.eligible_tier_id);
     const customerRank = tiers.findIndex((t) => t.id === customerTier?.id);
@@ -269,11 +271,11 @@ export async function generateReferralCode(): Promise<string> {
   throw new Error("Could not generate a unique referral code");
 }
 
-/** The member whose referral code this is (codes are matched case-insensitively). */
-export async function findReferrer(code: string | null | undefined): Promise<number | null> {
+/** This business's member whose referral code this is (codes are matched case-insensitively). */
+export async function findReferrer(businessId: number, code: string | null | undefined): Promise<number | null> {
   const clean = String(code ?? "").trim().toUpperCase();
   if (!clean) return null;
-  const { data } = await supabase.from("customers").select("id").eq("referral_code", clean).maybeSingle();
+  const { data } = await bizDb(businessId).from("customers").select("id").eq("referral_code", clean).maybeSingle();
   return data?.id ?? null;
 }
 
@@ -286,7 +288,9 @@ export async function findReferrer(code: string | null | undefined): Promise<num
 export async function issueReferralVoucher(referrerId: number, friendId: number): Promise<void> {
   try {
     if (referrerId === friendId) return;
-    const { data: reward } = await supabase
+    const { data: referrer } = await supabase.from("customers").select("business_id").eq("id", referrerId).maybeSingle();
+    if (!referrer) return;
+    const { data: reward } = await bizDb(referrer.business_id)
       .from("loyalty_rewards")
       .select("id")
       .eq("is_referral_reward", true)
@@ -401,7 +405,10 @@ export async function issueSignupPoints(customerId: number): Promise<boolean> {
 // means no voucher.
 export async function issueWelcomeVoucher(customerId: number): Promise<void> {
   try {
-    const { data: reward } = await supabase
+    const { data: customer } = await supabase.from("customers").select("business_id").eq("id", customerId).maybeSingle();
+    if (!customer) return;
+    // The welcome voucher of the customer's own business's scheme.
+    const { data: reward } = await bizDb(customer.business_id)
       .from("loyalty_rewards")
       .select("id")
       .eq("is_welcome_reward", true)

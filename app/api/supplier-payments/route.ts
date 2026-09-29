@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bizDb } from "@/lib/business-db";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     const db = bizDb(session.businessId);
     const { supplier_id, purchase_order_id, amount, method, notes, allow_duplicate } = await req.json();
     if (!supplier_id || !amount) return NextResponse.json({ error: "supplier_id and amount are required" }, { status: 400 });
+    if (!(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
     if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
 
     // Same payment to the same supplier on the same day is almost always a double entry — ask first.

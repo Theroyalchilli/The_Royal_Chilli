@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
-import { getActiveTiers, tierForSpend } from "@/lib/crm";
+import { customerBusinessId, getActiveTiers, tierForSpend } from "@/lib/crm";
+import { bizDb } from "@/lib/business-db";
 import {
   doublePointsDay,
   findReferrer,
@@ -26,13 +27,15 @@ import { sendReferralUnlockedFor, sendWelcomeFor } from "@/lib/rewards-emails";
 export const CUSTOMER_SAFE_FIELDS =
   "id, name, phone, email, date_of_birth, address, notes, loyalty_points, referral_code, referred_by_customer_id, referral_completed_at, marketing_consent, created_at";
 
-// Self-service signup: name + mobile + email + password. One customer, one
-// record (lib/customer-match.ts): if the mobile or email already belongs to a
+// Self-service signup on a business's website: name + mobile + email +
+// password. Each business has its own customers. One customer, one record
+// within the business (lib/customer-match.ts): if the mobile or email already belongs to a
 // guest record (from till or online orders), the account *claims* it — their
 // orders and points come with them instead of starting a duplicate at zero.
 export type SignupResult = { ok: true; customer: Customer } | { ok: false; error: string };
 
 export async function signupCustomer(
+  businessId: number,
   name: string,
   email: string,
   password: string,
@@ -44,7 +47,7 @@ export async function signupCustomer(
   const cleanPhone = normalizeUkMobile(phone);
   if (!cleanPhone) return { ok: false, error: "Please enter a UK mobile number (starts with 07)." };
 
-  const match = await findMember(cleanPhone, cleanEmail);
+  const match = await findMember(businessId, cleanPhone, cleanEmail);
   let claimId: number | null = null;
   if (match.kind === "conflict") {
     if (!match.mergeable || match.emailMember.has_account) {
@@ -93,8 +96,8 @@ export async function signupCustomer(
     return { ok: true, customer: data as Customer };
   }
 
-  const referrerId = await findReferrer(referralCode);
-  const { data, error } = await supabase
+  const referrerId = await findReferrer(businessId, referralCode);
+  const { data, error } = await bizDb(businessId)
     .from("customers")
     .insert({
       name: name.trim(),
@@ -116,10 +119,12 @@ export async function signupCustomer(
 }
 
 export async function verifyCustomerLogin(
+  businessId: number,
   email: string,
   password: string
 ): Promise<{ ok: true; customer: Customer } | { ok: false; error: string }> {
-  const { data } = await supabase
+  // An account belongs to the business whose website it was made on.
+  const { data } = await bizDb(businessId)
     .from("customers")
     .select(`${CUSTOMER_SAFE_FIELDS}, password_hash`)
     .ilike("email", email.trim().toLowerCase())
@@ -150,6 +155,7 @@ export async function verifyCustomerLogin(
 // is already stored untouched — an order where the box wasn't ticked must
 // never silently revoke consent given on an earlier order.
 export async function findOrCreateCustomerByPhone(
+  businessId: number,
   phone: string,
   name: string,
   email?: string | null,
@@ -161,7 +167,7 @@ export async function findOrCreateCustomerByPhone(
 
   // Match on mobile OR email (lib/customer-match.ts). A quick order that hits
   // two different records goes by the mobile — the email is left alone.
-  const match = await findMember(cleanPhone, cleanEmail);
+  const match = await findMember(businessId, cleanPhone, cleanEmail);
   const existing = match.kind === "match" ? match.member : match.kind === "conflict" ? match.phoneMember : null;
   if (existing) {
     const updates: Record<string, unknown> = {};
@@ -175,7 +181,7 @@ export async function findOrCreateCustomerByPhone(
     return existing.id;
   }
 
-  const { data: created, error } = await supabase
+  const { data: created, error } = await bizDb(businessId)
     .from("customers")
     .insert({ name: name.trim() || "Guest", phone: cleanPhone, email: cleanEmail, marketing_consent: marketingConsent === true })
     .select("id")
@@ -194,6 +200,7 @@ export async function findOrCreateCustomerByPhone(
  * Not logged in → matched on mobile OR email as usual.
  */
 export async function customerForOrder(
+  businessId: number,
   accountId: number | null | undefined,
   phone: string | null | undefined,
   name: string,
@@ -201,18 +208,19 @@ export async function customerForOrder(
   marketingConsent?: boolean,
 ): Promise<number | null> {
   if (accountId) {
-    const { data: me } = await supabase.from("customers").select("id, phone, merged_into").eq("id", accountId).maybeSingle();
+    // Only an account of this business (someone logged in to another business's site is matched by mobile instead).
+    const { data: me } = await bizDb(businessId).from("customers").select("id, phone, merged_into").eq("id", accountId).maybeSingle();
     if (me && !me.merged_into) {
       const updates: Record<string, unknown> = {};
       const mobile = normalizeUkMobile(phone);
-      if (!me.phone && mobile && !(await findByPhone(mobile))) updates.phone = mobile;
+      if (!me.phone && mobile && !(await findByPhone(businessId, mobile))) updates.phone = mobile;
       if (marketingConsent === true) updates.marketing_consent = true;
       if (Object.keys(updates).length) await supabase.from("customers").update(updates).eq("id", me.id);
       return me.id;
     }
   }
   if (!phone || !String(phone).trim()) return null;
-  return findOrCreateCustomerByPhone(String(phone), name, email, marketingConsent);
+  return findOrCreateCustomerByPhone(businessId, String(phone), name, email, marketingConsent);
 }
 
 /**
@@ -226,7 +234,7 @@ export type JoinResult =
   | { ok: true; customerId: number; alreadyMember: boolean }
   | { ok: false; error: string; conflict?: { phoneMember: MemberSummary; emailMember: MemberSummary } };
 
-export async function joinMemberAtTill(input: {
+export async function joinMemberAtTill(businessId: number, input: {
   name: string;
   phone: string;
   email: string;
@@ -240,9 +248,12 @@ export async function joinMemberAtTill(input: {
 
   let customerId: number;
   if (input.useCustomerId) {
-    customerId = input.useCustomerId; // staff chose which record after a conflict
+    // staff chose which record after a conflict — it must be this business's
+    const { data: own } = await bizDb(businessId).from("customers").select("id").eq("id", input.useCustomerId).maybeSingle();
+    if (!own) return { ok: false, error: "Customer not found" };
+    customerId = input.useCustomerId;
   } else {
-    const match = await findMember(phone, email);
+    const match = await findMember(businessId, phone, email);
     if (match.kind === "conflict") {
       if (!match.mergeable) return { ok: false, error: "These belong to two different people", conflict: match };
       const merged = await mergeCustomers(match.emailMember.id, match.phoneMember.id, { reason: "joined at the till" });
@@ -251,7 +262,7 @@ export async function joinMemberAtTill(input: {
     } else if (match.kind === "match") {
       customerId = match.member.id;
     } else {
-      const { data: created, error } = await supabase
+      const { data: created, error } = await bizDb(businessId)
         .from("customers")
         .insert({ name: input.name.trim() || "Guest", phone, email, marketing_consent: input.marketingConsent === true })
         .select("id")
@@ -267,7 +278,7 @@ export async function joinMemberAtTill(input: {
   const updates: Record<string, unknown> = {};
   if (!c?.referral_code) updates.referral_code = await generateReferralCode();
   if (input.name.trim() && (!c?.name || c.name === "Guest")) updates.name = input.name.trim();
-  if (!c?.phone && !(await findByPhone(phone))) updates.phone = phone;
+  if (!c?.phone && !(await findByPhone(businessId, phone))) updates.phone = phone;
   if (!c?.email) updates.email = email;
   if (input.marketingConsent === true) updates.marketing_consent = true;
   if (Object.keys(updates).length) await supabase.from("customers").update(updates).eq("id", customerId);
@@ -316,7 +327,7 @@ export async function estimatePurchasePoints(
     .eq("is_paid", true);
   const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
 
-  const tiers = await getActiveTiers();
+  const tiers = await getActiveTiers(await customerBusinessId(customerId));
   const tier = tierForSpend(tiers, lifetimeSpend);
   const multiplier = tier?.points_multiplier ?? 1;
   const bonus = multiplier > 1 ? Math.floor(base * (multiplier - 1)) : 0;
@@ -370,7 +381,7 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
     .neq("id", orderId);
   const priorSpend = (priorOrders || []).reduce((s, o) => s + Number(o.total), 0);
 
-  const tiers = await getActiveTiers();
+  const tiers = await getActiveTiers(await customerBusinessId(customerId));
   const tierBefore = tierForSpend(tiers, priorSpend);
   const multiplier = tierBefore?.points_multiplier ?? 1;
   const bonusPoints = multiplier > 1 ? Math.floor(basePoints * (multiplier - 1)) : 0;

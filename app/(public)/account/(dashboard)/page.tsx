@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { customerBusinessId } from "@/lib/crm";
+import { bizDb } from "@/lib/business-db";
 import { getCustomerSession } from "@/lib/customer-auth";
 import supabase from "@/lib/supabase";
 import AccountOrderCard, { type AccountOrder } from "@/components/site/AccountOrderCard";
@@ -10,7 +12,7 @@ export default async function AccountHomePage() {
   const { data: customer } = await supabase.from("customers").select("loyalty_points").eq("id", session.id).maybeSingle();
   const points = customer?.loyalty_points ?? 0;
 
-  const { data: nextReward } = await supabase
+  const { data: nextReward } = await bizDb(await customerBusinessId(session.id))
     .from("loyalty_rewards")
     .select("name, points_cost")
     .eq("active", 1)

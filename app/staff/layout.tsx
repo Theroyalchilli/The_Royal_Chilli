@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { canAccess, isStaffManagement, canViewCrm } from "@/lib/permissions";
 import { getHubNotifications } from "@/lib/hub-notifications";
+import { getBusiness, listBusinesses } from "@/lib/business";
 import StaffShell, { type NavGroup } from "@/components/staff/StaffShell";
 import { Toaster } from "@/components/ui/toaster";
 import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
@@ -66,9 +67,20 @@ export default async function StaffHubLayout({
   ].filter((g, i) => i === 0 || g.items.length > 0);
 
   const notices = await getHubNotifications(session.businessId, session.role).catch(() => []);
+  const business = await getBusiness(session.businessId);
+  // Only the group owner can step into other businesses.
+  const switcher = session.owner
+    ? (await listBusinesses()).map((b) => ({ id: b.id, name: b.name, active: b.active }))
+    : undefined;
 
   return (
-    <StaffShell user={{ name: session.name, role: session.role }} nav={nav} notices={notices}>
+    <StaffShell
+      user={{ name: session.name, role: session.role }}
+      business={{ id: session.businessId, name: business?.name ?? "The Royal Chilli" }}
+      switcher={switcher}
+      nav={nav}
+      notices={notices}
+    >
       {children}
       <NewOrderAlerts />
       <Toaster />

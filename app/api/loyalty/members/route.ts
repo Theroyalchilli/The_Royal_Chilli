@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { joinMemberAtTill } from "@/lib/customers";
 import { linkMemberToOrders } from "@/lib/member-link";
@@ -15,13 +15,14 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const q = (new URL(req.url).searchParams.get("q") || "").trim();
   if (q.length < 3) return NextResponse.json({ members: [] });
 
   const digits = q.replace(/\D/g, "");
   const mobile = normalizeUkMobile(q);
-  let query = supabase.from("customers").select("id, name, phone, email, loyalty_points").is("merged_into", null).limit(6);
+  let query = db.from("customers").select("id, name, phone, email, loyalty_points").is("merged_into", null).limit(6);
   if (q.includes("@")) query = query.ilike("email", `%${q.replace(/[%_]/g, "")}%`);
   else if (mobile) query = query.eq("phone", mobile); // "+44 7700 900123" finds 07700900123
   else if (digits.length >= 4) query = query.ilike("phone", `%${digits}%`);
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const b = await req.json();
   const name = String(b.name || "").trim();
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
   if (!normalizeUkMobile(phone)) return NextResponse.json({ error: "Enter a UK mobile number (starts with 07)" }, { status: 400 });
   if (!isValidEmail(email)) return NextResponse.json({ error: "That email doesn't look right" }, { status: 400 });
 
-  const joined = await joinMemberAtTill({
+  const joined = await joinMemberAtTill(session.businessId, {
     name,
     phone,
     email,
@@ -62,11 +64,12 @@ export async function POST(req: NextRequest) {
 
   const orderIds = Array.isArray(b.order_ids) ? b.order_ids.map(Number).filter(Boolean) : [];
   if (orderIds.length) {
+    if (!(await allOwned(db, "orders", orderIds))) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     const linked = await linkMemberToOrders(joined.customerId, orderIds);
     if (!linked.ok) return NextResponse.json({ error: linked.error }, { status: 409 });
   }
 
-  const { data: member } = await supabase
+  const { data: member } = await db
     .from("customers")
     .select("id, name, phone, email, loyalty_points")
     .eq("id", joined.customerId)

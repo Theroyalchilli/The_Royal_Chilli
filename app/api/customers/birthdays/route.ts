@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
 
@@ -9,8 +9,9 @@ export async function GET(req: NextRequest) {
   if (!session || !canViewCrm(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
 
-  const { data: customers, error } = await supabase
+  const { data: customers, error } = await db
     .from("customers")
     .select("id, name, phone, date_of_birth")
     .not("date_of_birth", "is", null);

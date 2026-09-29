@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     const orderNumber = await generateOrderNumber(businessId);
     // logged in → their own account (lib/customers.ts customerForOrder)
     const account = await getCustomerSessionFromRequest(req);
-    const customerId = await customerForOrder(account?.id, customer_phone, customer_name, customer_email, marketing_consent === true);
+    const customerId = await customerForOrder(businessId, account?.id, customer_phone, customer_name, customer_email, marketing_consent === true);
 
     const { data: order, error: orderErr } = await db
       .from("orders")

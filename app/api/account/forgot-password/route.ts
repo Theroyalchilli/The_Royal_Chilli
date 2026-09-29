@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { websiteBusinessId } from "@/lib/business";
 import { waitUntil } from "@vercel/functions";
 import { createPasswordResetToken } from "@/lib/customer-auth";
 import { sendPasswordResetEmail } from "@/lib/email";
@@ -14,7 +15,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    const { data: customer } = await supabase
+    // The account on this business's website.
+    const { data: customer } = await bizDb(await websiteBusinessId(req.headers.get("host")))
       .from("customers")
       .select("id, name, email, password_hash")
       .ilike("email", email.trim().toLowerCase())

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bizDb } from "@/lib/business-db";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     }
     const db = bizDb(session.businessId);
     const { name, unit, reorder_level, reorder_quantity, cost_per_unit, supplier_id, opening_stock } = await req.json();
+    if (supplier_id && !(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
     if (!name || !String(name).trim() || !unit) return NextResponse.json({ error: "Name and unit are required" }, { status: 400 });
     const existing = await findActiveByName("ingredients", String(name), undefined, session.businessId);
     if (existing) return NextResponse.json({ error: `"${existing.name}" is already an ingredient — use Adjust on it instead` }, { status: 409 });

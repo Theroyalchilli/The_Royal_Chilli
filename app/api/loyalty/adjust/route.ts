@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
-import { bizDb } from "@/lib/business-db";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageCrm } from "@/lib/permissions";
 
@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     }
     const { customer_id, points_delta, reason } = await req.json();
     if (!customer_id || !points_delta) return NextResponse.json({ error: "customer_id and points_delta are required" }, { status: 400 });
+    if (!(await allOwned(bizDb(session.businessId), "customers", [customer_id]))) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
     const { error } = await bizDb(session.businessId).from("loyalty_transactions").insert({
       customer_id, points_delta: Number(points_delta), reason: "manual_adjustment",

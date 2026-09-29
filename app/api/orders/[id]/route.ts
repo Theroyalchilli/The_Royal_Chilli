@@ -182,7 +182,7 @@ export async function PUT(
     // brand-new order (POST /api/orders); loyalty then picks it up
     // automatically off orders.customer_id once payment completes.
     if (customer_phone !== undefined && String(customer_phone).trim()) {
-      const customerId = await findOrCreateCustomerByPhone(String(customer_phone).trim(), customer_name || "Guest", customer_email, marketing_consent === true);
+      const customerId = await findOrCreateCustomerByPhone(session.businessId, String(customer_phone).trim(), customer_name || "Guest", customer_email, marketing_consent === true);
       const { error } = await db
         .from("orders")
         .update({ customer_id: customerId, customer_name: customer_name || null, customer_phone: String(customer_phone).trim(), updated_at: new Date().toISOString() })

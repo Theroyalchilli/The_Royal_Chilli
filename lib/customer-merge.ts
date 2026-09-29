@@ -8,6 +8,7 @@ import supabase from "@/lib/supabase";
 
 type Cust = {
   id: number;
+  business_id: number;
   name: string;
   phone: string | null;
   email: string | null;
@@ -34,6 +35,7 @@ export async function mergeCustomers(
   const drop = (rows ?? []).find((r) => r.id === dropId) as Cust | undefined;
   if (!keep || !drop) return { ok: false, error: "Customer not found" };
   if (keep.merged_into || drop.merged_into) return { ok: false, error: "One of these has already been merged" };
+  if (keep.business_id !== drop.business_id) return { ok: false, error: "These are customers of two different businesses" };
 
   // 1. Free the dropped record's unique mobile/email-login first, keeping a note
   //    of what it had (its login stops working — only the kept record's does).

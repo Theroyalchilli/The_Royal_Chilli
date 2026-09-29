@@ -1,8 +1,10 @@
 import supabase from "@/lib/supabase";
 
-// Tables whose rows belong to one business (migrations 076, 078). Everything else —
-// staff, HR records, customers, the rewards scheme, suppliers, settings — is
-// shared across the group.
+// Tables whose rows belong to one business (migrations 076, 078, 079). Staff
+// also belong to one business (staff.business_id) but are looked up by id and
+// username across the group, so they're filtered explicitly (staffIdsAt /
+// staffWorksAt) rather than here. HR records, addresses and points history
+// follow their staff member / customer.
 export const BUSINESS_TABLES = new Set([
   "menu_categories", "menu_items", "modifier_groups", "featured_dishes", "promotions",
   "restaurant_tables", "table_requests", "reservations", "delivery_zones",
@@ -13,6 +15,8 @@ export const BUSINESS_TABLES = new Set([
   "fs_delivery_check", "fs_problem", "fs_signoff",
   "shifts", "attendance", "timesheets", "payroll_periods", "employee_payslips", "leave_requests",
   "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
+  // 079: every business independent
+  "suppliers", "customers", "loyalty_tiers", "loyalty_rewards", "loyalty_redemptions", "newsletter_subscribers",
 ]);
 
 type Builder = ReturnType<typeof supabase.from>;
@@ -86,11 +90,11 @@ export async function payrollEntryOwned(db: BizDb, entryId: number | string): Pr
   return !!data;
 }
 
-/** Does this (shared) staff member work at the business? */
+/** Is this one of the business's own staff? (The owner isn't anyone's staff.) */
 export async function staffWorksAt(db: BizDb, staffId: number | string): Promise<boolean> {
   const { data, error } = await supabase
-    .from("staff_businesses").select("staff_id")
-    .eq("staff_id", Number(staffId)).eq("business_id", db.businessId).eq("active", true)
+    .from("staff").select("id")
+    .eq("id", Number(staffId)).eq("business_id", db.businessId)
     .maybeSingle();
   if (error) throw error;
   return !!data;

@@ -47,12 +47,18 @@ describe("bizDb", () => {
     expect(calls[0].args[0]).toEqual({ name: "x" });
   });
 
-  it("leaves shared tables (staff, customers, suppliers) alone", () => {
+  it("staff pass straight through (filtered explicitly by staffIdsAt / staffWorksAt)", () => {
     db.from("staff").select("id");
+    expect(calls[0].eq).toEqual([]);
+  });
+
+  it("customers, suppliers and the rewards scheme are per business (079)", () => {
     db.from("customers").insert({ name: "A" });
-    db.from("suppliers").update({ name: "B" });
-    expect(calls.every((c) => c.eq.length === 0)).toBe(true);
-    expect(calls[1].args[0]).toEqual({ name: "A" });
+    db.from("suppliers").select("id");
+    db.from("loyalty_rewards").select("id");
+    expect(calls[0].args[0]).toEqual({ name: "A", business_id: 2 });
+    expect(calls[1].eq).toEqual([["business_id", 2]]);
+    expect(calls[2].eq).toEqual([["business_id", 2]]);
   });
 
   it("refuses a missing or bad business id", () => {

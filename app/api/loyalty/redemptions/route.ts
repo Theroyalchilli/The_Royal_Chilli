@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { canViewCrm } from "@/lib/permissions";
 import { issueRedemption, manualIssueBlocked } from "@/lib/loyalty";
 
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
 
     const blocked = await manualIssueBlocked(Number(reward_id));
     if (blocked) return NextResponse.json({ error: blocked }, { status: 400 });
+    if (!(await allOwned(bizDb(session.businessId), "customers", [customer_id]))) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     const result = await issueRedemption(Number(customer_id), Number(reward_id), session.id);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 

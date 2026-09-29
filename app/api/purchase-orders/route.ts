@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     if (!supplier_id || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "supplier_id and at least one item are required" }, { status: 400 });
     }
+    if (!(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
 
     if (!(await allOwned(db, "ingredients", items.map((i: { ingredient_id: number }) => i.ingredient_id)))) {
       return NextResponse.json({ error: "One of those ingredients isn't this business's" }, { status: 400 });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { customerBusinessId } from "@/lib/crm";
 import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { normalizeUkMobile } from "@/lib/phone";
@@ -27,7 +28,7 @@ export async function PATCH(req: NextRequest) {
       // Already on a guest record (from till or online orders)? That's them —
       // merge it in so its orders and points come across. Another person's
       // account → refuse.
-      const owner = await findByPhone(cleanPhone);
+      const owner = await findByPhone(await customerBusinessId(session.id), cleanPhone);
       if (owner && owner.id !== session.id) {
         const { data: me } = await supabase.from("customers").select("email").eq("id", session.id).single();
         const sameEmailOrNone = !owner.email || owner.email.toLowerCase() === (me?.email ?? "").toLowerCase();

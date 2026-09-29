@@ -109,7 +109,7 @@ export async function addItemsToTable(
   // regardless of whether the order already had a customer.
   // Logged in on their phone → their own account, whatever number they typed.
   if (customer?.phone?.trim() || customer?.accountId) {
-    const customerId = await customerForOrder(customer.accountId, customer.phone, customer.name || "Guest", customer.email, customer.marketingConsent === true);
+    const customerId = await customerForOrder(businessId, customer.accountId, customer.phone, customer.name || "Guest", customer.email, customer.marketingConsent === true);
     if (customerId) {
       await supabase
         .from("orders")

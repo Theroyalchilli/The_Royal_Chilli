@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm, canManageCrm } from "@/lib/permissions";
 
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session || !canViewCrm(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase
+  const db = bizDb(session.businessId);
+  const { data, error } = await db
     .from("loyalty_rewards")
     .select("*, eligible_tier:loyalty_tiers(name)")
     .eq("active", 1)
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageCrm(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const {
       name, description, points_cost, discount_amount, min_spend,
       eligible_tier_id, valid_days, per_customer_limit, start_date, end_date, is_birthday_reward,
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name and points_cost are required" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("loyalty_rewards")
       .insert({
         name,

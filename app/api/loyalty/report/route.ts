@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
 import { londonDateStr, tradingDayStr } from "@/lib/london-date";
@@ -14,14 +14,15 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session || !canViewCrm(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const months = Math.min(24, Math.max(1, Number(new URL(req.url).searchParams.get("months")) || 12));
   const now = new Date();
   const [y, m] = londonDateStr(now).split("-").map(Number);
   const firstMonth = new Date(Date.UTC(y, m - 1 - (months - 1), 1)).toISOString().slice(0, 7);
 
-  const { data: customers } = await supabase.from("customers").select("id, created_at").is("merged_into", null);
-  const { data: orders } = await supabase
+  const { data: customers } = await db.from("customers").select("id, created_at").is("merged_into", null);
+  const { data: orders } = await db
     .from("orders")
     .select("customer_id, total, discount, discount_reason, created_at")
     .eq("is_paid", true)

@@ -3,6 +3,8 @@ import { getDashboardData } from "@/lib/staff-dashboard";
 import { getAdminDashboard, RANGES, type RangeKey } from "@/lib/admin-dashboard";
 import StaffDashboard, { KpiCard } from "@/components/staff/StaffDashboard";
 import AdminDashboard from "@/components/staff/AdminDashboard";
+import GroupOverview from "@/components/staff/GroupOverview";
+import { getGroupOverview } from "@/lib/group-dashboard";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
@@ -36,10 +38,13 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
     const { range } = await searchParams;
     const key: RangeKey = range && range in RANGES ? (range as RangeKey) : "this_week";
     const data = await getAdminDashboard(session!.businessId, key);
+    // The group owner sees every business first, then the one they're working in.
+    const group = session!.owner ? await getGroupOverview(key) : null;
     return (
       <div className="px-4 pb-12 pt-6 md:px-6">
         <div className="mx-auto max-w-[1240px]">
           {header}
+          {group && <GroupOverview data={group} current={session!.businessId} />}
           <AdminDashboard data={data} />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm } from "@/lib/permissions";
 import { londonDayRangeUtc } from "@/lib/london-date";
@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
   if (!session || !canViewCrm(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const to = req.nextUrl.searchParams.get("to");
-  let query = supabase
+  let query = db
     .from("loyalty_redemptions")
     .select("id, code, status, points_spent, issued_at, expires_at, redeemed_at, reward:loyalty_rewards(name), customer:customers(name, phone)")
     .order("issued_at", { ascending: false })

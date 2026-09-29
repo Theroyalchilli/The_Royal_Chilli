@@ -5,7 +5,7 @@ import { createSession, getSessionCookieOptions } from "@/lib/auth";
 import { isManagerRole } from "@/lib/staff-pin";
 import { createTillToken, tillCookieOptions, TILL_COOKIE } from "@/lib/till-device";
 import type { Staff } from "@/lib/types";
-import { loginBusinessId } from "@/lib/business";
+import { loginBusinessId, staffHome } from "@/lib/business";
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,11 +43,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Your account isn't set up at any business yet — ask a manager." }, { status: 403 });
     }
 
+    const owner = (await staffHome(staff.id)).isOwner;
     const token = await createSession({
       id: staff.id,
       name: staff.name,
       role: staff.role,
       businessId,
+      ...(owner ? { owner: true } : {}),
     });
 
     const { name: cookieName, options } = getSessionCookieOptions();

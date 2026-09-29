@@ -1,23 +1,25 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { tradingDayStr } from "@/lib/london-date";
 
 export type LoyaltyTier = { id: number; name: string; min_lifetime_spend: number; points_multiplier: number };
 
-let tiersCache: { tiers: LoyaltyTier[]; loadedAt: number } | null = null;
+const tiersCache = new Map<number, { tiers: LoyaltyTier[]; loadedAt: number }>(); // per business
 const TIERS_CACHE_MS = 60_000;
 
 // Tiers are admin-configurable (loyalty_tiers table) rather than hardcoded —
 // short-lived cache since this is read on every points-earning purchase and
 // every customer list load, but tiers themselves change rarely.
-export async function getActiveTiers(): Promise<LoyaltyTier[]> {
-  if (tiersCache && Date.now() - tiersCache.loadedAt < TIERS_CACHE_MS) return tiersCache.tiers;
-  const { data } = await supabase
+export async function getActiveTiers(businessId: number): Promise<LoyaltyTier[]> {
+  const cached = tiersCache.get(businessId);
+  if (cached && Date.now() - cached.loadedAt < TIERS_CACHE_MS) return cached.tiers;
+  const { data } = await bizDb(businessId)
     .from("loyalty_tiers")
     .select("id, name, min_lifetime_spend, points_multiplier")
     .eq("active", 1)
     .order("sort_order", { ascending: true });
   const tiers = (data || []).map((t) => ({ ...t, min_lifetime_spend: Number(t.min_lifetime_spend), points_multiplier: Number(t.points_multiplier) }));
-  tiersCache = { tiers, loadedAt: Date.now() };
+  tiersCache.set(businessId, { tiers, loadedAt: Date.now() });
   return tiers;
 }
 
@@ -37,8 +39,15 @@ export function tierForSpend(tiers: LoyaltyTier[], lifetimeSpend: number): Loyal
   return tiers.reduce<LoyaltyTier | null>((lowest, t) => (!lowest || t.min_lifetime_spend < lowest.min_lifetime_spend ? t : lowest), null);
 }
 
-export async function tierFromSpend(lifetimeSpend: number): Promise<string> {
-  const tiers = await getActiveTiers();
+/** The business a customer belongs to (every business has its own customers). */
+export async function customerBusinessId(customerId: number): Promise<number> {
+  const { data, error } = await supabase.from("customers").select("business_id").eq("id", customerId).single();
+  if (error || !data) throw error ?? new Error(`Customer ${customerId} not found`);
+  return data.business_id as number;
+}
+
+export async function tierFromSpend(businessId: number, lifetimeSpend: number): Promise<string> {
+  const tiers = await getActiveTiers(businessId);
   return tierForSpend(tiers, lifetimeSpend)?.name ?? "Bronze";
 }
 
@@ -103,5 +112,5 @@ export async function getCustomerStats(customerId: number) {
     favouriteDish = sorted[0]?.[0] ?? null;
   }
 
-  return { lifetimeSpend, visitCount, favouriteDish, tier: await tierFromSpend(lifetimeSpend) };
+  return { lifetimeSpend, visitCount, favouriteDish, tier: await tierFromSpend(await customerBusinessId(customerId), lifetimeSpend) };
 }

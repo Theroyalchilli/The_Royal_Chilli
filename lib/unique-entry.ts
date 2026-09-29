@@ -6,9 +6,8 @@ import { bizDb } from "@/lib/business-db";
 // two rows and be counted twice.
 
 /**
- * Case- and space-insensitive name match against active rows of `table`.
- * Suppliers are shared by the whole group; ingredients belong to one
- * business, so pass its id (each business can have its own "Onions").
+ * Case- and space-insensitive name match against active rows of `table`,
+ * within one business (each business has its own suppliers and ingredients).
  */
 export async function findActiveByName(table: "suppliers" | "ingredients", name: string, excludeId?: number, businessId?: number): Promise<{ id: number; name: string } | null> {
   const clean = name.trim().replace(/\s+/g, " ");

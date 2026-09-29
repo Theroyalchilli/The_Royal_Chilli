@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { notYetValidMessage } from "@/lib/loyalty";
 
@@ -10,10 +10,11 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { code } = await req.json();
   if (!code) return NextResponse.json({ error: "code is required" }, { status: 400 });
 
-  const { data: redemption, error } = await supabase
+  const { data: redemption, error } = await db
     .from("loyalty_redemptions")
     .select("*, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend), customer:customers(name, phone)")
     .eq("code", String(code).trim().toUpperCase())

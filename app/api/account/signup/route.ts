@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { websiteBusinessId } from "@/lib/business";
 import { signupCustomer } from "@/lib/customers";
 import { createCustomerSession, getCustomerSessionCookieOptions } from "@/lib/customer-auth";
 import { isValidEmail } from "@/lib/utils";
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
-    const result = await signupCustomer(name, email, password, !!marketingConsent, typeof referralCode === "string" ? referralCode : null, typeof phone === "string" ? phone : null);
+    const result = await signupCustomer(await websiteBusinessId(req.headers.get("host")), name, email, password, !!marketingConsent, typeof referralCode === "string" ? referralCode : null, typeof phone === "string" ? phone : null);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }

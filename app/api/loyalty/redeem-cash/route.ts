@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Loyalty credit has already been applied to this order" }, { status: 400 });
     }
 
-    const { data: customer } = await supabase.from("customers").select("loyalty_points").eq("id", customer_id).single();
+    const { data: customer } = await bizDb(session.businessId).from("customers").select("loyalty_points").eq("id", customer_id).maybeSingle();
     if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
     const cashCredit = await getCashCreditInfo(customer.loyalty_points);

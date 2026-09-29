@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { pageBusinessId } from "@/lib/business";
+import { bizDb } from "@/lib/business-db";
 import Link from "next/link";
 import supabase from "@/lib/supabase";
 import { siteContent } from "@/lib/site-content";
@@ -27,7 +29,7 @@ function listDays(days: number[]): string {
 async function rules() {
   const [{ data: settings }, { data: rewards }] = await Promise.all([
     supabase.from("app_settings").select("key, value").like("key", "loyalty_%"),
-    supabase
+    bizDb(await pageBusinessId())
       .from("loyalty_rewards")
       .select("discount_pct, discount_amount, max_discount, valid_days, is_welcome_reward, is_referral_reward")
       .eq("active", 1)

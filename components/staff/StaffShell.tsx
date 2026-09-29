@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { HubNotice } from "@/lib/hub-notifications";
+import BusinessSwitcher, { type SwitcherOption } from "@/components/staff/BusinessSwitcher";
 
 export type NavItem = { href: string; label: string; icon: string; note?: string; external?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -15,11 +16,17 @@ const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: 
 // phone the row is replaced by 🔔 + ☰, which open a drawer from the right.
 export default function StaffShell({
   user,
+  business,
+  switcher,
   nav,
   notices,
   children,
 }: {
   user: { name: string; role: string };
+  /** The business this login is working for. */
+  business: { id: number; name: string };
+  /** The group owner's business picker (owner only). */
+  switcher?: SwitcherOption[];
   nav: NavGroup[];
   notices: HubNotice[];
   children: React.ReactNode;
@@ -90,12 +97,14 @@ export default function StaffShell({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="" className="h-[42px] w-[42px] flex-shrink-0 rounded-[10px] object-cover" />
             <span className="min-w-0">
-              <b style={{ fontFamily: "var(--font-cinzel)" }} className="block truncate text-[15px] leading-tight text-foreground">The Royal Chilli</b>
+              <b style={{ fontFamily: "var(--font-cinzel)" }} className="block truncate text-[15px] leading-tight text-foreground">{business.name}</b>
               <small className="hidden truncate text-[11.5px] leading-snug text-muted-foreground lg:block">
                 <i style={{ fontFamily: "var(--font-playfair)" }} className="text-[#E34435]">Dil Se Desi</i> · {user.name} · {ROLE_LABEL[user.role] ?? user.role}
               </small>
             </span>
           </Link>
+
+          {switcher && <BusinessSwitcher current={business.id} options={switcher} className="hidden md:flex" />}
 
           {/* Computer: the menu row */}
           <nav className="ml-auto hidden items-center gap-0.5 md:flex" aria-label="Staff Hub">
@@ -157,6 +166,7 @@ export default function StaffShell({
           ) : (
             <>
               <p className="px-2.5 pb-1 pt-2 text-[12px] text-muted-foreground">{user.name} · {ROLE_LABEL[user.role] ?? user.role}</p>
+              {switcher && <BusinessSwitcher current={business.id} options={switcher} className="px-2.5 pb-2" />}
               {dashboard.items.map((item) => itemLink({ ...item, icon: "🏠" }, `flex gap-2.5 rounded-[10px] px-2.5 py-3 text-[15px] ${active(item.href) ? "bg-[#FDECE9]" : "hover:bg-[#FDECE9]"}`))}
               {groups.map((g) => (
                 <div key={g.label}>

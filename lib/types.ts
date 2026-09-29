@@ -234,6 +234,8 @@ export interface SessionUser {
   role: StaffRole;
   /** The business this login is working for (lib/business.ts). */
   businessId: number;
+  /** The group owner: can switch into any business (lib/business.ts). */
+  owner?: boolean;
 }
 
 export interface CartItem {

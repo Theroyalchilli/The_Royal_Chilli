@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "customer_id and amount are required" }, { status: 400 });
   }
 
-  const { data: customer } = await supabase.from("customers").select("loyalty_points, name").eq("id", customerId).maybeSingle();
+  const { data: customer } = await bizDb(session.businessId).from("customers").select("loyalty_points, name").eq("id", customerId).maybeSingle();
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
   const estimate = await estimatePurchasePoints(customerId, amount);

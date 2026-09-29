@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bizDb } from "@/lib/business-db";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
@@ -23,6 +23,7 @@ export async function PATCH(
     const updates: Record<string, unknown> = {};
     for (const field of EDITABLE_FIELDS) if (field in body) updates[field] = body[field];
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    if (updates.supplier_id && !(await allOwned(db, "suppliers", [updates.supplier_id as number]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
     if (typeof updates.name === "string") {
       updates.name = updates.name.trim().replace(/\s+/g, " ");
       if (!updates.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });

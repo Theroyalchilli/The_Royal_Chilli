@@ -17,6 +17,7 @@ export async function createSession(user: SessionUser): Promise<string> {
     name: user.name,
     role: user.role,
     bid: user.businessId,
+    ...(user.owner ? { own: true } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -38,14 +39,14 @@ async function verify(token: string | undefined): Promise<SessionUser | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
-    const { id, name, role, bid } = payload;
+    const { id, name, role, bid, own } = payload;
     if (typeof id !== "number" || typeof name !== "string" || !VALID_ROLES.has(role as SessionUser["role"])) {
       return null;
     }
     // Logins from before multi-business (and the attendance app's tokens,
     // until it's updated) don't say — they're The Royal Chilli.
     const businessId = typeof bid === "number" && Number.isInteger(bid) && bid > 0 ? bid : DEFAULT_BUSINESS_ID;
-    return { id, name, role: role as SessionUser["role"], businessId };
+    return { id, name, role: role as SessionUser["role"], businessId, ...(own === true ? { owner: true } : {}) };
   } catch {
     return null;
   }

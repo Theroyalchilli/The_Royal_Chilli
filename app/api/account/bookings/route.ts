@@ -42,8 +42,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please enter a valid UK mobile number (starts with 07, 11 digits)" }, { status: 400 });
     }
 
-    const { data: customer } = await supabase.from("customers").select("name, email, phone").eq("id", session.id).single();
-    if (!customer) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    // An account books at its own business (the website it was made on).
+    const db = bizDb(await websiteBusinessId(req.headers.get("host")));
+    const { data: customer } = await db.from("customers").select("name, email, phone").eq("id", session.id).maybeSingle();
+    if (!customer) return NextResponse.json({ error: "Please log in on this restaurant's own website to book." }, { status: 403 });
 
     // Backfill the profile's phone the same way a first-time checkout would,
     // without overwriting one that's already there.
@@ -51,7 +53,6 @@ export async function POST(req: NextRequest) {
       await supabase.from("customers").update({ phone: phone.trim() }).eq("id", session.id);
     }
 
-    const db = bizDb(await websiteBusinessId(req.headers.get("host")));
     const { count: tableCount } = await db.from("restaurant_tables").select("*", { count: "exact", head: true });
     const { count: bookedCount } = await db
       .from("reservations")

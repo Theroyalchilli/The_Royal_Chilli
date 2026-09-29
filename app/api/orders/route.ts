@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
     const { tax, total } = bill;
 
     const customerId = customer_phone
-      ? await findOrCreateCustomerByPhone(customer_phone, customer_name || "Guest", customer_email, marketing_consent === true)
+      ? await findOrCreateCustomerByPhone(session.businessId, customer_phone, customer_name || "Guest", customer_email, marketing_consent === true)
       : null;
 
     // generateOrderNumber() isn't locked against a concurrent request landing

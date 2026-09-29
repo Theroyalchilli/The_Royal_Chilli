@@ -11,16 +11,23 @@ export const PIN_PATTERN = /^\d{4}$/;
 export const MANAGER_ROLES: SessionUser["role"][] = ["admin", "manager"];
 export const isManagerRole = (role: string) => (MANAGER_ROLES as string[]).includes(role);
 
-type PinStaff = { id: number; name: string; role: SessionUser["role"]; pin_hash: string | null };
+type PinStaff = { id: number; name: string; role: SessionUser["role"]; pin_hash: string | null; is_owner: boolean };
 
-// The active staff member whose PIN this is, or null. Checks every active
-// staff member's hash (a handful of people), so PINs must be unique.
-export async function findStaffByPin(pin: string, exceptId?: number): Promise<Omit<SessionUser, "businessId"> | null> {
+// The active staff member of this business whose PIN this is (or the group
+// owner, who can sign in on any business's till), or null. Checks a handful
+// of bcrypt hashes, so PINs must be unique within a business.
+export async function findStaffByPin(
+  pin: string,
+  businessId: number,
+  exceptId?: number,
+): Promise<(Omit<SessionUser, "businessId"> & { owner: boolean }) | null> {
   if (!PIN_PATTERN.test(pin)) return null;
-  const { data } = await supabase.from("staff").select("id, name, role, pin_hash").eq("active", 1).not("pin_hash", "is", null);
+  const { data } = await supabase.from("staff").select("id, name, role, pin_hash, is_owner")
+    .eq("active", 1).not("pin_hash", "is", null)
+    .or(`business_id.eq.${Number(businessId)},is_owner.eq.true`);
   for (const s of (data ?? []) as PinStaff[]) {
     if (s.id === exceptId || !s.pin_hash) continue;
-    if (await bcrypt.compare(pin, s.pin_hash)) return { id: s.id, name: s.name, role: s.role };
+    if (await bcrypt.compare(pin, s.pin_hash)) return { id: s.id, name: s.name, role: s.role, owner: !!s.is_owner };
   }
   return null;
 }

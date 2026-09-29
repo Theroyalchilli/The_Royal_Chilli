@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
-import { staffBusinessIds } from "@/lib/business";
 import { getSessionFromRequest } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
 import { findStaffByPin, isManagerRole } from "@/lib/staff-pin";
@@ -35,9 +34,8 @@ export async function POST(
     // the refund is recorded against that manager.
     let approverId = session.id;
     if (!isManagerRole(session.role)) {
-      const found = manager_pin ? await findStaffByPin(String(manager_pin)) : null;
-      // …a manager at this business.
-      const manager = found && (await staffBusinessIds(found.id)).includes(session.businessId) ? found : null;
+      // …a manager at this business (or the owner).
+      const manager = manager_pin ? await findStaffByPin(String(manager_pin), session.businessId) : null;
       if (!manager || !isManagerRole(manager.role)) {
         return NextResponse.json(
           { error: "MANAGER_PIN_REQUIRED", message: manager_pin ? "That isn't a manager's PIN" : "A manager needs to approve refunds — enter a manager PIN" },

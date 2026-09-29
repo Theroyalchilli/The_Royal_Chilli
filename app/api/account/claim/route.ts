@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { claimableOrder } from "@/lib/claim";
 import { awardPurchasePoints } from "@/lib/customers";
+import { customerBusinessId } from "@/lib/crm";
 
 // POST { o, k } — the signed-in customer claims a receipt's points.
 export async function POST(req: NextRequest) {
@@ -12,6 +13,12 @@ export async function POST(req: NextRequest) {
   const { o, k } = await req.json().catch(() => ({}));
   const check = await claimableOrder(Number(o), String(k || ""));
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+
+  // Points go to an account at the business the bill is from.
+  const { data: own } = await supabase.from("orders").select("business_id").eq("id", check.order.id).single();
+  if (!own || own.business_id !== (await customerBusinessId(session.id))) {
+    return NextResponse.json({ error: "This receipt is from a different restaurant — log in on that restaurant's website to claim it." }, { status: 400 });
+  }
 
   // One claim per receipt: only succeeds while no member is on the bill.
   const { data: linked } = await supabase

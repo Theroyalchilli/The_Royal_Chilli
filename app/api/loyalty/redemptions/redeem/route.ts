@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { code, order_id } = await req.json();
     if (!code || !order_id) return NextResponse.json({ error: "code and order_id are required" }, { status: 400 });
 
-    const { data: redemption, error: fetchErr } = await supabase
+    const { data: redemption, error: fetchErr } = await bizDb(session.businessId)
       .from("loyalty_redemptions")
       .select("*, reward:loyalty_rewards(name, discount_amount, discount_pct, max_discount, order_types, min_spend)")
       .eq("code", String(code).trim().toUpperCase())

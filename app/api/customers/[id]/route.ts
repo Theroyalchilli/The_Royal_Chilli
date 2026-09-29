@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canViewCrm, canManageCrm } from "@/lib/permissions";
 import { getCustomerStats } from "@/lib/crm";
@@ -13,21 +13,22 @@ export async function GET(
   if (!session || !canViewCrm(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
 
-  const { data: customer, error } = await supabase.from("customers").select(CUSTOMER_SAFE_FIELDS).eq("id", id).single();
+  const { data: customer, error } = await db.from("customers").select(CUSTOMER_SAFE_FIELDS).eq("id", id).single();
   if (error || !customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
   const stats = await getCustomerStats(Number(id));
 
-  const { data: orders } = await supabase
+  const { data: orders } = await db
     .from("orders")
     .select("id, order_number, order_type, status, total, created_at")
     .eq("customer_id", id)
     .order("created_at", { ascending: false })
     .limit(20);
 
-  const { data: transactions } = await supabase
+  const { data: transactions } = await db
     .from("loyalty_transactions")
     .select("*")
     .eq("customer_id", id)
@@ -50,6 +51,7 @@ export async function PATCH(
     if (!session || !canManageCrm(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
     const body = await req.json();
     const editable = ["name", "email", "date_of_birth", "address", "notes", "marketing_consent"];
@@ -57,7 +59,7 @@ export async function PATCH(
     for (const f of editable) if (f in body) updates[f] = body[f];
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
-    const { data, error } = await supabase.from("customers").update(updates).eq("id", id).select(CUSTOMER_SAFE_FIELDS).single();
+    const { data, error } = await db.from("customers").update(updates).eq("id", id).select(CUSTOMER_SAFE_FIELDS).single();
     if (error) throw error;
     return NextResponse.json({ success: true, customer: data });
   } catch (error) {

@@ -19,7 +19,7 @@ jest.mock("@/lib/supabase", () => ({
 }));
 
 let businessId: number | null = 1;
-jest.mock("@/lib/business", () => ({ __esModule: true, loginBusinessId: () => Promise.resolve(businessId) }));
+jest.mock("@/lib/business", () => ({ __esModule: true, loginBusinessId: () => Promise.resolve(businessId), staffHome: () => Promise.resolve({ businessId, isOwner: false }) }));
 
 import { POST } from "@/app/api/auth/login/route";
 

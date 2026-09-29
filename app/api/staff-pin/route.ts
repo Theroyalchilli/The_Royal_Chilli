@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
   const p = String(pin ?? "");
   if (!PIN_PATTERN.test(p)) return NextResponse.json({ error: "The PIN must be exactly 4 digits" }, { status: 400 });
-  if (await findStaffByPin(p, staffId)) {
+  if (await findStaffByPin(p, session.businessId, staffId)) {
     return NextResponse.json({ error: "Someone else already uses that PIN — choose a different one" }, { status: 409 });
   }
 

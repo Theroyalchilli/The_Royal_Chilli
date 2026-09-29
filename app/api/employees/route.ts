@@ -3,7 +3,6 @@ import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { staffIdsAt } from "@/lib/business";
-import { linkStaffToBusiness } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
 
 const PROFILE_FIELDS =
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "That username is already taken" }, { status: 400 });
     }
 
-    const { count: activeCount } = await supabase.from("staff").select("*", { count: "exact", head: true }).eq("active", 1);
+    const { count: activeCount } = await supabase.from("staff").select("*", { count: "exact", head: true }).eq("active", 1).eq("business_id", session.businessId);
     const { data: limitSetting } = await supabase.from("app_settings").select("value").eq("key", "max_employees").maybeSingle();
     const maxEmployees = limitSetting ? Number(limitSetting.value) : null;
     if (maxEmployees !== null && (activeCount ?? 0) >= maxEmployees) {
@@ -71,6 +70,8 @@ export async function POST(req: NextRequest) {
     const { data: created, error: insertErr } = await supabase
       .from("staff")
       .insert({
+        // Staff belong to the business that adds them (each business is independent).
+        business_id: session.businessId,
         name,
         username: username.toLowerCase(),
         password_hash,
@@ -103,8 +104,6 @@ export async function POST(req: NextRequest) {
       .select(PROFILE_FIELDS)
       .single();
     if (updateErr) throw updateErr;
-
-    await linkStaffToBusiness(created.id, session.businessId, role);
 
     await supabase.from("audit_logs").insert({
       staff_id: session.id,

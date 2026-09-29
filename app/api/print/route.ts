@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import { queueKitchenTicket, queueReceipt } from "@/lib/print-queue";
+import { allOwned, bizDb } from "@/lib/business-db";
 
 // Staff "Print Receipt" / "Reprint Receipt" / "Print KOT" buttons — sends the
 // ticket to the CloudPRNT printer queue instead of the browser's print dialog.
@@ -14,6 +15,10 @@ export async function POST(req: NextRequest) {
   const orderId = Number(order_id);
   if (!Number.isInteger(orderId) || orderId <= 0 || (kind !== "kot" && kind !== "receipt")) {
     return NextResponse.json({ error: "order_id and kind ('kot' or 'receipt') are required" }, { status: 400 });
+  }
+
+  if (!(await allOwned(bizDb(session.businessId), "orders", [orderId]))) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
   try {

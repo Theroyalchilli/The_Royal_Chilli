@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -19,7 +19,8 @@ export async function POST(
     const { id } = await params;
     const { status } = await req.json();
 
-    const { data: order, error: fetchErr } = await supabase.from("orders").select("driver_id, delivery_status").eq("id", id).single();
+    const db = bizDb(session.businessId);
+    const { data: order, error: fetchErr } = await db.from("orders").select("driver_id, delivery_status").eq("id", id).single();
     if (fetchErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     if (order.driver_id !== session.id) return NextResponse.json({ error: "This delivery isn't assigned to you" }, { status: 403 });
 
@@ -31,7 +32,7 @@ export async function POST(
     const updates: Record<string, unknown> = { delivery_status: status, updated_at: new Date().toISOString() };
     if (status === "delivered") updates.status = "paid"; // cash-on-delivery orders are settled once delivered
 
-    const { data, error } = await supabase.from("orders").update(updates).eq("id", id).select().single();
+    const { data, error } = await db.from("orders").update(updates).eq("id", id).select().single();
     if (error) throw error;
 
     return NextResponse.json({ success: true, order: data });

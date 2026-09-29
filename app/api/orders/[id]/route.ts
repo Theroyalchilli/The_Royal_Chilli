@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
 import { recalcTotals } from "@/lib/order-totals";
@@ -17,8 +18,9 @@ export async function GET(
     }
 
     const { id } = await params;
+    const db = bizDb(session.businessId);
 
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await db
       .from("orders")
       .select(`
         *,
@@ -69,10 +71,11 @@ export async function PUT(
     }
 
     const { id } = await params;
+    const db = bizDb(session.businessId);
     const body = await req.json();
     const { status, discount_type, discount_value, discount_reason, discount_given_by_staff_id, notes, customer_name, customer_phone, customer_email, marketing_consent } = body;
 
-    const { data: order, error: fetchError } = await supabase
+    const { data: order, error: fetchError } = await db
       .from("orders")
       .select("id, table_id, status, is_paid")
       .eq("id", id)
@@ -88,7 +91,7 @@ export async function PUT(
         return NextResponse.json({ error: result.error }, { status: 409 });
       }
     } else if (status) {
-      const { error } = await supabase
+      const { error } = await db
         .from("orders")
         .update({ status, updated_at: new Date().toISOString() })
         .eq("id", id);
@@ -104,7 +107,7 @@ export async function PUT(
       // Free table when the order is fully paid this way (rare — normal
       // payments go through /payment, which handles this itself).
       if (status === "paid" && order.table_id) {
-        await supabase
+        await db
           .from("restaurant_tables")
           .update({ status: "available", self_order_enabled: false })
           .eq("id", order.table_id);
@@ -134,7 +137,7 @@ export async function PUT(
       const noGiver = NextResponse.json({ error: "Choose who is giving this discount" }, { status: 400 });
 
       if (discount_type === null) {
-        const { error } = await supabase
+        const { error } = await db
           .from("orders")
           .update({ discount_type: null, discount_pct: null, discount: 0, discount_reason: null, discount_given_by_staff_id: null, discount_given_by: null, updated_at: new Date().toISOString() })
           .eq("id", id);
@@ -145,7 +148,7 @@ export async function PUT(
         }
         const givenBy = await resolveGiver();
         if (!givenBy) return noGiver;
-        const { error } = await supabase
+        const { error } = await db
           .from("orders")
           .update({ discount_type: "percent", discount_pct: discount_value, discount_reason: discount_reason || null, ...givenBy, updated_at: new Date().toISOString() })
           .eq("id", id);
@@ -156,7 +159,7 @@ export async function PUT(
         }
         const givenBy = await resolveGiver();
         if (!givenBy) return noGiver;
-        const { error } = await supabase
+        const { error } = await db
           .from("orders")
           .update({ discount_type: "amount", discount_pct: null, discount: discount_value, discount_reason: discount_reason || null, ...givenBy, updated_at: new Date().toISOString() })
           .eq("id", id);
@@ -169,7 +172,7 @@ export async function PUT(
     }
 
     if (notes !== undefined) {
-      const { error } = await supabase.from("orders").update({ notes, updated_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await db.from("orders").update({ notes, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     }
 
@@ -180,14 +183,14 @@ export async function PUT(
     // automatically off orders.customer_id once payment completes.
     if (customer_phone !== undefined && String(customer_phone).trim()) {
       const customerId = await findOrCreateCustomerByPhone(String(customer_phone).trim(), customer_name || "Guest", customer_email, marketing_consent === true);
-      const { error } = await supabase
+      const { error } = await db
         .from("orders")
         .update({ customer_id: customerId, customer_name: customer_name || null, customer_phone: String(customer_phone).trim(), updated_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
     }
 
-    const { data: updated, error: updError } = await supabase
+    const { data: updated, error: updError } = await db
       .from("orders")
       .select(`
         *,
@@ -228,8 +231,9 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const db = bizDb(session.businessId);
 
-    const { data: order, error: fetchError } = await supabase
+    const { data: order, error: fetchError } = await db
       .from("orders")
       .select("id, table_id")
       .eq("id", id)

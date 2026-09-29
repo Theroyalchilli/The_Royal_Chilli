@@ -113,3 +113,18 @@ export async function requestBusinessId(req: { headers: Headers; cookies: { get(
   const session = await getSessionFromRequest(req as Parameters<typeof getSessionFromRequest>[0]);
   return session?.businessId ?? websiteBusinessId(req.headers.get("host"));
 }
+
+/** Ids of the (shared) staff who work at this business. */
+export async function staffIdsAt(businessId: number): Promise<number[]> {
+  const { data, error } = await supabase.from("staff_businesses").select("staff_id").eq("business_id", businessId).eq("active", true);
+  if (error) throw error;
+  return (data ?? []).map((r) => r.staff_id as number);
+}
+
+/** Short prefix for this business's order numbers: RC-20260929-001, MH-…  */
+export async function orderNumberPrefix(businessId: number): Promise<string> {
+  if (businessId === DEFAULT_BUSINESS_ID) return "RC";
+  const b = await getBusiness(businessId);
+  const parts = (b?.slug ?? `b${businessId}`).split("-").filter(Boolean);
+  return (parts.length > 1 ? parts.map((p) => p[0]).join("") : parts[0].slice(0, 2)).toUpperCase();
+}

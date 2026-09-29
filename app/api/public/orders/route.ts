@@ -6,6 +6,7 @@ import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { websiteBusinessId } from "@/lib/business";
+import { bizDb } from "@/lib/business-db";
 import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen } from "@/lib/hours";
@@ -107,7 +108,8 @@ export async function POST(req: NextRequest) {
     // delivery fee isn't included in this figure).
     const tax = Math.round((subtotal - subtotal / 1.2) * 100) / 100;
 
-    const { data: workPeriod } = await supabase
+    const db = bizDb(businessId);
+    const { data: workPeriod } = await db
       .from("work_periods")
       .select("id")
       .eq("status", "open")
@@ -115,12 +117,12 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .single();
 
-    const orderNumber = await generateOrderNumber();
+    const orderNumber = await generateOrderNumber(businessId);
     // logged in → their own account (lib/customers.ts customerForOrder)
     const account = await getCustomerSessionFromRequest(req);
     const customerId = await customerForOrder(account?.id, customer_phone, customer_name, customer_email, marketing_consent === true);
 
-    const { data: order, error: orderErr } = await supabase
+    const { data: order, error: orderErr } = await db
       .from("orders")
       .insert({
         order_number: orderNumber,

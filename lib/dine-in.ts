@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { generateOrderNumber } from "@/lib/orders";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
 import { recalcTotals } from "@/lib/order-totals";
@@ -77,8 +78,8 @@ export async function addItemsToTable(
 
   let order = await getOpenOrderForTable(tableId);
   if (!order) {
-    const orderNumber = await generateOrderNumber();
-    const { data: newOrder, error: orderErr } = await supabase
+    const orderNumber = await generateOrderNumber(businessId);
+    const { data: newOrder, error: orderErr } = await bizDb(businessId)
       .from("orders")
       .insert({
         order_number: orderNumber,

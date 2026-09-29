@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { londonDayRangeUtc } from "@/lib/london-date";
 import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const db = bizDb(session.businessId);
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const date = searchParams.get("date");
@@ -23,7 +25,7 @@ export async function GET(req: NextRequest) {
     // Orders panels, polling every 15s) don't need — opt-in only, for History.
     const detailed = searchParams.get("detailed") === "true";
 
-    let query = supabase
+    let query = db
       .from("orders")
       .select(`
         *,
@@ -154,6 +156,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const db = bizDb(session.businessId);
+    // Dishes and tables must be this business's own.
+    const menuItemIds = (items as { menu_item_id?: number }[]).map((i) => i.menu_item_id).filter((id): id is number => !!id);
+    if (!(await allOwned(db, "menu_items", menuItemIds))) {
+      return NextResponse.json({ error: "One of those dishes isn't on this business's menu" }, { status: 400 });
+    }
+    if (table_id && !(await allOwned(db, "restaurant_tables", [table_id]))) {
+      return NextResponse.json({ error: "That table isn't this business's" }, { status: 400 });
+    }
+
     if (order_type === "delivery" && !String(customer_address || "").trim()) {
       return NextResponse.json(
         { error: "A delivery address is required" },
@@ -161,8 +173,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get open work period
-    const { data: workPeriod } = await supabase
+    // This business's open till shift
+    const { data: workPeriod } = await db
       .from("work_periods")
       .select("id")
       .eq("status", "open")
@@ -198,8 +210,8 @@ export async function POST(req: NextRequest) {
     let newOrder: { id: number; order_number: string } | null = null;
     let orderError: { code?: string; message?: string } | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const orderNumber = await generateOrderNumber();
-      const result = await supabase
+      const orderNumber = await generateOrderNumber(session.businessId);
+      const result = await db
         .from("orders")
         .insert({
           order_number: orderNumber,
@@ -273,14 +285,14 @@ export async function POST(req: NextRequest) {
 
     // Update table status if dine-in
     if (order_type === "dine_in" && table_id) {
-      await supabase
+      await db
         .from("restaurant_tables")
         .update({ status: "occupied" })
         .eq("id", table_id);
     }
 
     // Fetch full order with joins
-    const { data: order, error: fetchError } = await supabase
+    const { data: order, error: fetchError } = await db
       .from("orders")
       .select(`
         *,

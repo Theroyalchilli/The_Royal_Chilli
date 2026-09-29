@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
+import { staffIdsAt } from "@/lib/business";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageDrivers } from "@/lib/permissions";
 
@@ -16,12 +18,15 @@ export async function POST(
     const { driver_id } = await req.json();
     if (!driver_id) return NextResponse.json({ error: "driver_id is required" }, { status: 400 });
 
+    const db = bizDb(session.businessId);
+    if (!(await allOwned(db, "orders", [id]))) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
     const { data: driver } = await supabase.from("staff").select("id, role").eq("id", driver_id).single();
-    if (!driver || driver.role !== "driver") {
-      return NextResponse.json({ error: "That staff member is not a driver" }, { status: 400 });
+    if (!driver || driver.role !== "driver" || !(await staffIdsAt(session.businessId)).includes(driver.id)) {
+      return NextResponse.json({ error: "That staff member is not a driver here" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("orders")
       .update({ driver_id, delivery_status: "assigned", updated_at: new Date().toISOString() })
       .eq("id", id)

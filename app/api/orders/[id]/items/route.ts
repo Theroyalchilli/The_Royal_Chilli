@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { notifyOrderReady } from "@/lib/order-notifications";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
@@ -17,6 +18,9 @@ export async function GET(
     }
 
     const { id } = await params;
+    if (!(await allOwned(bizDb(session.businessId), "orders", [id]))) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
 
     const { data: items, error } = await supabase
       .from("order_items")
@@ -64,7 +68,8 @@ export async function POST(
       return NextResponse.json({ error: "No items provided" }, { status: 400 });
     }
 
-    const { data: order, error: orderFetchError } = await supabase
+    const db = bizDb(session.businessId);
+    const { data: order, error: orderFetchError } = await db
       .from("orders")
       .select("id")
       .eq("id", id)
@@ -72,6 +77,11 @@ export async function POST(
 
     if (orderFetchError || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    const menuItemIds = (items as { menu_item_id?: number }[]).map((i) => i.menu_item_id).filter((mid): mid is number => !!mid);
+    if (!(await allOwned(db, "menu_items", menuItemIds))) {
+      return NextResponse.json({ error: "One of those dishes isn't on this business's menu" }, { status: 400 });
     }
 
     const itemRows = items.map((item: {
@@ -121,6 +131,9 @@ export async function PUT(
 
     const { id: orderId } = await params;
     const { itemId, status, action, quantity } = await req.json();
+    if (!(await allOwned(bizDb(session.businessId), "orders", [orderId]))) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
 
     if (action === "void") {
       // Once an order is paid, voiding an item wouldn't touch the money

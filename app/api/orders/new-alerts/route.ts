@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const now = Date.now();
-  const { data, error } = await supabase
+  const { data, error } = await bizDb(session.businessId)
     .from("print_jobs")
     .select("id, source, print_after, order:orders(order_number, order_type, status, customer_name, restaurant_tables(table_number))")
     .eq("kind", "kot")

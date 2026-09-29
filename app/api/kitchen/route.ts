@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { notifyOrderReady } from "@/lib/order-notifications";
 import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { getSessionFromRequest } from "@/lib/auth";
 import { openTableOrders, roundNumbers } from "@/lib/kitchen-rounds";
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: rawOrders, error: ordersError } = await supabase
+    const db = bizDb(session.businessId);
+    const { data: rawOrders, error: ordersError } = await db
       .from("orders")
       .select(`
         *,
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
     // Orders cancelled in the last 2 minutes: kitchen needs a brief, explicit
     // "stop prep" alert instead of the ticket silently vanishing next poll.
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-    const { data: justCancelled } = await supabase
+    const { data: justCancelled } = await db
       .from("orders")
       .select(`
         *,
@@ -144,8 +146,12 @@ export async function PUT(req: NextRequest) {
     }
 
     const { orderId, status } = await req.json();
+    const db = bizDb(session.businessId);
+    if (!(await allOwned(db, "orders", [orderId]))) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
 
-    const { error } = await supabase
+    const { error } = await db
       .from("orders")
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", orderId);

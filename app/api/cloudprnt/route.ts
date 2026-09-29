@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import supabase from "@/lib/supabase";
 import { buildTicket, toPlainText, toStarPrnt, type PrintJob, type Ticket } from "@/lib/cloudprnt";
 import { JOB_COLUMNS, markPrinted, nextDueJob } from "@/lib/print-queue";
+import { bizDb } from "@/lib/business-db";
+import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
 
 // Star CloudPRNT endpoint for the restaurant's one printer (Star mC-Print3).
 // The printer polls this URL every few seconds — no local device or browser
@@ -12,8 +13,9 @@ import { JOB_COLUMNS, markPrinted, nextDueJob } from "@/lib/print-queue";
 // Jobs come from the print_jobs queue (lib/print-queue.ts): kitchen tickets
 // from the till, table QR and the website, customer receipts and Z reports.
 //
-// Only one printer is registered, so jobs aren't routed by printerMAC. If a
-// second printer is ever added, this needs to key off printerMAC instead.
+// One printer per business: its Server URL carries ?b=<business id> (no b =
+// The Royal Chilli, so the existing printer needs no change), and it only
+// ever gets that business's jobs.
 //
 // The printer's requests are logged (except idle polls) so the first real
 // test shows exactly which query params Star's firmware sends — the GET/
@@ -52,6 +54,13 @@ function isAuthorized(req: NextRequest): boolean {
   return false;
 }
 
+function businessFor(req: NextRequest): number | null {
+  const b = req.nextUrl.searchParams.get("b");
+  if (b == null) return DEFAULT_BUSINESS_ID;
+  const id = Number(b);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
 // Query params minus the key, for logs.
@@ -61,10 +70,10 @@ function paramsForLog(req: NextRequest): string {
   return p.toString();
 }
 
-async function jobFor(req: NextRequest): Promise<{ job: PrintJob; ticket: Ticket } | null> {
+async function jobFor(req: NextRequest, businessId: number): Promise<{ job: PrintJob; ticket: Ticket } | null> {
   const token = req.nextUrl.searchParams.get("token") || req.nextUrl.searchParams.get("jobToken");
-  if (!token) return nextDueJob();
-  const { data: job } = await supabase.from("print_jobs").select(JOB_COLUMNS).eq("id", token).is("printed_at", null).maybeSingle();
+  if (!token) return nextDueJob(businessId);
+  const { data: job } = await bizDb(businessId).from("print_jobs").select(JOB_COLUMNS).eq("id", token).is("printed_at", null).maybeSingle();
   if (!job) return null;
   const ticket = await buildTicket(job as PrintJob);
   return ticket ? { job: job as PrintJob, ticket } : null;
@@ -74,6 +83,8 @@ const STARPRNT = "application/vnd.star.starprnt";
 
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) return unauthorized();
+  const businessId = businessFor(req);
+  if (!businessId) return unauthorized();
 
   const status = await req.json().catch(() => null);
   const statusCode: string | undefined = status?.statusCode;
@@ -81,7 +92,7 @@ export async function POST(req: NextRequest) {
     console.warn(`[cloudprnt] printer reports status "${statusCode}"`, JSON.stringify(status));
   }
 
-  const next = await nextDueJob();
+  const next = await nextDueJob(businessId);
   if (!next) return NextResponse.json({ jobReady: false });
 
   console.log(`[cloudprnt] POST poll -> job ${next.job.id} ready (${next.job.kind} ${next.job.order_id ?? next.job.work_period_id})`, JSON.stringify(status));
@@ -90,9 +101,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) return unauthorized();
+  const businessId = businessFor(req);
+  if (!businessId) return unauthorized();
   console.log(`[cloudprnt] GET ${paramsForLog(req)}`);
 
-  const found = await jobFor(req);
+  const found = await jobFor(req, businessId);
   if (!found) return new NextResponse(null, { status: 404 });
 
   if (req.nextUrl.searchParams.get("type") === "text/plain") {
@@ -103,6 +116,8 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   if (!isAuthorized(req)) return unauthorized();
+  const businessId = businessFor(req);
+  if (!businessId) return unauthorized();
   console.log(`[cloudprnt] DELETE ${paramsForLog(req)}`);
 
   // "code" is the printer's result, e.g. "200 OK" or "510 Media Error".
@@ -115,12 +130,12 @@ export async function DELETE(req: NextRequest) {
 
   const token = req.nextUrl.searchParams.get("token") || req.nextUrl.searchParams.get("jobToken");
   if (token) {
-    await markPrinted(Number(token));
+    await markPrinted(businessId, Number(token));
   } else {
     // No token echoed back — the job it just printed is the one we'd have
     // served, i.e. the next due job.
-    const next = await nextDueJob();
-    if (next) await markPrinted(next.job.id);
+    const next = await nextDueJob(businessId);
+    if (next) await markPrinted(businessId, next.job.id);
   }
   return NextResponse.json({ success: true });
 }

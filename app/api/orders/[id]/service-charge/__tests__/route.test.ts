@@ -24,6 +24,7 @@ jest.mock("@/lib/supabase", () => ({
         return builder;
       };
       builder.single = () => Promise.resolve(resp);
+      builder.maybeSingle = () => Promise.resolve(resp);
       builder.then = (resolve: (v: Resp) => void, reject: (e: unknown) => void) => Promise.resolve(resp).then(resolve, reject);
       return builder;
     },

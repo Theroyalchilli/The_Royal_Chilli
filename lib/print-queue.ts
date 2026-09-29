@@ -1,7 +1,12 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { buildTicket, LINE_WIDTH, type PrintJob, type Ticket } from "@/lib/cloudprnt";
 
+// Each business prints only its own jobs: a print job takes its order's (or
+// till shift's) business in the database (migration 076), and every printer
+// and Print Station takes jobs for one business.
+//
 // Queues tickets for the Star mC-Print3, which pulls them via CloudPRNT
 // (app/api/cloudprnt) — the one printer handles kitchen tickets from the
 // till, table QR and the website, plus customer receipts. Tickets are
@@ -68,16 +73,16 @@ export const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
 
 export const JOB_COLUMNS = "id, order_id, work_period_id, kind, source, item_ids";
 
-export async function markPrinted(jobId: number) {
-  await supabase.from("print_jobs").update({ printed_at: new Date().toISOString() }).eq("id", jobId).is("printed_at", null);
+export async function markPrinted(businessId: number, jobId: number) {
+  await bizDb(businessId).from("print_jobs").update({ printed_at: new Date().toISOString() }).eq("id", jobId).is("printed_at", null);
 }
 
 // The next job that's due and still has something to print, laid out
 // `width` columns wide. A job whose order was cancelled (or whose items all
 // were) renders to nothing — it's closed off here so it can't block the queue.
-export async function nextDueJob(width = LINE_WIDTH): Promise<{ job: PrintJob; ticket: Ticket } | null> {
+export async function nextDueJob(businessId: number, width = LINE_WIDTH): Promise<{ job: PrintJob; ticket: Ticket } | null> {
   const now = Date.now();
-  const { data: jobs } = await supabase
+  const { data: jobs } = await bizDb(businessId)
     .from("print_jobs")
     .select(JOB_COLUMNS)
     .is("printed_at", null)
@@ -91,7 +96,7 @@ export async function nextDueJob(width = LINE_WIDTH): Promise<{ job: PrintJob; t
     const ticket = await buildTicket(job, width);
     if (ticket) return { job, ticket };
     console.log(`[print] job ${job.id} (${job.kind} ${job.order_id ?? job.work_period_id}) has nothing to print — skipping`);
-    await markPrinted(job.id);
+    await markPrinted(businessId, job.id);
   }
   return null;
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { staffIdsAt } from "@/lib/business";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageDrivers } from "@/lib/permissions";
 
@@ -13,10 +15,11 @@ export async function GET(req: NextRequest) {
     .from("staff")
     .select("id, name, phone, vehicle_type, vehicle_registration, driver_status")
     .eq("role", "driver")
-    .eq("active", 1);
+    .eq("active", 1)
+    .in("id", await staffIdsAt(session.businessId));
   if (error) return NextResponse.json({ error: "Failed to fetch drivers" }, { status: 500 });
 
-  const { data: deliveries } = await supabase
+  const { data: deliveries } = await bizDb(session.businessId)
     .from("orders")
     .select("driver_id, total, delivery_status")
     .eq("order_type", "delivery")

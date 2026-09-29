@@ -64,6 +64,7 @@ beforeEach(() => {
 
 describe("PUT /api/orders/[id]/items — void action closes an emptied-out order", () => {
   it("cancels the order and frees the table when the last active item is voided", async () => {
+    queue("orders", { data: [{ id: 1 }], error: null }); // order belongs to this business
     queue("orders", { data: { status: "pending", table_id: 5 }, error: null }); // paid-status guard read
     queue("order_items", { error: null }); // the void update itself
     queue("orders", { data: { discount: 0, service_charge_pct: 0 }, error: null }); // recalcTotals read
@@ -81,6 +82,7 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
   });
 
   it("does NOT cancel the order or free the table when other active items remain", async () => {
+    queue("orders", { data: [{ id: 1 }], error: null }); // order belongs to this business
     queue("orders", { data: { status: "pending", table_id: 5 }, error: null }); // paid-status guard read
     queue("order_items", { error: null }); // the void update itself
     queue("orders", { data: { discount: 0, service_charge_pct: 0 }, error: null }); // recalcTotals read
@@ -95,10 +97,19 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
   });
 
   it("refuses to void an item on an already-paid order", async () => {
+    queue("orders", { data: [{ id: 1 }], error: null }); // order belongs to this business
     queue("orders", { data: { status: "paid", is_paid: true, table_id: 5 }, error: null }); // paid-status guard read
 
     const res = await voidItem("77", 1);
     expect(res.status).toBe(409);
+    expect(ordersUpdatePayloads).toHaveLength(0);
+    expect(tablesUpdatePayloads).toHaveLength(0);
+  });
+
+  it("treats another business's order as not found, and changes nothing", async () => {
+    queue("orders", { data: [], error: null }); // not this business's order
+    const res = await voidItem("1", 10);
+    expect(res.status).toBe(404);
     expect(ordersUpdatePayloads).toHaveLength(0);
     expect(tablesUpdatePayloads).toHaveLength(0);
   });

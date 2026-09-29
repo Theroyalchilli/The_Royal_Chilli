@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only a manager can pair the Print Station" }, { status: 401 });
   }
   try {
-    return NextResponse.json({ key: await pairPrintStation() });
+    return NextResponse.json({ key: await pairPrintStation(session.businessId) });
   } catch (error) {
     console.error("Print Station pairing error:", error);
     return NextResponse.json({ error: "Failed to pair" }, { status: 500 });

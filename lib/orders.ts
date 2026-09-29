@@ -1,4 +1,6 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { orderNumberPrefix } from "@/lib/business";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 import { amountHeld } from "@/lib/payment-status";
 import { sendPaymentReceiptEmail, sendOrderCancellationEmail } from "@/lib/email";
@@ -61,14 +63,15 @@ export async function cancelOrderAndFreeTable(orderId: number, tableId: number |
 // then collide on the unique constraint and block every new order for the
 // rest of the day) the moment any of today's orders is deleted rather than
 // just cancelled, e.g. test-data cleanup against production.
-export async function generateOrderNumber(): Promise<string> {
+// Per business: each has its own prefix and its own sequence (RC-…, MH-…).
+export async function generateOrderNumber(businessId: number): Promise<string> {
   // Numbered by UK date (lib/london-date.ts): after midnight in summer time
   // it's already the next day here, even though UTC is still on the last one.
   const today = londonDateStr();
-  const prefix = `RC-${today.replace(/-/g, "")}-`;
+  const prefix = `${await orderNumberPrefix(businessId)}-${today.replace(/-/g, "")}-`;
   const { start: todayStart, end: todayEnd } = londonDayRangeUtc(today);
 
-  const { data: rows } = await supabase
+  const { data: rows } = await bizDb(businessId)
     .from("orders")
     .select("order_number")
     .gte("created_at", todayStart)

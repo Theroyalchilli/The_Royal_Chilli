@@ -23,7 +23,6 @@ export default async function StaffHubLayout({
   if (!isStaffManagement(session.role)) redirect("/pos");
 
   const see = (tab: Parameters<typeof canAccess>[1]) => canAccess(session.role, tab);
-  const isManagement = session.role === "admin" || session.role === "manager";
 
   // First entry = the plain "Dashboard" link; the rest are dropdown groups.
   const nav: NavGroup[] = [
@@ -34,7 +33,6 @@ export default async function StaffHubLayout({
         ...(see("menu") ? [{ href: "/staff/menu", label: "Menu", icon: "🍽️" }] : []),
         ...(see("tables") ? [{ href: "/staff/tables", label: "Tables", icon: "🪑" }] : []),
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
-        ...(isManagement ? [{ href: "/pos/kitchen", label: "Kitchen Display", icon: "👨‍🍳" }] : []),
         ...(see("finance") ? [{ href: "/staff/platforms", label: "Delivery platforms", icon: "🛵", note: "Enter daily totals" }] : []),
         { href: "/pos", label: "Till", icon: "💷" },
       ],

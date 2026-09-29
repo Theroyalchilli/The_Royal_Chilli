@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
-import { boxesPerScreen, boxWidth, BOX_GAP, screenCount, screenOf } from "@/lib/kitchen-pages";
+import { boxesPerScreen, boxWidth, BOX_GAP, screenCount, screenOf, tabLabel } from "@/lib/kitchen-pages";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import PrintButton from "@/components/pos/PrintButton";
 
@@ -11,9 +11,10 @@ import PrintButton from "@/components/pos/PrintButton";
 // the left, only as tall as its items need — a long one scrolls inside its
 // own box. A table's later rounds (each till "Send to Kitchen") join its box
 // as Round 2, Round 3… with their own timers. How many boxes fit per screen
-// depends on the device (lib/kitchen-pages.ts); the rest are on further
-// screens the kitchen moves through by hand with Prev / Next, and a 🔔 says
-// when a new order lands on a screen they're not looking at.
+// depends on the device (lib/kitchen-pages.ts). Above them, one tab per box
+// (T7, Online 23, Collection 41) coloured by its timer: the ones on screen are
+// outlined, and tapping any tab jumps straight to it. A new order that lands
+// off screen pulses 🔔 on its tab until someone looks.
 
 interface OrderWithItems extends Order {
   items: OrderItem[];
@@ -188,11 +189,13 @@ function RoundSection({
 function OrderBox({
   group,
   width,
+  flash,
   onBumpAll,
   onBumpItem,
 }: {
   group: OrderWithItems[];
   width: number;
+  flash: boolean;
   onBumpAll: (orderIds: number[]) => void;
   onBumpItem: (orderId: number, itemId: number, status: "ready" | "pending") => void;
 }) {
@@ -202,7 +205,7 @@ function OrderBox({
   return (
     <div
       style={{ width, flex: `0 0 ${width}px` }}
-      className={`max-h-full flex flex-col rounded-xl border-[3px] bg-surface overflow-hidden ${boxClass(group)}`}
+      className={`max-h-full flex flex-col rounded-xl border-[3px] bg-surface overflow-hidden transition-shadow ${boxClass(group)} ${flash ? "ring-4 ring-blue-500 ring-offset-2" : ""}`}
     >
       <div className={`flex-shrink-0 px-3 py-2 border-b border-border ${headClass(group)}`}>
         <div className="flex items-baseline justify-between gap-2">
@@ -258,6 +261,15 @@ function ReadyChip({ group, onRecall }: { group: OrderWithItems[]; onRecall: (or
   );
 }
 
+// One tab per box. Colour = how long it's been waiting (same as the timers).
+function tabClass(group: OrderWithItems[]): string {
+  if (group[0].just_cancelled) return "bg-red-600 text-white border-red-700";
+  const age = getAgeMinutes(group[0].created_at);
+  if (age >= 20) return "bg-red-600 text-white border-red-700";
+  if (age >= 10) return "bg-orange-100 text-orange-800 border-orange-400";
+  return "bg-yellow-100 text-yellow-900 border-yellow-400";
+}
+
 export default function KitchenBoard() {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,8 +277,10 @@ export default function KitchenBoard() {
   const [, setTick] = useState(0);
   const [boardWidth, setBoardWidth] = useState(0);
   const [screen, setScreen] = useState(0);
-  // Screens (0-based) that got a new order the kitchen hasn't looked at yet.
-  const [bellScreens, setBellScreens] = useState<number[]>([]);
+  // Boxes (by their first order's id) with a new ticket nobody has looked at yet.
+  const [bellKeys, setBellKeys] = useState<number[]>([]);
+  // The box just picked from the tabs, outlined for a moment so it's easy to spot.
+  const [flashKey, setFlashKey] = useState<number | null>(null);
   const seenIds = useRef<Set<number> | null>(null);
   // True after the first successful load — the bell only counts orders that
   // arrive after that, never the ones already there when the screen opened.
@@ -362,10 +376,11 @@ export default function KitchenBoard() {
   const screens = screenCount(activeGroups.length, perScreen);
   const current = Math.min(screen, screens - 1);
   const visible = activeGroups.slice(current * perScreen, current * perScreen + perScreen);
-  const moreAfter = Math.max(0, activeGroups.length - (current + 1) * perScreen);
+  const visibleKeys = visible.map((g) => g[0].id).join(",");
+  const onScreen = useMemo(() => new Set(visibleKeys ? visibleKeys.split(",").map(Number) : []), [visibleKeys]);
 
   // 🔔 A new ticket (a new table/order, or another round) that lands on a
-  // screen other than the one being looked at. Staff stay where they are.
+  // box that isn't on screen. Staff stay where they are.
   useEffect(() => {
     const ids = new Set(activeOrders.map((o) => o.id));
     if (seenIds.current === null) {
@@ -374,17 +389,28 @@ export default function KitchenBoard() {
     }
     const fresh: number[] = [];
     activeGroups.forEach((g, i) => {
-      if (g.some((o) => !seenIds.current!.has(o.id))) fresh.push(screenOf(i, perScreen));
+      if (screenOf(i, perScreen) !== current && g.some((o) => !seenIds.current!.has(o.id))) fresh.push(g[0].id);
     });
     seenIds.current = ids;
-    const others = fresh.filter((s) => s !== current);
-    if (others.length) setBellScreens((b) => [...new Set([...b, ...others])].sort((x, y) => x - y));
+    if (fresh.length) setBellKeys((b) => [...new Set([...b, ...fresh])]);
   }, [activeOrders, activeGroups, perScreen, current, loadedOnce]);
 
-  // Looking at a screen clears its bell; bells for screens that no longer exist go.
+  // A box on screen has been seen; boxes that are gone lose their bell.
   useEffect(() => {
-    setBellScreens((b) => (b.some((s) => s === current || s >= screens) ? b.filter((s) => s !== current && s < screens) : b));
-  }, [current, screens]);
+    const live = new Set(activeGroups.map((g) => g[0].id));
+    setBellKeys((b) => (b.some((k) => onScreen.has(k) || !live.has(k)) ? b.filter((k) => !onScreen.has(k) && live.has(k)) : b));
+  }, [onScreen, activeGroups]);
+
+  useEffect(() => {
+    if (flashKey === null) return;
+    const t = setTimeout(() => setFlashKey(null), 1500);
+    return () => clearTimeout(t);
+  }, [flashKey]);
+
+  const jumpTo = (index: number) => {
+    setScreen(screenOf(index, perScreen));
+    setFlashKey(activeGroups[index][0].id);
+  };
 
   if (loading) {
     return (
@@ -393,8 +419,6 @@ export default function KitchenBoard() {
       </div>
     );
   }
-
-  const pagerBtn = "pos-btn no-select rounded-xl border-2 border-foreground bg-surface px-3 sm:px-4 py-2 text-sm sm:text-base font-black text-foreground disabled:opacity-25";
 
   return (
     <div className="h-full flex flex-col">
@@ -428,35 +452,42 @@ export default function KitchenBoard() {
       <TableRequestsBanner />
 
       <div className="flex-1 min-h-0 p-2.5 sm:p-3 flex flex-col gap-2.5">
-        {/* Ready strip + screen controls */}
-        <div className="flex-shrink-0 flex flex-wrap items-center gap-2">
-          {readyGroups.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <span className="text-sm font-bold text-foreground">✅ Ready</span>
-              {readyGroups.map((group) => (
-                <ReadyChip key={group[0].id} group={group} onRecall={handleRecall} />
-              ))}
-            </div>
-          )}
-          {screens > 1 && (
-            <div className="ml-auto flex items-center gap-2">
-              {bellScreens.length > 0 && (
+        {/* One tab per box — tap to jump to it */}
+        {activeGroups.length > 0 && (
+          <div className="flex-shrink-0 flex flex-wrap items-center gap-2" role="tablist" aria-label="Orders">
+            {activeGroups.map((group, i) => {
+              const key = group[0].id;
+              const shown = onScreen.has(key);
+              const bell = bellKeys.includes(key);
+              return (
                 <button
-                  onClick={() => setScreen(bellScreens[0])}
-                  className="pos-btn no-select animate-pulse rounded-xl bg-amber-500 px-3 py-2 text-sm font-black text-white"
+                  key={key}
+                  role="tab"
+                  aria-selected={shown}
+                  onClick={() => jumpTo(i)}
+                  className={`pos-btn no-select flex items-center gap-1.5 rounded-xl border-2 px-3 py-2 text-sm sm:text-base font-black ${tabClass(group)} ${
+                    shown ? "ring-[3px] ring-foreground ring-offset-1" : "opacity-80"
+                  } ${bell ? "animate-pulse" : ""}`}
                 >
-                  🔔 New order on screen {bellScreens.map((s) => s + 1).join(", ")}
+                  {bell && <span aria-label="new">🔔</span>}
+                  {group[0].just_cancelled && <span>✕</span>}
+                  {tabLabel(group[0])}
+                  {!group[0].just_cancelled && <span className="text-xs font-bold opacity-75">{getAgeMinutes(group[0].created_at)}m</span>}
                 </button>
-              )}
-              <button className={pagerBtn} disabled={current === 0} onClick={() => setScreen(current - 1)}>◀ Prev</button>
-              <div className="text-center leading-tight min-w-[84px]">
-                <div className="text-sm sm:text-base font-black text-foreground">Screen {current + 1} of {screens}</div>
-                {moreAfter > 0 && <div className="text-[11px] font-bold text-red-600">+{moreAfter} more →</div>}
-              </div>
-              <button className={pagerBtn} disabled={current >= screens - 1} onClick={() => setScreen(current + 1)}>Next ▶</button>
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Ready strip */}
+        {readyGroups.length > 0 && (
+          <div className="flex-shrink-0 flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-sm font-bold text-foreground">✅ Ready</span>
+            {readyGroups.map((group) => (
+              <ReadyChip key={group[0].id} group={group} onRecall={handleRecall} />
+            ))}
+          </div>
+        )}
 
         {/* The boxes */}
         <div ref={boardRef} className="flex-1 min-h-0">
@@ -469,7 +500,7 @@ export default function KitchenBoard() {
           ) : (
             <div className="flex h-full items-start" style={{ gap: BOX_GAP }}>
               {visible.map((group) => (
-                <OrderBox key={group[0].id} group={group} width={width} onBumpAll={handleBumpAll} onBumpItem={handleBumpItem} />
+                <OrderBox key={group[0].id} group={group} width={width} flash={flashKey === group[0].id} onBumpAll={handleBumpAll} onBumpItem={handleBumpItem} />
               ))}
             </div>
           )}

@@ -26,3 +26,17 @@ export function screenOf(index: number, perScreen: number): number {
 export function screenCount(boxes: number, perScreen: number): number {
   return Math.max(1, Math.ceil(boxes / perScreen));
 }
+
+// The tab for a box in the strip above the boxes: the table ("T7") for dine-in,
+// otherwise "Online" (website delivery) or "Collection" (website or till) plus
+// the last two digits of the order number, e.g. RC-20260928-023 → "Collection 23".
+export function tabLabel(o: { order_type: string; table_number?: string | null; order_number: string }): string {
+  if (o.order_type === "dine_in") {
+    const t = (o.table_number ?? "").trim();
+    if (!t) return "Dine-in";
+    return /^\d/.test(t) ? `T${t}` : t;
+  }
+  const digits = String(o.order_number).replace(/\D/g, "");
+  const last2 = digits.slice(-2).padStart(2, "0");
+  return `${o.order_type === "delivery" ? "Online" : "Collection"} ${last2}`;
+}

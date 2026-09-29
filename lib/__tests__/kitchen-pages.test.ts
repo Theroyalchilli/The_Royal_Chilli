@@ -1,5 +1,5 @@
 // Kitchen Display: how many boxes fit per screen on each device, and paging.
-import { boxesPerScreen, boxWidth, screenCount, screenOf } from "@/lib/kitchen-pages";
+import { boxesPerScreen, boxWidth, screenCount, screenOf, tabLabel } from "@/lib/kitchen-pages";
 
 describe("kitchen screens", () => {
   it("fits boxes to the device width", () => {
@@ -20,5 +20,16 @@ describe("kitchen screens", () => {
     expect(screenCount(0, 4)).toBe(1);
     expect(screenCount(9, 4)).toBe(3);
     expect([screenOf(0, 4), screenOf(3, 4), screenOf(4, 4), screenOf(8, 4)]).toEqual([0, 0, 1, 2]);
+  });
+});
+
+describe("kitchen tabs", () => {
+  it("names dine-in by table, others by type + last two digits", () => {
+    expect(tabLabel({ order_type: "dine_in", table_number: "T7", order_number: "RC-20260928-001" })).toBe("T7");
+    expect(tabLabel({ order_type: "dine_in", table_number: "12", order_number: "RC-20260928-001" })).toBe("T12");
+    expect(tabLabel({ order_type: "dine_in", table_number: null, order_number: "RC-20260928-001" })).toBe("Dine-in");
+    expect(tabLabel({ order_type: "takeaway", order_number: "RC-20260928-023" })).toBe("Collection 23");
+    expect(tabLabel({ order_type: "delivery", order_number: "RC-20260928-105" })).toBe("Online 05");
+    expect(tabLabel({ order_type: "takeaway", order_number: "RC-20260928-002" })).toBe("Collection 02");
   });
 });

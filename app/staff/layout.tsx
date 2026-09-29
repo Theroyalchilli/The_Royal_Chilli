@@ -61,6 +61,7 @@ export default async function StaffHubLayout({
         ? [
             { href: "/staff/settings", label: "Settings", icon: "⚙️" },
             { href: "/staff/business", label: "Business setup", icon: "🏢", note: "Name, address, VAT, receipts" },
+            ...(session.owner ? [{ href: "/staff/businesses", label: "Businesses", icon: "🗂️", note: "All businesses — owner only" }] : []),
             { href: "/staff/settings?tab=permissions", label: "Roles & Permissions", icon: "🔐" },
           ]
         : [],

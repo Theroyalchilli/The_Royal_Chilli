@@ -40,6 +40,8 @@ jest.mock("@/lib/supabase", () => ({
 }));
 
 const linked: unknown[][] = [];
+let worksHere = true;
+jest.mock("@/lib/business-db", () => ({ __esModule: true, bizDb: (id: number) => ({ businessId: id }), staffWorksAt: () => Promise.resolve(worksHere) }));
 jest.mock("@/lib/business", () => ({ __esModule: true, linkStaffToBusiness: (...a: unknown[]) => { linked.push(a); return Promise.resolve(); } }));
 
 import { PATCH } from "@/app/api/employees/[id]/route";
@@ -93,5 +95,13 @@ describe("PATCH /api/employees/[id] — privilege-escalation guard", () => {
   it("401s when there's no session at all", async () => {
     const res = await patch(null, "5", { phone: "07700900000" });
     expect(res.status).toBe(401);
+  });
+
+  it("404s for someone who doesn't work at this business, and changes nothing", async () => {
+    worksHere = false;
+    const res = await patch(admin, "5", { phone: "07700900000" });
+    worksHere = true;
+    expect(res.status).toBe(404);
+    expect(updatedRow).toBeNull();
   });
 });

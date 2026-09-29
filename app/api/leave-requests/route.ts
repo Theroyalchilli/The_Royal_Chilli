@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const isManager = canManageStaff(session.role);
-  let query = supabase
+  let query = db
     .from("leave_requests")
     .select("*, staff:staff!leave_requests_staff_id_fkey(name)")
     .order("start_date", { ascending: false });
@@ -30,13 +31,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const db = bizDb(session.businessId);
 
     const { leave_type, start_date, end_date, reason } = await req.json();
     if (!leave_type || !start_date || !end_date) {
       return NextResponse.json({ error: "leave_type, start_date and end_date are required" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("leave_requests")
       .insert({ staff_id: session.id, leave_type, start_date, end_date, reason: reason || null, status: "pending" })
       .select()

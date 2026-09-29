@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { linkStaffToBusiness } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -23,6 +24,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), id))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const { data, error } = await supabase.from("staff").select(PROFILE_FIELDS).eq("id", id).single();
   if (error || !data) {
     return NextResponse.json({ error: "Employee not found" }, { status: 404 });
@@ -40,6 +42,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;
+    if (!(await staffWorksAt(bizDb(session.businessId), id))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
     const body = await req.json();
 
     // Role, active status and password resets are privilege-affecting — a

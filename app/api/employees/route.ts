@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { staffIdsAt } from "@/lib/business";
 import { linkStaffToBusiness } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   const role = searchParams.get("role");
   const activeParam = searchParams.get("active") ?? "1";
 
-  let query = supabase.from("staff").select(PROFILE_FIELDS).order("name");
+  let query = supabase.from("staff").select(PROFILE_FIELDS).in("id", await staffIdsAt(session.businessId)).order("name");
 
   if (activeParam !== "all") {
     query = query.eq("active", Number(activeParam));

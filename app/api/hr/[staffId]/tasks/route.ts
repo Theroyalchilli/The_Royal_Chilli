@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
 import { ONBOARDING_TASKS } from "@/lib/hr";
 
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const staffIdNum = Number(staffId);
 
   const { data: existing } = await supabase.from("staff_onboarding_tasks").select("*").eq("staff_id", staffIdNum);
@@ -42,6 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ st
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const { task_key, status, notes } = await req.json();
   if (!task_key || !status) return NextResponse.json({ error: "task_key and status are required" }, { status: 400 });
 

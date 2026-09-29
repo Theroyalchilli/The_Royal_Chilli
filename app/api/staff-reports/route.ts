@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const { data: staff, error: staffErr } = await db.from("staff").select("id, name, role, pay_rate").eq("active", 1).in("id", await staffIdsAt(session.businessId)).order("name");
   if (staffErr) return NextResponse.json({ error: "Failed to fetch staff" }, { status: 500 });
 
-  const hoursByStaff = await computeHoursForPeriod(from, to);
+  const hoursByStaff = await computeHoursForPeriod(session.businessId, from, to);
 
   const { data: lateCounts } = await db
     .from("attendance")

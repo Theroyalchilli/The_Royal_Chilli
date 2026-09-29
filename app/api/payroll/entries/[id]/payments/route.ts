@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb, payrollEntryOwned } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -11,8 +11,10 @@ export async function GET(
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
-  const { data, error } = await supabase.from("payroll_payments").select("*").eq("payroll_entry_id", id).order("paid_at", { ascending: false });
+  if (!(await payrollEntryOwned(db, id))) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  const { data, error } = await db.from("payroll_payments").select("*").eq("payroll_entry_id", id).order("paid_at", { ascending: false });
   if (error) return NextResponse.json({ error: "Failed to fetch payments" }, { status: 500 });
   return NextResponse.json({ payments: data });
 }
@@ -26,10 +28,12 @@ export async function POST(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
+    if (!(await payrollEntryOwned(db, id))) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     const body = await req.json();
 
-    const { data: entry, error: fetchErr } = await supabase.from("payroll_entries").select("*").eq("id", id).single();
+    const { data: entry, error: fetchErr } = await db.from("payroll_entries").select("*").eq("id", id).single();
     if (fetchErr || !entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
     const remaining = Math.round((entry.gross_pay - entry.paid_amount) * 100) / 100;
@@ -41,7 +45,7 @@ export async function POST(
       return NextResponse.json({ error: `Amount exceeds the remaining balance of £${remaining.toFixed(2)}` }, { status: 400 });
     }
 
-    const { data: payment, error: payErr } = await supabase
+    const { data: payment, error: payErr } = await db
       .from("payroll_payments")
       .insert({ payroll_entry_id: Number(id), amount, method: body.method || null, recorded_by: session.id, notes: body.notes || null })
       .select()
@@ -50,7 +54,7 @@ export async function POST(
 
     const newPaidAmount = Math.round((entry.paid_amount + amount) * 100) / 100;
     const newStatus = newPaidAmount >= entry.gross_pay ? "paid" : "partially_paid";
-    const { data: updatedEntry, error: updateErr } = await supabase
+    const { data: updatedEntry, error: updateErr } = await db
       .from("payroll_entries")
       .update({ paid_amount: newPaidAmount, status: newStatus, updated_at: new Date().toISOString() })
       .eq("id", id)
@@ -58,7 +62,7 @@ export async function POST(
       .single();
     if (updateErr) throw updateErr;
 
-    await supabase.from("audit_logs").insert({
+    await db.from("audit_logs").insert({
       staff_id: session.id,
       action: "payment",
       entity_type: "payroll_entry",

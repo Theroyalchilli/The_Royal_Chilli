@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { computeHoursForPeriod } from "@/lib/payroll";
@@ -10,12 +10,13 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
 
   const { searchParams } = new URL(req.url);
   const staffId = searchParams.get("staff_id");
   if (!staffId) return NextResponse.json({ error: "staff_id is required" }, { status: 400 });
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("employee_payslips")
     .select("*")
     .eq("staff_id", Number(staffId))
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
 
   const { staff_id, period_start, period_end } = await req.json();
   if (!staff_id || !period_start || !period_end) {
@@ -43,10 +45,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "period_end must be on or after period_start" }, { status: 400 });
   }
 
-  const { data: staff, error: staffErr } = await supabase.from("staff").select("id, name, pay_rate").eq("id", staff_id).single();
+  const { data: staff, error: staffErr } = await db.from("staff").select("id, name, pay_rate").eq("id", staff_id).single();
   if (staffErr || !staff) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
-  const hoursByStaff = await computeHoursForPeriod(period_start, period_end);
+  const hoursByStaff = await computeHoursForPeriod(session.businessId, period_start, period_end);
   const hoursWorked = Math.round((hoursByStaff.get(staff.id) || 0) * 100) / 100;
   const payRate = Number(staff.pay_rate || 0);
   const totalAmount = Math.round(hoursWorked * payRate * 100) / 100;
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
   const monthStart = `${yearLabel}-${String(endDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
   const monthEndDate = new Date(Date.UTC(yearLabel, endDate.getUTCMonth() + 1, 0));
   const monthEnd = monthEndDate.toISOString().slice(0, 10);
-  const { count } = await supabase
+  const { count } = await db
     .from("employee_payslips")
     .select("id", { count: "exact", head: true })
     .eq("staff_id", staff.id)
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
     .lte("period_end", monthEnd);
   const name = `${monthLabel} ${yearLabel} - Payslip #${(count ?? 0) + 1}`;
 
-  const { data: saved, error } = await supabase
+  const { data: saved, error } = await db
     .from("employee_payslips")
     .insert({
       staff_id: staff.id, name, period_start, period_end,

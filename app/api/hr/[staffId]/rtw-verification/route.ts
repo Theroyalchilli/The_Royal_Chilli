@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
 
 // History, not a single editable record — see migration 019 for why.
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const { data, error } = await supabase
     .from("staff_rtw_verification")
     .select("*, checker:staff!staff_rtw_verification_checked_by_fkey(name)")
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sta
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const body = await req.json();
 
   if (!body.check_date || !body.check_method) {

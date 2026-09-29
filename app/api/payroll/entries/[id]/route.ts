@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb, payrollEntryOwned } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { computeGrossPay } from "@/lib/payroll";
@@ -13,10 +13,12 @@ export async function PATCH(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { id } = await params;
+    if (!(await payrollEntryOwned(db, id))) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     const { bonuses, tips, deductions, holiday_pay, notes } = await req.json();
 
-    const { data: existing, error: fetchErr } = await supabase.from("payroll_entries").select("*").eq("id", id).single();
+    const { data: existing, error: fetchErr } = await db.from("payroll_entries").select("*").eq("id", id).single();
     if (fetchErr || !existing) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     if (existing.status === "paid") {
       return NextResponse.json({ error: "Cannot edit a fully paid entry" }, { status: 400 });
@@ -32,7 +34,7 @@ export async function PATCH(
     const grossPay = computeGrossPay({ base_pay: existing.base_pay, ...updated });
     const status = existing.paid_amount >= grossPay && grossPay > 0 ? "paid" : existing.paid_amount > 0 ? "partially_paid" : "pending";
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("payroll_entries")
       .update({ ...updated, gross_pay: grossPay, status, updated_at: new Date().toISOString() })
       .eq("id", id)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
 import { maskHrDetails } from "@/lib/hr";
 
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
 
   const { data: staffRow, error: staffErr } = await supabase
     .from("staff")
@@ -47,6 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ staf
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const body = await req.json();
 
   const update: Record<string, unknown> = { staff_id: Number(staffId), updated_at: new Date().toISOString() };

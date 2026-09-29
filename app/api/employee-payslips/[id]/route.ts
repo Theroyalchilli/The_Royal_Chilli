@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -11,6 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
   const body = await req.json();
   const patch: Record<string, unknown> = {};
@@ -21,7 +22,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 
-  const { data, error } = await supabase.from("employee_payslips").update(patch).eq("id", id).select().single();
+  const { data, error } = await db.from("employee_payslips").update(patch).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: "Failed to update payslip" }, { status: 500 });
   return NextResponse.json({ payslip: data });
 }
@@ -31,8 +32,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const db = bizDb(session.businessId);
   const { id } = await params;
-  const { error } = await supabase.from("employee_payslips").delete().eq("id", id);
+  const { error } = await db.from("employee_payslips").delete().eq("id", id);
   if (error) return NextResponse.json({ error: "Failed to delete payslip" }, { status: 500 });
   return NextResponse.json({ success: true });
 }

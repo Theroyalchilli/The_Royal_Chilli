@@ -1,4 +1,4 @@
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 
 // Worked hours per staff member for a period, taken directly from live
 // attendance punches (closed shifts only — clock_out set) in the shared
@@ -6,11 +6,13 @@ import supabase from "@/lib/supabase";
 // someone clocks out, and a later correction (attendance_corrections) that
 // edits the underlying attendance row is reflected immediately too, since
 // everything downstream always reads current state rather than a snapshot.
+// Hours worked at one business — each business is a separate employer.
 export async function computeHoursForPeriod(
+  businessId: number,
   periodStart: string,
   periodEnd: string,
 ): Promise<Map<number, number>> {
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await bizDb(businessId)
     .from("attendance")
     .select("staff_id, net_work_seconds")
     .not("clock_out", "is", null)

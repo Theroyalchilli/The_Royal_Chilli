@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
 
 const BUCKET = "employee-documents";
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId, id } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
 
   const { data: doc } = await supabase
     .from("employee_documents")

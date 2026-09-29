@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { staffIdsAt } from "@/lib/business";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { computeHoursForPeriod, computeGrossPay } from "@/lib/payroll";
@@ -15,17 +16,19 @@ export async function POST(
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
 
     const { id } = await params;
-    const { data: period, error: periodErr } = await supabase.from("payroll_periods").select("*").eq("id", id).single();
+    const { data: period, error: periodErr } = await db.from("payroll_periods").select("*").eq("id", id).single();
     if (periodErr || !period) return NextResponse.json({ error: "Period not found" }, { status: 404 });
 
-    const hoursByStaff = await computeHoursForPeriod(period.period_start, period.period_end);
+    const hoursByStaff = await computeHoursForPeriod(session.businessId, period.period_start, period.period_end);
 
-    const { data: staff, error: staffErr } = await supabase
+    const { data: staff, error: staffErr } = await db
       .from("staff")
       .select("id, pay_rate, employment_type")
-      .eq("active", 1);
+      .eq("active", 1)
+      .in("id", await staffIdsAt(session.businessId));
     if (staffErr) throw staffErr;
 
     const results = [];
@@ -33,7 +36,7 @@ export async function POST(
       const hoursWorked = Math.round((hoursByStaff.get(s.id) || 0) * 100) / 100;
       if (s.employment_type === "hourly" && hoursWorked === 0) continue; // nothing to pay this period
 
-      const { data: existing } = await supabase
+      const { data: existing } = await db
         .from("payroll_entries")
         .select("id, bonuses, tips, deductions, holiday_pay, paid_amount, status")
         .eq("payroll_period_id", id)
@@ -69,7 +72,7 @@ export async function POST(
         updated_at: new Date().toISOString(),
       };
 
-      const { data: saved, error: upsertErr } = await supabase
+      const { data: saved, error: upsertErr } = await db
         .from("payroll_entries")
         .upsert(row, { onConflict: "payroll_period_id,staff_id" })
         .select()
@@ -79,7 +82,7 @@ export async function POST(
     }
 
     if (period.status === "open") {
-      await supabase.from("payroll_periods").update({ status: "processing" }).eq("id", id);
+      await db.from("payroll_periods").update({ status: "processing" }).eq("id", id);
     }
 
     return NextResponse.json({ success: true, entries: results });

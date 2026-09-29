@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { data, error } = await supabase.from("payroll_periods").select("*").order("period_start", { ascending: false });
+  const db = bizDb(session.businessId);
+  const { data, error } = await db.from("payroll_periods").select("*").order("period_start", { ascending: false });
   if (error) return NextResponse.json({ error: "Failed to fetch periods" }, { status: 500 });
   return NextResponse.json({ periods: data });
 }
@@ -19,11 +20,12 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageStaff(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const db = bizDb(session.businessId);
     const { period_start, period_end } = await req.json();
     if (!period_start || !period_end) {
       return NextResponse.json({ error: "period_start and period_end are required" }, { status: 400 });
     }
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("payroll_periods")
       .insert({ period_start, period_end })
       .select()

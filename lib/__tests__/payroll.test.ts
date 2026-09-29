@@ -1,15 +1,19 @@
 let attendanceRows: Record<string, unknown>[];
+let businessFilter: unknown;
 
 jest.mock("../supabase", () => ({
   __esModule: true,
   default: {
     from: () => ({
       select: () => ({
+        // bizDb adds the business filter first
+        eq: (_c: string, v: unknown) => { businessFilter = v; return {
         not: () => ({
           gte: () => ({
             lte: () => Promise.resolve({ data: attendanceRows, error: null }),
           }),
         }),
+        }; },
       }),
     }),
   },
@@ -38,7 +42,7 @@ describe("computeHoursForPeriod", () => {
 
   it("converts net_work_seconds to hours per staff member", async () => {
     attendanceRows = [{ staff_id: 1, net_work_seconds: 3600 * 8 }];
-    const hours = await computeHoursForPeriod("2026-01-01", "2026-01-07");
+    const hours = await computeHoursForPeriod(1, "2026-01-01", "2026-01-07");
     expect(hours.get(1)).toBe(8);
   });
 
@@ -48,13 +52,18 @@ describe("computeHoursForPeriod", () => {
       { staff_id: 1, net_work_seconds: 3600 * 6 },
       { staff_id: 2, net_work_seconds: 3600 * 5 },
     ];
-    const hours = await computeHoursForPeriod("2026-01-01", "2026-01-07");
+    const hours = await computeHoursForPeriod(1, "2026-01-01", "2026-01-07");
     expect(hours.get(1)).toBe(14);
     expect(hours.get(2)).toBe(5);
   });
 
   it("returns an empty map when nobody worked in the period", async () => {
-    const hours = await computeHoursForPeriod("2026-01-01", "2026-01-07");
+    const hours = await computeHoursForPeriod(1, "2026-01-01", "2026-01-07");
     expect(hours.size).toBe(0);
+  });
+
+  it("only counts shifts worked at the business being paid", async () => {
+    await computeHoursForPeriod(2, "2026-01-01", "2026-01-07");
+    expect(businessFilter).toBe(2);
   });
 });

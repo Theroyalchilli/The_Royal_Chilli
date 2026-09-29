@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ staffId: string }> }) {
@@ -9,6 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const { data, error } = await supabase
     .from("staff_references")
     .select("*")
@@ -24,6 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sta
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const body = await req.json();
 
   const { data, error } = await supabase
@@ -50,12 +53,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
   if (!session || !canManageStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  await params;
+  const { staffId } = await params;
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-  const { error } = await supabase.from("staff_references").delete().eq("id", id);
+  // Only this staff member's reference.
+  const { error } = await supabase.from("staff_references").delete().eq("id", id).eq("staff_id", staffId);
   if (error) return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
   return NextResponse.json({ success: true });
 }

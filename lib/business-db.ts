@@ -73,3 +73,25 @@ export async function allOwned(db: BizDb, table: string, ids: (number | string)[
   if (error) throw error;
   return (data ?? []).length === unique.length;
 }
+
+/** A payroll entry is this business's when its pay period is (entries have no business of their own). */
+export async function payrollEntryOwned(db: BizDb, entryId: number | string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("payroll_entries")
+    .select("id, payroll_periods!inner(business_id)")
+    .eq("id", entryId)
+    .eq("payroll_periods.business_id", db.businessId)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+/** Does this (shared) staff member work at the business? */
+export async function staffWorksAt(db: BizDb, staffId: number | string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("staff_businesses").select("staff_id")
+    .eq("staff_id", Number(staffId)).eq("business_id", db.businessId).eq("active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}

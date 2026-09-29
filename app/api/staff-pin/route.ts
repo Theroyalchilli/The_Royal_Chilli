@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { staffIdsAt } from "@/lib/business";
+import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
 import { findStaffByPin, hashPin, PIN_PATTERN } from "@/lib/staff-pin";
 
@@ -9,7 +11,7 @@ import { findStaffByPin, hashPin, PIN_PATTERN } from "@/lib/staff-pin";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { count } = await supabase.from("staff").select("id", { count: "exact", head: true }).eq("active", 1).not("pin_hash", "is", null);
+  const { count } = await supabase.from("staff").select("id", { count: "exact", head: true }).eq("active", 1).not("pin_hash", "is", null).in("id", await staffIdsAt(session.businessId));
   return NextResponse.json({ pins_set: count ?? 0 });
 }
 
@@ -24,6 +26,7 @@ export async function POST(req: NextRequest) {
   const { staff_id, pin } = await req.json().catch(() => ({}));
   const staffId = Number(staff_id);
   if (!Number.isInteger(staffId) || staffId <= 0) return NextResponse.json({ error: "staff_id is required" }, { status: 400 });
+  if (!(await staffWorksAt(bizDb(session.businessId), staffId))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
 
   if (pin === null) {
     await supabase.from("staff").update({ pin_hash: null }).eq("id", staffId);

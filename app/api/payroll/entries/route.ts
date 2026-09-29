@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const { searchParams } = new URL(req.url);
   const periodId = searchParams.get("period_id");
   if (!periodId) return NextResponse.json({ error: "period_id is required" }, { status: 400 });
+  if (!(await allOwned(db, "payroll_periods", [periodId]))) return NextResponse.json({ error: "Pay period not found" }, { status: 404 });
 
   const isManager = canManageStaff(session.role);
-  let query = supabase
+  let query = db
     .from("payroll_entries")
     .select("*, staff:staff!payroll_entries_staff_id_fkey(name)")
     .eq("payroll_period_id", periodId);

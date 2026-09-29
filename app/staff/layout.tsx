@@ -60,6 +60,7 @@ export default async function StaffHubLayout({
       items: see("settings")
         ? [
             { href: "/staff/settings", label: "Settings", icon: "⚙️" },
+            { href: "/staff/business", label: "Business setup", icon: "🏢", note: "Name, address, VAT, receipts" },
             { href: "/staff/settings?tab=permissions", label: "Roles & Permissions", icon: "🔐" },
           ]
         : [],

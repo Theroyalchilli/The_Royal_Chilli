@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
 import type { ZReport } from "@/lib/z-report";
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await bizDb(session.businessId)
     .from("work_periods")
     .select("id, opened_at, closed_at, close_note, z_report")
     .eq("status", "closed")

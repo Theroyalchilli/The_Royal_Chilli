@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { depleteStockForOrder } from "@/lib/inventory";
 
@@ -21,7 +22,8 @@ export async function POST(
     const { id } = await params;
     const { note, extraOrderIds } = await req.json().catch(() => ({}));
 
-    const { data: order, error: fetchError } = await supabase
+    const db = bizDb(session.businessId);
+    const { data: order, error: fetchError } = await db
       .from("orders")
       .select("id, status, is_paid, table_id")
       .eq("id", id)
@@ -34,8 +36,11 @@ export async function POST(
       return NextResponse.json({ error: "Order already paid" }, { status: 400 });
     }
 
-    const ids = [Number(id), ...(Array.isArray(extraOrderIds) ? extraOrderIds.map(Number) : [])];
-    const { error: updateError } = await supabase
+    // Only this business's orders (merged-table extras included).
+    const asked = [Number(id), ...(Array.isArray(extraOrderIds) ? extraOrderIds.map(Number) : [])];
+    const { data: owned } = await db.from("orders").select("id").in("id", asked);
+    const ids = (owned ?? []).map((o) => o.id as number);
+    const { error: updateError } = await db
       .from("orders")
       .update({ pay_later: true, pay_later_note: note || null, updated_at: new Date().toISOString() })
       .in("id", ids);

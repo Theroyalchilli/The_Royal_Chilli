@@ -3,6 +3,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
 import { getZReport } from "@/lib/z-report-db";
 import { queueZReport } from "@/lib/print-queue";
+import { allOwned, bizDb } from "@/lib/business-db";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   }
   const id = periodId((await params).id);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  if (!(await allOwned(bizDb(session.businessId), "work_periods", [id]))) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const report = await getZReport(id);
   if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -33,6 +35,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const id = periodId((await params).id);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  if (!(await allOwned(bizDb(session.businessId), "work_periods", [id]))) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   try {
     await queueZReport(id);

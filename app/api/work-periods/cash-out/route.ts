@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 
 // Records cash physically removed from the till mid-shift (paying a
@@ -8,6 +8,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const { amount, reason } = await req.json().catch(() => ({}));
   if (!amount || Number(amount) <= 0) {
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A reason is required" }, { status: 400 });
   }
 
-  const { data: period, error: periodError } = await supabase
+  const { data: period, error: periodError } = await db
     .from("work_periods")
     .select("id")
     .eq("status", "open")
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (periodError) return NextResponse.json({ error: periodError.message }, { status: 500 });
   if (!period) return NextResponse.json({ error: "No till is currently open" }, { status: 400 });
 
-  const { error } = await supabase.from("cash_paid_outs").insert({
+  const { error } = await db.from("cash_paid_outs").insert({
     work_period_id: period.id,
     amount: Number(amount),
     reason: String(reason).trim(),

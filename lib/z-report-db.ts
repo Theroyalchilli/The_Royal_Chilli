@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { computeZReport, type ZOrder, type ZReport } from "@/lib/z-report";
 
 // Loads a shift's Z report (lib/z-report.ts) from the database. A closed
@@ -14,9 +15,13 @@ export async function calculateZReport(periodId: number): Promise<ZReport | null
   if (!period) return null;
 
   const until = period.closed_at ?? new Date().toISOString();
+  // Payments are picked up by time (everything taken while the till was
+  // open), so they must be limited to this shift's business — other
+  // businesses take payments at the same time.
+  const db = bizDb(period.business_id);
   const [{ data: payments }, { data: ownOrders }, { data: paidOuts }, { data: staff }] = await Promise.all([
-    supabase.from("payments").select("order_id, method, amount, tip_amount").gte("created_at", period.opened_at).lte("created_at", until),
-    supabase.from("orders").select(ORDER_COLUMNS).eq("work_period_id", periodId),
+    db.from("payments").select("order_id, method, amount, tip_amount").gte("created_at", period.opened_at).lte("created_at", until),
+    db.from("orders").select(ORDER_COLUMNS).eq("work_period_id", periodId),
     supabase.from("cash_paid_outs").select("reason, amount").eq("work_period_id", periodId).order("created_at"),
     supabase.from("staff").select("id, name").in("id", [period.opened_by, period.closed_by].filter((x) => x != null)),
   ]);
@@ -25,7 +30,7 @@ export async function calculateZReport(periodId: number): Promise<ZReport | null
   const known = new Set(orders.map((o) => o.id));
   const missing = [...new Set((payments ?? []).map((p) => p.order_id))].filter((id) => id != null && !known.has(id));
   if (missing.length > 0) {
-    const { data: others } = await supabase.from("orders").select(ORDER_COLUMNS).in("id", missing);
+    const { data: others } = await db.from("orders").select(ORDER_COLUMNS).in("id", missing);
     orders.push(...(others ?? []));
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { awardPurchasePoints } from "@/lib/customers";
 import { depleteStockForOrder } from "@/lib/inventory";
@@ -26,7 +27,8 @@ export async function POST(
       );
     }
 
-    const { data: order, error: fetchError } = await supabase
+    const db = bizDb(session.businessId);
+    const { data: order, error: fetchError } = await db
       .from("orders")
       .select("id, total, amount_paid, table_id, status, is_paid, customer_id")
       .eq("id", id)
@@ -79,7 +81,7 @@ export async function POST(
     // payment row for each (previously they were marked paid with no payment history at all,
     // which would silently undercount cash/card totals in reporting).
     if (Array.isArray(extraOrderIds) && extraOrderIds.length > 0) {
-      const { data: extraOrders } = await supabase.from("orders").select("id, total, amount_paid, customer_id").in("id", extraOrderIds);
+      const { data: extraOrders } = await db.from("orders").select("id, total, amount_paid, customer_id").in("id", extraOrderIds);
       for (const extra of extraOrders || []) {
         const extraRemaining = Math.round((Number(extra.total) - Number(extra.amount_paid)) * 100) / 100;
         if (extraRemaining <= 0.01) continue;

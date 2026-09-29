@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { staffBusinessIds } from "@/lib/business";
 import { getSessionFromRequest } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
 import { findStaffByPin, isManagerRole } from "@/lib/staff-pin";
@@ -33,7 +35,9 @@ export async function POST(
     // the refund is recorded against that manager.
     let approverId = session.id;
     if (!isManagerRole(session.role)) {
-      const manager = manager_pin ? await findStaffByPin(String(manager_pin)) : null;
+      const found = manager_pin ? await findStaffByPin(String(manager_pin)) : null;
+      // …a manager at this business.
+      const manager = found && (await staffBusinessIds(found.id)).includes(session.businessId) ? found : null;
       if (!manager || !isManagerRole(manager.role)) {
         return NextResponse.json(
           { error: "MANAGER_PIN_REQUIRED", message: manager_pin ? "That isn't a manager's PIN" : "A manager needs to approve refunds — enter a manager PIN" },
@@ -53,7 +57,7 @@ export async function POST(
       return NextResponse.json({ error: "A reason is required" }, { status: 400 });
     }
 
-    const { data: order, error: fetchError } = await supabase
+    const { data: order, error: fetchError } = await bizDb(session.businessId)
       .from("orders")
       .select("id, total, amount_paid, customer_id, status, table_id")
       .eq("id", id)

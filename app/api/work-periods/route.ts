@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { calculateZReport, snapshotZReport } from "@/lib/z-report-db";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
@@ -9,8 +9,9 @@ import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
-  const { data: period, error: periodError } = await supabase
+  const { data: period, error: periodError } = await db
     .from("work_periods")
     .select("*")
     .eq("status", "open")
@@ -36,11 +37,12 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const body = await req.json();
   const { closing_cash, opening_cash, staff_id, close_note } = body;
 
-  let { data: period, error: findError } = await supabase
+  let { data: period, error: findError } = await db
     .from("work_periods")
     .select("id")
     .eq("status", "open")
@@ -54,7 +56,7 @@ export async function PUT(req: NextRequest) {
     // This trading day, 5am–5am UK (lib/london-date.ts) — not UTC midnight.
     const trading = tradingRangeUtc(tradingDayStr());
 
-    const { data: created, error: createError } = await supabase
+    const { data: created, error: createError } = await db
       .from("work_periods")
       .insert({
         opened_by: staff_id ?? session.id,
@@ -70,7 +72,7 @@ export async function PUT(req: NextRequest) {
 
     // Backfill today's orders that predate this period so cash reconciliation
     // reports pick them up.
-    await supabase
+    await db
       .from("orders")
       .update({ work_period_id: period.id })
       .is("work_period_id", null)
@@ -85,7 +87,7 @@ export async function PUT(req: NextRequest) {
   // "Paid" is by money received (is_paid, migration 063) — an online-paid
   // order can still be "ready" in the kitchen — and a refunded order owes
   // nothing either (same rule as lib/z-report.ts).
-  const { data: unpaid, error: unresolvedError } = await supabase
+  const { data: unpaid, error: unresolvedError } = await db
     .from("orders")
     .select("id, order_number")
     .eq("work_period_id", period.id)
@@ -95,7 +97,7 @@ export async function PUT(req: NextRequest) {
   if (unresolvedError) return NextResponse.json({ error: unresolvedError.message }, { status: 500 });
   let unresolved = unpaid || [];
   if (unresolved.length > 0) {
-    const { data: refundRows } = await supabase
+    const { data: refundRows } = await db
       .from("payments")
       .select("order_id")
       .in("order_id", unresolved.map((o) => o.id))
@@ -112,7 +114,7 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const { data: updated, error: updateError } = await supabase
+  const { data: updated, error: updateError } = await db
     .from("work_periods")
     .update({
       status: "closed",
@@ -144,11 +146,12 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = bizDb(session.businessId);
 
   const body = await req.json();
   const { opening_cash, staff_id } = body;
 
-  const { data: newPeriod, error } = await supabase
+  const { data: newPeriod, error } = await db
     .from("work_periods")
     .insert({
       opened_by: staff_id ?? session.id,

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { stripe, siteUrl } from "@/lib/stripe";
+import { bizDb } from "@/lib/business-db";
+import { getBusiness, websiteBusinessId } from "@/lib/business";
 
 // Creates a Stripe Checkout Session for an already-created order (from
 // POST /api/public/orders) so the customer can pay online instead of at
@@ -17,7 +19,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const { id } = await params;
-    const { data: order } = await supabase.from("orders").select("*").eq("id", id).single();
+    const businessId = await websiteBusinessId(req.headers.get("host"));
+    const { data: order } = await bizDb(businessId).from("orders").select("*").eq("id", id).maybeSingle();
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
@@ -35,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           price_data: {
             currency: "gbp",
             unit_amount: remainingPence,
-            product_data: { name: `The Royal Chilli — Order ${order.order_number}` },
+            product_data: { name: `${(await getBusiness(businessId))?.name ?? "The Royal Chilli"} — Order ${order.order_number}` },
           },
         },
       ],

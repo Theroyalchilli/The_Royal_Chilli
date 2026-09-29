@@ -27,7 +27,7 @@ with `business_id`. Decided 2026-09-29.
 |---|---|---|
 | 1 | Foundation: `businesses`, `staff_businesses`, `business_id` on 36 tables, triggers (migrations 076, 077) | **Done** |
 | 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** (both apps live) |
-| 2b | **Next:** fully separate staff, suppliers, customers + rewards (migration 079) and the owner's group admin (switcher, combined dashboard) | Not started |
+| 2b | Fully separate staff, suppliers, customers + rewards (079); owner login, "Working in" switcher, All-businesses overview | **Done** |
 | 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
 | 4 | Businesses admin screen (add a business, module switches, payments, printers) | Not started |
 | 5 | ~~Shared staff / customers / suppliers~~ — replaced by 2b (everything separate) | Dropped |
@@ -45,7 +45,7 @@ Run in order in the Supabase SQL editor
 | 076 foundation | run 29 Sep 2026 |
 | 077 rows never change business | run 29 Sep 2026 |
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
-| 079 fully separate staff / suppliers / customers, owner login | written + tested — **to run** (safe with the live code) |
+| 079 fully separate staff / suppliers / customers, owner login | run 29 Sep 2026 — Phase 2b code pushed after it; owner login `owner` (staff #26) created |
 | 080 drop the old group-wide unique rules | before a second business opens |
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)

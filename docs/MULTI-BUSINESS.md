@@ -74,7 +74,52 @@ Run in order in the Supabase SQL editor
 15. Clock in / out on your phone.
 16. Manager: rota, attendance, timesheets, approvals load.
 
-## Phase 3 — per-business settings + branding
+## Phase 3 — Business setup page (decided 29 Sep 2026, replaces hand-made per-business changes)
+
+Each business's details are entered once on a **Business setup** page and the
+whole system reads them (till header, receipts, website, emails, accountant
+export) — no code changes per business.
+
+**Fields (groups 1 + 2):**
+- Identity: trading name, legal name, company number, logo, brand colour,
+  website / domain, phone, email.
+- Addresses: registered office, trading address (printed on receipts).
+- Tax & VAT: VAT registered, VAT number (printed on receipts), VAT rate,
+  VAT scheme, UTR, PAYE reference, financial year end.
+- Accountant & bank: accounts email, bank name, account name, account number,
+  sort code, IBAN, SWIFT/BIC (for the accountant export — no invoices).
+- Receipts & numbering: receipt header / footer text, order-number prefix
+  (RC-, MH-), purchase-order prefix.
+- Operations (move from today's shared Settings into each business): opening
+  hours, busy mode, booking deposit, delivery radius + restaurant location,
+  clock-in location (geofence), card reader.
+- Modules: till, kitchen display, tables, QR, online ordering, delivery,
+  bookings, inventory, rewards, food safety, delivery platforms.
+- Payments: each company's own Stripe + SumUp account — keys pasted once,
+  stored **encrypted**, shown only as "connected ✓".
+- Website legal pages: privacy policy, terms, refund policy.
+- Left out: directors / shareholders / PSC / company status / SIC (Companies
+  House), chart of accounts (accounting software), shipping address, quote /
+  credit-note / invoice numbering, language / currency / time zone (all UK).
+
+**Who edits:** owner only — legal, tax, bank, payments, modules. Owner or the
+business's own admin — contact details, logo, receipt text, hours, busy mode.
+
+**Build order:**
+1. Migration 080: setup fields on `businesses`, per-business settings table,
+   encrypted payment keys (needs a new `SETTINGS_ENCRYPTION_KEY` in Vercel);
+   Royal Chilli pre-filled with today's values.
+2. Business setup page (Staff Hub → Settings) with the owner / admin split.
+3. Owner's Businesses screen: list, add a business (copies Royal Chilli's
+   rewards scheme, default modules), open its setup.
+4. Wire the system to read setup: till / Staff Hub / receipts / Z reports
+   branding (already written locally, not pushed — reads the setup), VAT
+   number on receipts, order prefixes, per-business settings, payments per
+   company, accountant export header, website legal pages.
+5. Migration 081 (before a second business opens): drop the old group-wide
+   unique rules kept by 078 / 079.
+
+## Phase 3 — details already noted (folded into the setup page above)
 
 - `app_settings` is global today → per-business settings (keep Royal Chilli's
   current values as business 1): VAT rate stays group-wide.

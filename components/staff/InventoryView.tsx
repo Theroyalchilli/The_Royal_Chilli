@@ -234,6 +234,9 @@ function NewPoModal({ suppliers, ingredients, onClose, onSaved }: { suppliers: S
     if (!supplierId) return toast({ variant: "destructive", title: "Pick a supplier" });
     const validItems = items.filter((i) => i.ingredient_id > 0 && i.quantity > 0);
     if (validItems.length === 0) return toast({ variant: "destructive", title: "Add at least one item" });
+    if (new Set(validItems.map((i) => i.ingredient_id)).size !== validItems.length) {
+      return toast({ variant: "destructive", title: "Same ingredient on two lines", description: "Put it on one line with the total quantity." });
+    }
     const res = await fetch("/api/purchase-orders", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ supplier_id: Number(supplierId), items: validItems, status: "ordered" }),
@@ -277,6 +280,7 @@ function NewPoModal({ suppliers, ingredients, onClose, onSaved }: { suppliers: S
 }
 
 function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
   const [items, setItems] = useState<{ id: number; ingredient_name: string; unit: string; quantity: number; received_quantity: number; expiry_date: string }[]>([]);
   const [orderNumber, setOrderNumber] = useState("");
 
@@ -288,10 +292,13 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
   }, [poId]);
 
   async function confirm() {
-    await fetch(`/api/purchase-orders/${poId}/receive`, {
+    const res = await fetch(`/api/purchase-orders/${poId}/receive`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items: items.map((i) => ({ item_id: i.id, received_quantity: i.received_quantity, expiry_date: i.expiry_date || undefined })) }),
     });
+    const data = await res.json();
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't receive order", description: data.error });
+    toast({ variant: "success", title: "Delivery received", description: `Cost counted in Finance: £${Number(data.purchaseOrder?.total_cost ?? 0).toFixed(2)}` });
     onSaved(); onClose();
   }
 
@@ -299,6 +306,7 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
         <h2 className="text-foreground font-bold text-lg">Receive {orderNumber}</h2>
+        <p className="mt-1 text-muted-foreground text-xs">Enter what actually arrived — the order&apos;s cost in Finance is worked out from these quantities.</p>
         <div className="mt-4 space-y-2">
           {items.map((item, i) => (
             <div key={item.id} className="grid grid-cols-[1fr_90px_120px] gap-2 items-center">
@@ -361,6 +369,7 @@ function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
   const [name, setName] = useState("");
   const [menuItemId, setMenuItemId] = useState(0);
   const [lines, setLines] = useState<{ ingredient_id: number; quantity: number }[]>([{ ingredient_id: 0, quantity: 0 }]);
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     const res = await fetch("/api/recipes");
@@ -373,11 +382,14 @@ function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
   }, []);
 
   async function save() {
-    if (!name.trim()) return;
-    await fetch("/api/recipes", {
+    if (!name.trim()) return toast({ variant: "destructive", title: "Recipe name is required" });
+    const res = await fetch("/api/recipes", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, menu_item_id: menuItemId || null, ingredients: lines.filter((l) => l.ingredient_id > 0) }),
+      body: JSON.stringify({ name, menu_item_id: menuItemId || null, ingredients: lines.filter((l) => l.ingredient_id > 0 && l.quantity > 0) }),
     });
+    const data = await res.json();
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't save recipe", description: data.error });
+    toast({ variant: "success", title: "Recipe saved" });
     setModal(false); setName(""); setMenuItemId(0); setLines([{ ingredient_id: 0, quantity: 0 }]);
     load();
   }
@@ -418,9 +430,9 @@ function RecipesTab({ ingredients }: { ingredients: Ingredient[] }) {
             <input placeholder="Recipe name" value={name} onChange={(e) => setName(e.target.value)} className="mt-3 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <select value={menuItemId} onChange={(e) => setMenuItemId(Number(e.target.value))} className="mt-2 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
               <option value={0}>Link to menu item (optional)…</option>
-              {menuItems.map((mi) => <option key={mi.id} value={mi.id}>{mi.name}</option>)}
+              {uncostedMenuItems.map((mi) => <option key={mi.id} value={mi.id}>{mi.name}</option>)}
             </select>
-            <p className="mt-1 text-muted-foreground text-[11px]">Linking a menu item feeds this recipe's cost into the real P&amp;L and deducts stock automatically when it's sold.</p>
+            <p className="mt-1 text-muted-foreground text-[11px]">Only dishes without a recipe are listed — one recipe per dish. Linking a menu item feeds this recipe's cost into the real P&amp;L and deducts stock automatically when it's sold.</p>
             <div className="mt-3 space-y-2">
               {lines.map((l, i) => (
                 <div key={i} className="grid grid-cols-[1fr_80px] gap-2">
@@ -689,7 +701,7 @@ function ReconciliationTab() {
             <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3"><p className="text-muted-foreground text-xs">GP % (actual)</p><p className="text-foreground font-bold text-lg">{report.gp_actual != null ? `${report.gp_actual}%` : "—"}</p></div>
             <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3"><p className="text-muted-foreground text-xs">GP gap</p><p className={`font-bold text-lg ${(report.gp_gap ?? 0) > 2 ? "text-red-600" : "text-foreground"}`}>{report.gp_gap != null ? `${report.gp_gap} pts` : "—"}</p></div>
           </div>
-          <p className="mt-2 text-muted-foreground text-[11px]">Stock-vs-sales — only trustworthy once a stock take has been posted for this period, so the ledger already matches the shelf.</p>
+          <p className="mt-2 text-muted-foreground text-[11px]">Stock-vs-sales — only trustworthy once a stock take has been posted for this period, so the ledger already matches the shelf. Net sales are own orders ex-VAT after refunds; COGS (theoretical) matches Finance&apos;s recipe-based COGS. Delivery-platform orders aren&apos;t itemised, so their ingredients show as extra actual usage.</p>
 
           <div className="mt-4 rounded-xl border border-border overflow-x-auto">
             <table className="w-full text-sm">

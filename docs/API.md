@@ -655,21 +655,21 @@ Validates the customer has enough points (`400` otherwise, message states the sh
 
 ## 11. Finance (`/api/finance/*`, `/api/expenses`, `/api/supplier-payments`)
 
-### `GET /api/finance/cash-reconciliation`
-**Auth:** `canManageFinance(session.role)`
-**Response:** `{ periods }` — last 20 closed work periods, each with `cash_sales` (sum of cash payments in that period), `expected_cash` (`opening_cash + cash_sales`), `actual_cash` (recorded `closing_cash`), and `variance`
-
 ### `GET /api/finance/pnl`
 **Auth:** `canManageFinance(session.role)`
 **Query:** `from`, `to` (both required)
-**Response:** `{ from, to, revenue, ingredient_purchases, labour_cost, other_expenses, net_profit }`
-All four inputs (`getRevenue`, `getIngredientPurchases`, `getLabourCost`, `getOtherExpenses` in `lib/finance.ts`) are fetched in parallel; `net_profit = revenue - ingredient_purchases - labour_cost - other_expenses`.
+**Response:** the `Pnl` object from `getPnl()` in `lib/finance.ts` — `{ from, to, vat_rate, sales, costs, profit, vat, recipe }`.
+One calculation shared with Finance → VAT and the admin dashboard summary, so the same range shows the same numbers everywhere:
+own sales = paid orders (by order date, VAT incl., after discounts) − refunds (by refund date); + delivery platform daily totals; profit is ex-VAT
+(`sales.ex_vat − costs.total`, costs = ingredients received on POs + labour from attendance + expenses ex reclaimable VAT + platform commission + estimated card fees).
+`recipe` swaps PO purchases for the recipe cost of what was sold (same maths as stock depletion — `lib/recipes.ts`).
+(The old `/api/finance/cash-reconciliation` was removed — the Z report's cash difference is the one cash check.)
 
 ### `GET /api/finance/vat`
 **Auth:** `canManageFinance(session.role)`
 **Query:** `from`, `to` (both required)
-**Response:** `{ from, to, vat_rate, revenue, output_vat, vat_applicable_expenses, input_vat, net_vat_due }`
-Explicitly documented in-code as an **estimate for the accountant to verify, not HMRC-ready**: assumes sales are standard-rated and raw ingredient purchases are zero-rated (so excluded from input VAT), and only expenses explicitly flagged `vat_applicable` count toward input VAT.
+**Response:** `{ from, to, vat_rate, sales, vat: { output, vat_applicable_expenses, input, net_due } }` — the same figures as the P&L.
+An **estimate for the accountant to verify, not HMRC-ready**: own-sales VAT is what each bill charged (less refunds), platform VAT is worked out from their gross sales, ingredient purchases are assumed zero-rated, and only expenses flagged `vat_applicable` count toward input VAT.
 
 ### `GET /api/expenses`
 **Auth:** `canManageFinance(session.role)`
@@ -678,8 +678,8 @@ Explicitly documented in-code as an **estimate for the accountant to verify, not
 
 ### `POST /api/expenses`
 **Auth:** `canManageFinance(session.role)`
-**Body:** `{ category, description, amount, vat_applicable?, expense_date?, receipt_reference? }` — category/description/amount required
-**Response:** `201 { success: true, expense }`
+**Body:** `{ category, description, amount, vat_applicable?, expense_date?, receipt_reference?, allow_duplicate? }` — category/description/amount (> 0) required
+**Response:** `201 { success: true, expense }`; `409 { error, duplicate: true }` if the same expense (date, category, amount, description) is already recorded — resend with `allow_duplicate: true` to record it anyway.
 `vat_applicable` defaults to `1` (true) if omitted; `expense_date` defaults to today.
 
 ### `GET /api/supplier-payments`
@@ -688,8 +688,9 @@ Explicitly documented in-code as an **estimate for the accountant to verify, not
 
 ### `POST /api/supplier-payments`
 **Auth:** `canManageFinance(session.role)`
-**Body:** `{ supplier_id, amount, purchase_order_id?, method?, notes? }` — supplier_id + amount required
-**Response:** `201 { success: true, payment }`
+**Body:** `{ supplier_id, amount, purchase_order_id?, method?, notes?, allow_duplicate? }` — supplier_id + amount (> 0) required
+**Response:** `201 { success: true, payment }`; `409 { error, duplicate: true }` if the same amount was already recorded to that supplier today.
+Not a P&L cost — ingredient cost is counted once, from the received purchase order.
 
 ---
 

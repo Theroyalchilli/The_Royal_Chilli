@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
@@ -26,11 +27,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { name, contact_name, phone, email, address, notes } = await req.json();
-    if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    if (!name || !String(name).trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    const existing = await findActiveByName("suppliers", String(name));
+    if (existing) return NextResponse.json({ error: `"${existing.name}" is already in the supplier list` }, { status: 409 });
 
     const { data, error } = await supabase
       .from("suppliers")
-      .insert({ name, contact_name: contact_name || null, phone: phone || null, email: email || null, address: address || null, notes: notes || null })
+      .insert({ name: String(name).trim().replace(/\s+/g, " "), contact_name: contact_name || null, phone: phone || null, email: email || null, address: address || null, notes: notes || null })
       .select()
       .single();
     if (error) throw error;

@@ -1,147 +1,250 @@
 import supabase from "@/lib/supabase";
-import { computeHoursForPeriod } from "@/lib/payroll";
 import { tradingRangeUtc } from "@/lib/london-date";
+import type { PlatformKey } from "@/lib/platforms";
+import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
+
+// The one place money figures are worked out. Finance → Profit & Loss,
+// Finance → VAT and the admin dashboard's summary all read getPnl(), so the
+// same date range always shows the same numbers on every screen.
+//
+// Rules:
+//   • Own sales (till, QR, website) = paid orders by order date, VAT included,
+//     after discounts, minus refunds on the day the refund was given (same as
+//     the Z report and the accountant export).
+//   • Delivery platforms = the daily totals typed into Delivery platforms.
+//   • Profit is worked out ex-VAT: VAT on sales belongs to HMRC, and VAT on
+//     expenses marked "VAT applicable" is reclaimed, so neither is profit or cost.
+//   • Ingredient cost = purchase orders received in the period (cash basis).
+
+// Card fees aren't itemised anywhere we can read, so estimate them from the
+// card + online takings (tips included — the fee is charged on the whole
+// amount) at a typical blended rate (SumUp ~1.69%, Stripe 1.5% + 20p).
+export const CARD_FEE_RATE = 0.0175;
+
+export const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function getVatRate(): Promise<number> {
   const { data } = await supabase.from("app_settings").select("value").eq("key", "vat_rate").maybeSingle();
   return data ? Number(data.value) : 0.2;
 }
 
-// For expenses/purchases only — a supplier invoice total is VAT-inclusive,
-// so the reclaimable VAT portion is gross * (rate / (1 + rate)). NOT used for
-// sales output VAT: menu prices are themselves VAT-inclusive (see
-// lib/order-totals.ts), and the embedded VAT component is computed once per
-// order at the time of sale and stored in orders.tax — see
-// getOutputVatCollected below.
+// For VAT-inclusive gross amounts: the VAT portion is gross * (rate / (1 + rate)).
 export function extractVat(grossAmount: number, vatRate: number): number {
-  return Math.round(grossAmount * (vatRate / (1 + vatRate)) * 100) / 100;
+  return r2(grossAmount * (vatRate / (1 + vatRate)));
 }
 
-export async function getRevenue(from: string, to: string): Promise<number> {
-  const { data } = await supabase
-    .from("orders")
-    .select("total")
-    .eq("is_paid", true)
-    .gte("created_at", tradingRangeUtc(from).start)
-    .lte("created_at", tradingRangeUtc(to).end);
-  return Math.round((data || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
+// Supabase caps a select at 1000 rows — page through so a busy month isn't cut short.
+export async function allRows<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await build(from, from + 999);
+    if (error) throw error;
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) return out;
+  }
 }
 
-// Sum of the actual VAT embedded in each paid order's price, not a
-// back-calculated estimate — accurate regardless of any discount applied,
-// since orders.tax is computed once per order at the time of sale (see
-// lib/order-totals.ts).
-export async function getOutputVatCollected(from: string, to: string): Promise<number> {
-  const { data } = await supabase
-    .from("orders")
-    .select("tax")
-    .eq("is_paid", true)
-    .gte("created_at", tradingRangeUtc(from).start)
-    .lte("created_at", tradingRangeUtc(to).end);
-  return Math.round((data || []).reduce((s, o) => s + Number(o.tax), 0) * 100) / 100;
+// `.in()` with thousands of ids overflows the URL — ask in batches.
+export async function chunked<T>(ids: number[], fetch: (ids: number[]) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += 300) out.push(...(await fetch(ids.slice(i, i + 300))));
+  return out;
 }
 
+// ── Sales ────────────────────────────────────────────────────────────────────
+export type SaleOrder = { id: number; total: number; tax: number; order_type: string; created_at: string };
+export type Refund = { order_id: number; amount: number; vat: number; order_type: string; created_at: string };
+export type PlatformSaleRow = { sales_date: string; platform: PlatformKey; orders: number; sales: number; commission: number };
+export type SalesData = { orders: SaleOrder[]; refunds: Refund[]; cardTaken: number; platforms: PlatformSaleRow[] };
+
+export async function getSalesData(from: string, to: string): Promise<SalesData> {
+  const { start, end } = tradingRangeUtc(from, to);
+  const [orders, refundRows, cardRows, platforms] = await Promise.all([
+    allRows<SaleOrder>((a, b) =>
+      supabase.from("orders").select("id, total, tax, order_type, created_at").eq("is_paid", true)
+        .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
+    allRows<{ order_id: number; amount: number; created_at: string; orders: unknown }>((a, b) =>
+      supabase.from("payments").select("order_id, amount, created_at, orders(total, tax, order_type)").lt("amount", 0)
+        .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
+    allRows<{ amount: number; tip_amount: number | null }>((a, b) =>
+      supabase.from("payments").select("amount, tip_amount").in("method", ["card", "card_online"]).gt("amount", 0)
+        .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
+    getPlatformSales(from, to),
+  ]);
+
+  const refunds: Refund[] = refundRows.map((p) => {
+    const o = p.orders as { total: number; tax: number; order_type: string } | null;
+    const amount = -Number(p.amount);
+    const total = Number(o?.total ?? 0);
+    // A refund gives back the VAT in it too, in the same proportion as the bill.
+    const vat = total > 0 ? amount * (Number(o?.tax ?? 0) / total) : 0;
+    return { order_id: p.order_id, amount, vat, order_type: o?.order_type ?? "", created_at: p.created_at };
+  });
+  const cardTaken = cardRows.reduce((s, p) => s + Number(p.amount) + Number(p.tip_amount || 0), 0);
+
+  return {
+    orders: orders.map((o) => ({ ...o, total: Number(o.total), tax: Number(o.tax) })),
+    refunds,
+    cardTaken,
+    platforms,
+  };
+}
+
+export async function getPlatformSales(from: string, to: string): Promise<PlatformSaleRow[]> {
+  const { data, error } = await supabase
+    .from("platform_sales").select("sales_date, platform, orders, sales, commission")
+    .eq("business_id", 1).gte("sales_date", from).lte("sales_date", to);
+  // Don't take a whole report down over the platform figures.
+  if (error) { console.error("platform_sales:", error.message); return []; }
+  return (data ?? []).map((r) => ({ ...r, orders: Number(r.orders), sales: Number(r.sales), commission: Number(r.commission) }));
+}
+
+// ── Costs ────────────────────────────────────────────────────────────────────
 export async function getIngredientPurchases(from: string, to: string): Promise<number> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("purchase_orders")
     .select("total_cost")
     .eq("status", "received")
     .gte("received_date", from)
     .lte("received_date", to);
-  return Math.round((data || []).reduce((s, po) => s + Number(po.total_cost), 0) * 100) / 100;
+  if (error) throw error;
+  return r2((data || []).reduce((s, po) => s + Number(po.total_cost), 0));
 }
 
-// Hours worked x current pay rate, computed live from attendance — not a
-// lookup into payroll_entries, which only has rows once a pay period has
+// Hours worked x current pay rate, computed live from clocked-out attendance —
+// not a lookup into payroll_entries, which only has rows once a pay period has
 // actually been run and would silently understate this (overstating profit)
-// until then.
-export async function getLabourCost(from: string, to: string): Promise<number> {
-  const hoursByStaff = await computeHoursForPeriod(from, to);
-  if (hoursByStaff.size === 0) return 0;
-  const { data: staff } = await supabase.from("staff").select("id, pay_rate").in("id", [...hoursByStaff.keys()]);
-  const rateById = new Map((staff || []).map((s) => [s.id, Number(s.pay_rate ?? 0)]));
-  let total = 0;
-  for (const [staffId, hours] of hoursByStaff) total += hours * (rateById.get(staffId) ?? 0);
-  return Math.round(total * 100) / 100;
+// until then. Per work date, so the dashboard's daily bars and the P&L total
+// come from the same numbers.
+export async function labourCostByDay(from: string, to: string): Promise<Map<string, number>> {
+  const rows = await allRows<{ staff_id: number; work_date: string; net_work_seconds: number | null }>((a, b) =>
+    supabase.from("attendance").select("staff_id, work_date, net_work_seconds")
+      .gte("work_date", from).lte("work_date", to).not("clock_out", "is", null).order("id").range(a, b));
+  const ids = [...new Set(rows.map((r) => r.staff_id))];
+  const { data: staff, error } = ids.length ? await supabase.from("staff").select("id, pay_rate").in("id", ids) : { data: [], error: null };
+  if (error) throw error;
+  const rate = new Map((staff ?? []).map((s) => [s.id, Number(s.pay_rate ?? 0)]));
+  const byDay = new Map<string, number>();
+  for (const r of rows) {
+    const cost = (Number(r.net_work_seconds ?? 0) / 3600) * (rate.get(r.staff_id) ?? 0);
+    byDay.set(r.work_date, (byDay.get(r.work_date) ?? 0) + cost);
+  }
+  return byDay;
 }
 
-// Real (accrual) cost of goods sold: for every paid order in the period, cost
-// each line item at its recipe cost (recipe_ingredients quantity * ingredient
-// cost_per_unit, scaled by the recipe's yield). Items with no recipe entered
-// yet contribute 0 cost and are excluded from the coverage % — this is
-// necessarily partial until recipes are entered for the full menu, so it's
-// reported alongside a coverage figure rather than presented as complete.
-export async function getRecipeCogs(from: string, to: string): Promise<{
-  cogs: number;
-  costedRevenue: number;
-  totalRevenue: number;
-  coveragePct: number;
-}> {
-  const { data: paidOrders } = await supabase
-    .from("orders")
-    .select("id, total")
-    .eq("is_paid", true)
-    .gte("created_at", tradingRangeUtc(from).start)
-    .lte("created_at", tradingRangeUtc(to).end);
-
-  const orderIds = (paidOrders || []).map((o) => o.id);
-  const totalRevenue = Math.round((paidOrders || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
-  if (orderIds.length === 0) return { cogs: 0, costedRevenue: 0, totalRevenue: 0, coveragePct: 0 };
-
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("order_id, menu_item_id, item_price, quantity")
-    .in("order_id", orderIds)
-    .neq("status", "cancelled");
-
-  const { data: recipes } = await supabase
-    .from("recipes")
-    .select("id, menu_item_id, yield_quantity")
-    .eq("active", 1);
-
-  const recipeByMenuItem = new Map<number, { id: number; yield_quantity: number }>();
-  for (const r of recipes || []) {
-    if (r.menu_item_id != null) recipeByMenuItem.set(r.menu_item_id, { id: r.id, yield_quantity: Number(r.yield_quantity) || 1 });
-  }
-
-  const recipeIds = [...recipeByMenuItem.values()].map((r) => r.id);
-  const { data: recipeIngredients } = recipeIds.length > 0
-    ? await supabase.from("recipe_ingredients").select("recipe_id, quantity, ingredient:ingredients(cost_per_unit)").in("recipe_id", recipeIds)
-    : { data: [] };
-
-  const costPerRecipe = new Map<number, number>();
-  for (const ri of recipeIngredients || []) {
-    const ing = ri.ingredient as unknown as { cost_per_unit: number } | null;
-    const cost = Number(ri.quantity) * Number(ing?.cost_per_unit ?? 0);
-    costPerRecipe.set(ri.recipe_id, (costPerRecipe.get(ri.recipe_id) || 0) + cost);
-  }
-
-  let cogs = 0;
-  let costedRevenue = 0;
-  for (const item of items || []) {
-    if (item.menu_item_id == null) continue;
-    const recipe = recipeByMenuItem.get(item.menu_item_id);
-    if (!recipe) continue;
-    const costPerPortion = (costPerRecipe.get(recipe.id) || 0) / recipe.yield_quantity;
-    cogs += costPerPortion * Number(item.quantity);
-    costedRevenue += Number(item.item_price) * Number(item.quantity);
-  }
-
-  return {
-    cogs: Math.round(cogs * 100) / 100,
-    costedRevenue: Math.round(costedRevenue * 100) / 100,
-    totalRevenue,
-    coveragePct: totalRevenue > 0 ? Math.round((costedRevenue / totalRevenue) * 1000) / 10 : 0,
-  };
+export async function getLabourCost(from: string, to: string): Promise<number> {
+  const byDay = await labourCostByDay(from, to);
+  return r2([...byDay.values()].reduce((s, n) => s + n, 0));
 }
 
 export async function getOtherExpenses(from: string, to: string): Promise<{ total: number; vatApplicableTotal: number }> {
-  const { data } = await supabase
-    .from("expenses")
-    .select("amount, vat_applicable")
-    .gte("expense_date", from)
-    .lte("expense_date", to);
-  const total = Math.round((data || []).reduce((s, e) => s + Number(e.amount), 0) * 100) / 100;
-  const vatApplicableTotal = Math.round((data || []).filter((e) => e.vat_applicable).reduce((s, e) => s + Number(e.amount), 0) * 100) / 100;
+  const data = await allRows<{ amount: number; vat_applicable: number }>((a, b) =>
+    supabase.from("expenses").select("amount, vat_applicable").gte("expense_date", from).lte("expense_date", to).order("id").range(a, b));
+  const total = r2(data.reduce((s, e) => s + Number(e.amount), 0));
+  const vatApplicableTotal = r2(data.filter((e) => e.vat_applicable).reduce((s, e) => s + Number(e.amount), 0));
   return { total, vatApplicableTotal };
+}
+
+// Real (accrual) cost of goods sold for our own orders: every item sold,
+// costed at its recipe. Items with no recipe cost nothing here, so it comes
+// with a coverage % (share of item sales that had a recipe).
+export async function getRecipeCogs(orderIds: number[]): Promise<{ cogs: number; coveragePct: number }> {
+  if (orderIds.length === 0) return { cogs: 0, coveragePct: 0 };
+  const items = await chunked(orderIds, async (ids) => {
+    const { data, error } = await supabase.from("order_items").select("menu_item_id, item_price, quantity")
+      .in("order_id", ids).neq("status", "cancelled");
+    if (error) throw error;
+    return data ?? [];
+  });
+  const book = await loadRecipeBook();
+  const { cogs, costedRevenue, itemRevenue } = recipeUsage(book, items);
+  return { cogs: r2(cogs), coveragePct: itemRevenue > 0 ? Math.round((costedRevenue / itemRevenue) * 1000) / 10 : 0 };
+}
+
+// ── Profit & Loss ────────────────────────────────────────────────────────────
+export type Pnl = {
+  from: string;
+  to: string;
+  vat_rate: number;
+  sales: {
+    own_gross: number;     // paid own orders, incl. VAT, after discounts
+    refunds: number;       // refunds given in the period
+    own: number;           // own_gross - refunds
+    platforms: number;     // delivery platforms' gross sales
+    total: number;         // own + platforms (incl. VAT)
+    vat_own: number;
+    vat_platforms: number;
+    vat: number;           // output VAT
+    ex_vat: number;        // total - vat
+  };
+  costs: {
+    ingredients: number;   // purchase orders received
+    staff: number;
+    expenses: number;      // other expenses, ex reclaimable VAT
+    commission: number;    // delivery platform commission
+    card_fees: number;     // estimate
+    total: number;
+  };
+  profit: number;
+  vat: { output: number; vat_applicable_expenses: number; input: number; net_due: number };
+  recipe: { cogs: number; coverage_pct: number; profit: number };
+};
+
+export type PnlInputs = {
+  from: string;
+  to: string;
+  vatRate: number;
+  sales: SalesData;
+  ingredients: number;
+  staff: number;
+  expenses: { total: number; vatApplicableTotal: number };
+  recipe: { cogs: number; coveragePct: number };
+};
+
+/** Pure: every P&L and VAT figure from the raw inputs. */
+export function buildPnl(i: PnlInputs): Pnl {
+  const ownGross = i.sales.orders.reduce((s, o) => s + o.total, 0);
+  const refunds = i.sales.refunds.reduce((s, r) => s + r.amount, 0);
+  const own = ownGross - refunds;
+  const platforms = i.sales.platforms.reduce((s, p) => s + p.sales, 0);
+  const total = own + platforms;
+
+  const vatOwn = i.sales.orders.reduce((s, o) => s + o.tax, 0) - i.sales.refunds.reduce((s, r) => s + r.vat, 0);
+  const vatPlatforms = platforms * (i.vatRate / (1 + i.vatRate));
+  const outputVat = r2(vatOwn + vatPlatforms);
+  const exVat = r2(total - outputVat);
+
+  const inputVat = extractVat(i.expenses.vatApplicableTotal, i.vatRate);
+  const expensesExVat = r2(i.expenses.total - inputVat);
+  const commission = r2(i.sales.platforms.reduce((s, p) => s + p.commission, 0));
+  const cardFees = r2(i.sales.cardTaken * CARD_FEE_RATE);
+  const costTotal = r2(i.ingredients + i.staff + expensesExVat + commission + cardFees);
+  const profit = r2(exVat - costTotal);
+
+  return {
+    from: i.from,
+    to: i.to,
+    vat_rate: i.vatRate,
+    sales: {
+      own_gross: r2(ownGross), refunds: r2(refunds), own: r2(own), platforms: r2(platforms), total: r2(total),
+      vat_own: r2(vatOwn), vat_platforms: r2(vatPlatforms), vat: outputVat, ex_vat: exVat,
+    },
+    costs: { ingredients: r2(i.ingredients), staff: r2(i.staff), expenses: expensesExVat, commission, card_fees: cardFees, total: costTotal },
+    profit,
+    vat: { output: outputVat, vat_applicable_expenses: r2(i.expenses.vatApplicableTotal), input: inputVat, net_due: r2(outputVat - inputVat) },
+    // Same bottom line, with recipe cost of what was sold in place of what was bought.
+    recipe: { cogs: i.recipe.cogs, coverage_pct: i.recipe.coveragePct, profit: r2(profit + i.ingredients - i.recipe.cogs) },
+  };
+}
+
+export async function getPnl(from: string, to: string): Promise<Pnl> {
+  const [sales, ingredients, staff, expenses, vatRate] = await Promise.all([
+    getSalesData(from, to),
+    getIngredientPurchases(from, to),
+    getLabourCost(from, to),
+    getOtherExpenses(from, to),
+    getVatRate(),
+  ]);
+  const recipe = await getRecipeCogs(sales.orders.map((o) => o.id));
+  return buildPnl({ from, to, vatRate, sales, ingredients, staff, expenses, recipe });
 }

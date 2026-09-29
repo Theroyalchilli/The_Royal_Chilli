@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
+import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -27,12 +28,24 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageFinance(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { supplier_id, purchase_order_id, amount, method, notes } = await req.json();
+    const { supplier_id, purchase_order_id, amount, method, notes, allow_duplicate } = await req.json();
     if (!supplier_id || !amount) return NextResponse.json({ error: "supplier_id and amount are required" }, { status: 400 });
+    if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
+
+    // Same payment to the same supplier on the same day is almost always a double entry — ask first.
+    if (!allow_duplicate) {
+      const { start, end } = londonDayRangeUtc(londonDateStr());
+      const { data: same } = await supabase.from("supplier_payments").select("id")
+        .eq("supplier_id", supplier_id).eq("amount", Math.round(Number(amount) * 100) / 100)
+        .gte("paid_at", start).lte("paid_at", end).limit(1);
+      if (same && same.length > 0) {
+        return NextResponse.json({ error: "A payment of this amount to this supplier is already recorded today", duplicate: true }, { status: 409 });
+      }
+    }
 
     const { data, error } = await supabase
       .from("supplier_payments")
-      .insert({ supplier_id, purchase_order_id: purchase_order_id || null, amount, method: method || null, notes: notes || null, recorded_by: session.id })
+      .insert({ supplier_id, purchase_order_id: purchase_order_id || null, amount: Math.round(Number(amount) * 100) / 100, method: method || null, notes: notes || null, recorded_by: session.id })
       .select()
       .single();
     if (error) throw error;

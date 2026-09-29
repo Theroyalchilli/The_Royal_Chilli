@@ -1,5 +1,7 @@
 import supabase from "@/lib/supabase";
 import { tradingRangeUtc } from "@/lib/london-date";
+import { allRows, chunked, getSalesData, r2 } from "@/lib/finance";
+import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
 
 export type ReconciliationLine = {
   ingredient_id: number;
@@ -49,46 +51,9 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
   if (!items || items.length === 0) return;
 
   const menuItemIds = [...new Set(items.map((i) => i.menu_item_id).filter((id): id is number => id != null))];
-  if (menuItemIds.length === 0) return;
-
-  const { data: recipes } = await supabase
-    .from("recipes")
-    .select("id, menu_item_id, yield_quantity")
-    .eq("active", 1)
-    .in("menu_item_id", menuItemIds);
-
-  if (!recipes || recipes.length === 0) return;
-
-  const recipeByMenuItem = new Map(recipes.map((r) => [r.menu_item_id as number, { id: r.id, yield_quantity: Number(r.yield_quantity) || 1 }]));
-  const recipeIds = recipes.map((r) => r.id);
-
-  const { data: recipeIngredients } = await supabase
-    .from("recipe_ingredients")
-    .select("recipe_id, ingredient_id, quantity")
-    .in("recipe_id", recipeIds);
-
-  if (!recipeIngredients || recipeIngredients.length === 0) return;
-
-  const ingredientsByRecipe = new Map<number, { ingredient_id: number; quantity: number }[]>();
-  for (const ri of recipeIngredients) {
-    const list = ingredientsByRecipe.get(ri.recipe_id) || [];
-    list.push({ ingredient_id: ri.ingredient_id, quantity: Number(ri.quantity) });
-    ingredientsByRecipe.set(ri.recipe_id, list);
-  }
-
-  // Combine into one delta per ingredient so a dish appearing twice in the
-  // same order produces one movement row, not several.
-  const deltaByIngredient = new Map<number, number>();
-  for (const item of items) {
-    if (item.menu_item_id == null) continue;
-    const recipe = recipeByMenuItem.get(item.menu_item_id);
-    if (!recipe) continue;
-    const lines = ingredientsByRecipe.get(recipe.id) || [];
-    for (const line of lines) {
-      const used = (line.quantity / recipe.yield_quantity) * Number(item.quantity);
-      deltaByIngredient.set(line.ingredient_id, (deltaByIngredient.get(line.ingredient_id) || 0) + used);
-    }
-  }
+  const book = await loadRecipeBook(menuItemIds);
+  // One movement row per ingredient, even if a dish appears twice in the order.
+  const { usage: deltaByIngredient } = recipeUsage(book, items);
 
   if (deltaByIngredient.size === 0) return;
 
@@ -164,76 +129,41 @@ export function buildReconciliationReport(
 
 // GET /reports/reconciliation — stock-vs-sales, only trustworthy once a
 // stock-take has posted for the period (see SPEC: two different reconciliations).
+// Sales and theoretical usage use the same code as Finance (lib/finance.ts,
+// lib/recipes.ts), so "COGS (theoretical)" here equals Finance's recipe COGS.
 export async function getReconciliationReport(from: string, to: string): Promise<ReconciliationReport> {
-  const { data: paidOrders } = await supabase
-    .from("orders")
-    .select("id, total")
-    .eq("is_paid", true)
-    .gte("created_at", tradingRangeUtc(from).start)
-    .lte("created_at", tradingRangeUtc(to).end);
+  const { start, end } = tradingRangeUtc(from, to);
+  const [sales, book, movements, ingredients] = await Promise.all([
+    getSalesData(from, to),
+    loadRecipeBook(),
+    // Actual usage: opening + receipts - closing collapses algebraically to just
+    // "everything that left the ledger other than a purchase, negated" — the
+    // opening/closing balances themselves cancel out. A new ingredient's
+    // opening stock isn't usage either, so it's left out too.
+    allRows<{ ingredient_id: number; quantity_delta: number; reason: string | null; reference_type: string | null }>((a, b) =>
+      supabase.from("stock_movements").select("ingredient_id, quantity_delta, reason, reference_type")
+        .neq("movement_type", "purchase").gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
+    supabase.from("ingredients").select("id, name, unit, cost_per_unit").then((r) => r.data ?? []),
+  ]);
 
-  const orderIds = (paidOrders || []).map((o) => o.id);
-  const netSales = Math.round((paidOrders || []).reduce((s, o) => s + Number(o.total), 0) * 100) / 100;
+  // GP is measured on our own sales, ex-VAT, after refunds — the orders the
+  // recipes can cost. Delivery-platform orders aren't itemised.
+  const own = sales.orders.reduce((s, o) => s + o.total, 0) - sales.refunds.reduce((s, r) => s + r.amount, 0);
+  const ownVat = sales.orders.reduce((s, o) => s + o.tax, 0) - sales.refunds.reduce((s, r) => s + r.vat, 0);
+  const netSales = r2(own - ownVat);
 
-  // Theoretical usage: recipe depletion for every item actually sold in the period
-  // (same math as depleteStockForOrder, aggregated across the date range instead of one order).
-  const theoreticalUsage = new Map<number, number>();
-  if (orderIds.length > 0) {
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("menu_item_id, quantity")
-      .in("order_id", orderIds)
-      .neq("status", "cancelled");
+  const items = await chunked(sales.orders.map((o) => o.id), async (ids) => {
+    const { data, error } = await supabase.from("order_items").select("menu_item_id, quantity").in("order_id", ids).neq("status", "cancelled");
+    if (error) throw error;
+    return data ?? [];
+  });
+  const theoreticalUsage = recipeUsage(book, items).usage;
 
-    const menuItemIds = [...new Set((items || []).map((i) => i.menu_item_id).filter((id): id is number => id != null))];
-    if (menuItemIds.length > 0) {
-      const { data: recipes } = await supabase
-        .from("recipes")
-        .select("id, menu_item_id, yield_quantity")
-        .eq("active", 1)
-        .in("menu_item_id", menuItemIds);
-
-      const recipeByMenuItem = new Map((recipes || []).map((r) => [r.menu_item_id as number, { id: r.id, yield_quantity: Number(r.yield_quantity) || 1 }]));
-      const recipeIds = (recipes || []).map((r) => r.id);
-      const { data: recipeIngredients } = recipeIds.length > 0
-        ? await supabase.from("recipe_ingredients").select("recipe_id, ingredient_id, quantity").in("recipe_id", recipeIds)
-        : { data: [] };
-
-      const linesByRecipe = new Map<number, { ingredient_id: number; quantity: number }[]>();
-      for (const ri of recipeIngredients || []) {
-        const list = linesByRecipe.get(ri.recipe_id) || [];
-        list.push({ ingredient_id: ri.ingredient_id, quantity: Number(ri.quantity) });
-        linesByRecipe.set(ri.recipe_id, list);
-      }
-
-      for (const item of items || []) {
-        if (item.menu_item_id == null) continue;
-        const recipe = recipeByMenuItem.get(item.menu_item_id);
-        if (!recipe) continue;
-        for (const line of linesByRecipe.get(recipe.id) || []) {
-          const used = (line.quantity / recipe.yield_quantity) * Number(item.quantity);
-          theoreticalUsage.set(line.ingredient_id, (theoreticalUsage.get(line.ingredient_id) || 0) + used);
-        }
-      }
-    }
-  }
-
-  // Actual usage: opening + receipts - closing collapses algebraically to just
-  // "everything that left the ledger other than a purchase, negated" — the
-  // opening/closing balances themselves cancel out, so there's no need to sum
-  // the ledger from the beginning of time.
   const actualUsage = new Map<number, number>();
-  const { data: movements } = await supabase
-    .from("stock_movements")
-    .select("ingredient_id, quantity_delta")
-    .neq("movement_type", "purchase")
-    .gte("created_at", tradingRangeUtc(from).start)
-    .lte("created_at", tradingRangeUtc(to).end);
-  for (const m of movements || []) {
+  for (const m of movements) {
+    if (m.reason === "Opening stock" && m.reference_type == null) continue;
     actualUsage.set(m.ingredient_id, (actualUsage.get(m.ingredient_id) || 0) - Number(m.quantity_delta));
   }
 
-  const { data: ingredients } = await supabase.from("ingredients").select("id, name, unit, cost_per_unit");
-
-  return buildReconciliationReport(from, to, netSales, ingredients || [], theoreticalUsage, actualUsage);
+  return buildReconciliationReport(from, to, netSales, ingredients, theoreticalUsage, actualUsage);
 }

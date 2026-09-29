@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { mergeRecipeLines, recipeForDish } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
@@ -50,19 +51,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { menu_item_id, name, yield_quantity, yield_unit, ingredients } = await req.json();
-    if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    if (!name || !String(name).trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+
+    // One active recipe per dish — two would make stock and food cost ambiguous.
+    if (menu_item_id) {
+      const taken = await recipeForDish(Number(menu_item_id));
+      if (taken) return NextResponse.json({ error: `That dish already has a recipe ("${taken.name}")` }, { status: 409 });
+    }
 
     const { data: recipe, error } = await supabase
       .from("recipes")
-      .insert({ menu_item_id: menu_item_id || null, name, yield_quantity: yield_quantity || 1, yield_unit: yield_unit || "portion" })
+      .insert({ menu_item_id: menu_item_id || null, name: String(name).trim(), yield_quantity: yield_quantity || 1, yield_unit: yield_unit || "portion" })
       .select()
       .single();
     if (error) throw error;
 
-    if (Array.isArray(ingredients) && ingredients.length > 0) {
-      const rows = ingredients.map((i: { ingredient_id: number; quantity: number; notes?: string }) => ({
-        recipe_id: recipe.id, ingredient_id: i.ingredient_id, quantity: i.quantity, notes: i.notes || null,
-      }));
+    const rows = Array.isArray(ingredients) ? mergeRecipeLines(recipe.id, ingredients) : [];
+    if (rows.length > 0) {
       const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
       if (riErr) throw riErr;
     }

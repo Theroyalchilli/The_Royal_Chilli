@@ -28,15 +28,26 @@ export async function POST(req: NextRequest) {
     if (!session || !canManageFinance(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { category, description, amount, vat_applicable, expense_date, receipt_reference } = await req.json();
+    const { category, description, amount, vat_applicable, expense_date, receipt_reference, allow_duplicate } = await req.json();
     if (!category || !description || !amount) {
       return NextResponse.json({ error: "category, description and amount are required" }, { status: 400 });
+    }
+    if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
+
+    // Same expense typed twice would be counted twice in the P&L — ask first.
+    if (!allow_duplicate) {
+      const { data: same } = await supabase.from("expenses").select("id")
+        .eq("expense_date", expense_date || londonDateStr()).eq("category", category)
+        .eq("amount", Math.round(Number(amount) * 100) / 100).ilike("description", String(description).trim()).limit(1);
+      if (same && same.length > 0) {
+        return NextResponse.json({ error: "This expense is already recorded for that day", duplicate: true }, { status: 409 });
+      }
     }
 
     const { data, error } = await supabase
       .from("expenses")
       .insert({
-        category, description, amount,
+        category, description: String(description).trim(), amount: Math.round(Number(amount) * 100) / 100,
         vat_applicable: vat_applicable === undefined ? 1 : Number(vat_applicable),
         expense_date: expense_date || londonDateStr(),
         receipt_reference: receipt_reference || null,

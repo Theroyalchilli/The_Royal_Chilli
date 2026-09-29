@@ -1,21 +1,7 @@
-let ordersRows: { tax: number }[] | null;
+jest.mock("../supabase", () => ({ __esModule: true, default: {} }));
 
-jest.mock("../supabase", () => ({
-  __esModule: true,
-  default: {
-    from: (table: string) => ({
-      select: () => ({
-        eq: () => ({
-          gte: () => ({
-            lte: () => Promise.resolve({ data: table === "orders" ? ordersRows : null, error: null }),
-          }),
-        }),
-      }),
-    }),
-  },
-}));
-
-import { extractVat, getOutputVatCollected } from "@/lib/finance";
+import { buildPnl, extractVat, type SalesData } from "@/lib/finance";
+import { recipeUsage, type RecipeBook } from "@/lib/recipes";
 
 describe("extractVat", () => {
   it("extracts VAT from a VAT-inclusive gross amount at the standard 20% rate", () => {
@@ -38,17 +24,71 @@ describe("extractVat", () => {
   });
 });
 
-describe("getOutputVatCollected", () => {
-  it("sums the actual tax column across paid orders — not a back-calculated estimate", async () => {
-    // Discounts, service charge etc. don't matter here: orders.tax is the
-    // exact VAT added at sale time (see lib/order-totals.ts), so this must
-    // just sum it directly rather than re-deriving it from order totals.
-    ordersRows = [{ tax: 20 }, { tax: 5.5 }, { tax: 0 }];
-    expect(await getOutputVatCollected("2026-01-01", "2026-01-31")).toBe(25.5);
+describe("buildPnl", () => {
+  // Worked by hand:
+  //   own gross 120 + 60 = 180, refund 30 (VAT 30 × 10/60 = 5) → own 150
+  //   platforms 240 → total 390
+  //   VAT: own 20 + 10 − 5 = 25, platforms 240 × 0.2/1.2 = 40 → 65; ex-VAT 325
+  //   expenses 36 of which 24 VAT-applicable → input VAT 4 → expenses ex-VAT 32
+  //   costs 50 + 40 + 32 + 60 commission + 1.75 card fees (1.75% of 100) = 183.75
+  //   profit 325 − 183.75 = 141.25; VAT due 65 − 4 = 61; recipe basis 141.25 + 50 − 30 = 161.25
+  const sales: SalesData = {
+    orders: [
+      { id: 1, total: 120, tax: 20, order_type: "dine_in", created_at: "2026-09-01T12:00:00Z" },
+      { id: 2, total: 60, tax: 10, order_type: "takeaway", created_at: "2026-09-01T13:00:00Z" },
+    ],
+    refunds: [{ order_id: 2, amount: 30, vat: 5, order_type: "takeaway", created_at: "2026-09-02T12:00:00Z" }],
+    cardTaken: 100,
+    platforms: [{ sales_date: "2026-09-01", platform: "deliveroo", orders: 10, sales: 240, commission: 60 }],
+  };
+  const p = buildPnl({
+    from: "2026-09-01", to: "2026-09-30", vatRate: 0.2, sales,
+    ingredients: 50, staff: 40, expenses: { total: 36, vatApplicableTotal: 24 }, recipe: { cogs: 30, coveragePct: 75 },
   });
 
-  it("returns 0 when there are no paid orders in the period", async () => {
-    ordersRows = [];
-    expect(await getOutputVatCollected("2026-01-01", "2026-01-31")).toBe(0);
+  it("works out sales and VAT", () => {
+    expect(p.sales).toEqual({
+      own_gross: 180, refunds: 30, own: 150, platforms: 240, total: 390,
+      vat_own: 25, vat_platforms: 40, vat: 65, ex_vat: 325,
+    });
+  });
+
+  it("works out costs and profit ex-VAT", () => {
+    expect(p.costs).toEqual({ ingredients: 50, staff: 40, expenses: 32, commission: 60, card_fees: 1.75, total: 183.75 });
+    expect(p.profit).toBe(141.25);
+  });
+
+  it("VAT return figures agree with the P&L", () => {
+    expect(p.vat).toEqual({ output: 65, vat_applicable_expenses: 24, input: 4, net_due: 61 });
+  });
+
+  it("recipe basis swaps purchases for recipe cost", () => {
+    expect(p.recipe).toEqual({ cogs: 30, coverage_pct: 75, profit: 161.25 });
+  });
+
+  it("is all zero with no data", () => {
+    const z = buildPnl({
+      from: "2026-09-01", to: "2026-09-01", vatRate: 0.2, sales: { orders: [], refunds: [], cardTaken: 0, platforms: [] },
+      ingredients: 0, staff: 0, expenses: { total: 0, vatApplicableTotal: 0 }, recipe: { cogs: 0, coveragePct: 0 },
+    });
+    expect(z.profit).toBe(0);
+    expect(z.vat.net_due).toBe(0);
+  });
+});
+
+describe("recipeUsage", () => {
+  // Curry: recipe makes 2 portions from 1 kg chicken (£6/kg) → 0.5 kg, £3 a portion.
+  const book: RecipeBook = new Map([[10, { recipeId: 1, perPortion: [{ ingredient_id: 100, quantity: 0.5 }], costPerPortion: 3 }]]);
+
+  it("uses and costs stock only for dishes with a recipe", () => {
+    const r = recipeUsage(book, [
+      { menu_item_id: 10, quantity: 3, item_price: 12 },   // costed: 36 revenue, £9 cost, 1.5 kg
+      { menu_item_id: 11, quantity: 1, item_price: 4 },    // no recipe
+      { menu_item_id: null, quantity: 1, item_price: 2 },  // custom item
+    ]);
+    expect(r.usage.get(100)).toBeCloseTo(1.5, 6);
+    expect(r.cogs).toBeCloseTo(9, 6);
+    expect(r.costedRevenue).toBe(36);
+    expect(r.itemRevenue).toBe(42);
   });
 });

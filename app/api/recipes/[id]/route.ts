@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { mergeRecipeLines, recipeForDish } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
 
 export async function GET(
@@ -54,6 +55,11 @@ export async function PATCH(
     const { id } = await params;
     const { menu_item_id, name, yield_quantity, yield_unit, notes, ingredients } = await req.json();
 
+    if (menu_item_id) {
+      const taken = await recipeForDish(Number(menu_item_id), Number(id));
+      if (taken) return NextResponse.json({ error: `That dish already has a recipe ("${taken.name}")` }, { status: 409 });
+    }
+
     const updates: Record<string, unknown> = {};
     if (menu_item_id !== undefined) updates.menu_item_id = menu_item_id;
     if (name !== undefined) updates.name = name;
@@ -68,10 +74,8 @@ export async function PATCH(
 
     if (Array.isArray(ingredients)) {
       await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
-      if (ingredients.length > 0) {
-        const rows = ingredients.map((i: { ingredient_id: number; quantity: number; notes?: string }) => ({
-          recipe_id: Number(id), ingredient_id: i.ingredient_id, quantity: i.quantity, notes: i.notes || null,
-        }));
+      const rows = mergeRecipeLines(Number(id), ingredients);
+      if (rows.length > 0) {
         const { error: riErr } = await supabase.from("recipe_ingredients").insert(rows);
         if (riErr) throw riErr;
       }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
 
 // current_stock is deliberately not editable here — it only changes via stock_movements,
@@ -21,6 +22,12 @@ export async function PATCH(
     const updates: Record<string, unknown> = {};
     for (const field of EDITABLE_FIELDS) if (field in body) updates[field] = body[field];
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    if (typeof updates.name === "string") {
+      updates.name = updates.name.trim().replace(/\s+/g, " ");
+      if (!updates.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
+      const existing = await findActiveByName("ingredients", updates.name as string, Number(id));
+      if (existing) return NextResponse.json({ error: `"${existing.name}" is already an ingredient` }, { status: 409 });
+    }
 
     const { data, error } = await supabase.from("ingredients").update(updates).eq("id", id).select().single();
     if (error) throw error;

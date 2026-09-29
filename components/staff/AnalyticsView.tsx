@@ -163,7 +163,7 @@ function InventoryTab({ from, to }: { from: string; to: string }) {
           </table>
           {data.forecast.length === 0 && <p className="text-muted-foreground text-sm text-center py-6">Not enough movement data to forecast yet.</p>}
         </div>
-        <p className="mt-2 text-muted-foreground text-xs">Based on waste + recorded usage over the selected period, projected forward at the same daily rate. Selling a dish doesn&apos;t yet auto-deduct its recipe ingredients — usage must be logged manually via Inventory.</p>
+        <p className="mt-2 text-muted-foreground text-xs">Based on waste + usage over the selected period (sales deduct their recipe ingredients automatically; dishes without a recipe don&apos;t), projected forward at the same daily rate.</p>
       </div>
     </div>
   );

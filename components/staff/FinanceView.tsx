@@ -26,56 +26,89 @@ function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: strin
   );
 }
 
+// Same shape as lib/finance.ts Pnl — the admin dashboard summary reads the same numbers.
+type Pnl = {
+  vat_rate: number;
+  sales: { own_gross: number; refunds: number; own: number; platforms: number; total: number; vat_own: number; vat_platforms: number; vat: number; ex_vat: number };
+  costs: { ingredients: number; staff: number; expenses: number; commission: number; card_fees: number; total: number };
+  profit: number;
+  vat: { output: number; vat_applicable_expenses: number; input: number; net_due: number };
+  recipe: { cogs: number; coverage_pct: number; profit: number };
+};
+
+function usePnl(from: string, to: string, path: "pnl" | "vat") {
+  const [data, setData] = useState<Pnl | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    setError("");
+    fetch(`/api/finance/${path}?from=${from}&to=${to}`)
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Failed to load"); return d; })
+      .then((d) => { if (live) setData(d); })
+      .catch((e) => { if (live) { setData(null); setError(e.message); } });
+    return () => { live = false; };
+  }, [from, to, path]);
+  return { data, error };
+}
+
+const cardClass = "mt-4 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border";
+
 function PnlTab() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
-  const [data, setData] = useState<{
-    revenue: number; ingredient_purchases: number; labour_cost: number; other_expenses: number; net_profit: number;
-    recipe_cogs: number; recipe_cogs_coverage_pct: number; net_profit_recipe_basis: number;
-  } | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/finance/pnl?from=${from}&to=${to}`);
-    setData(await res.json());
-  }, [from, to]);
-  useEffect(() => { load(); }, [load]);
+  const { data, error } = usePnl(from, to, "pnl");
 
   return (
     <div>
       <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
       {data && (
-        <div className="mt-4 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border">
-          <Row label="Revenue" value={data.revenue} positive />
-          <Row label="Ingredient Purchases" value={-data.ingredient_purchases} />
-          <Row label="Labour Cost" value={-data.labour_cost} />
-          <Row label="Other Expenses" value={-data.other_expenses} />
-          <Row label="Net Profit" value={data.net_profit} bold />
-        </div>
-      )}
-      <p className="mt-3 text-muted-foreground text-xs">Ingredient purchases are used as a cost-of-goods proxy (money spent on stock received in this period) rather than a full inventory-valuation COGS calculation.</p>
-
-      {data && (
-        <div className="mt-6 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
-          <p className="text-foreground font-bold text-sm">Recipe-Based COGS (accrual)</p>
-          <p className="text-muted-foreground text-xs mt-1">
-            Cost of what was actually sold, from recipe ingredient costs — not just what was bought.
-          </p>
-          <div className="mt-3 rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border">
-            <Row label="Recipe-based COGS" value={-data.recipe_cogs} />
-            <Row label="Net Profit (recipe basis)" value={data.net_profit_recipe_basis} bold />
+        <>
+          <div className={cardClass}>
+            <Row label="Own sales (till, QR, website)" value={data.sales.own_gross} />
+            {data.sales.refunds > 0 && <Row label="Less refunds" value={-data.sales.refunds} />}
+            <Row label="Delivery platforms" value={data.sales.platforms} />
+            <Row label="Total sales (incl. VAT)" value={data.sales.total} bold />
+            <Row label="Less VAT on sales" value={-data.sales.vat} />
+            <Row label="Sales ex-VAT" value={data.sales.ex_vat} bold />
           </div>
-          <p className="mt-2 text-xs font-semibold" style={{ color: data.recipe_cogs_coverage_pct >= 80 ? "#16a34a" : data.recipe_cogs_coverage_pct >= 30 ? "#d97706" : "#dc2626" }}>
-            Based on recipes covering {data.recipe_cogs_coverage_pct}% of this period&apos;s revenue.
-            {data.recipe_cogs_coverage_pct < 80 && " Add recipes in Inventory → Recipes & Food Cost for a fuller picture."}
+          <div className={cardClass}>
+            <Row label="Ingredients (purchase orders received)" value={-data.costs.ingredients} />
+            <Row label="Staff (hours worked × pay rate)" value={-data.costs.staff} />
+            <Row label="Other expenses (ex reclaimable VAT)" value={-data.costs.expenses} />
+            <Row label="Delivery platform commission" value={-data.costs.commission} />
+            <Row label="Card fees (estimate)" value={-data.costs.card_fees} />
+            <Row label="Total costs" value={-data.costs.total} />
+            <Row label="Net Profit" value={data.profit} bold />
+          </div>
+          <p className="mt-3 text-muted-foreground text-xs">
+            Same figures as the admin dashboard. Own sales are paid orders on the day ordered (after discounts, tips excluded); refunds count on the day given.
+            Ingredient cost is what was received on purchase orders in the period, not a stock valuation. Card fees are estimated at 1.75% of card and online takings.
           </p>
-        </div>
+
+          <div className="mt-6 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
+            <p className="text-foreground font-bold text-sm">Recipe-Based COGS (accrual)</p>
+            <p className="text-muted-foreground text-xs mt-1">
+              Same bottom line, but with the recipe cost of what was actually sold in place of what was bought.
+            </p>
+            <div className="mt-3 rounded-lg border border-border bg-surface divide-y divide-border">
+              <Row label="Recipe-based COGS" value={-data.recipe.cogs} />
+              <Row label="Net Profit (recipe basis)" value={data.recipe.profit} bold />
+            </div>
+            <p className="mt-2 text-xs font-semibold" style={{ color: data.recipe.coverage_pct >= 80 ? "#16a34a" : data.recipe.coverage_pct >= 30 ? "#d97706" : "#dc2626" }}>
+              Recipes cover {data.recipe.coverage_pct}% of own-order item sales.
+              {data.recipe.coverage_pct < 80 && " Add recipes in Inventory → Recipes & Food Cost for a fuller picture."}
+              {data.sales.platforms > 0 && " Delivery-platform orders aren't itemised, so their food cost isn't included here."}
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function Row({ label, value, positive, bold }: { label: string; value: number; positive?: boolean; bold?: boolean }) {
-  const color = bold ? (value >= 0 ? "text-emerald-600" : "text-red-600") : positive ? "text-foreground" : "text-foreground";
+function Row({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+  const color = bold ? (value >= 0 ? "text-emerald-600" : "text-red-600") : "text-foreground";
   return (
     <div className="flex justify-between px-4 py-3">
       <span className={bold ? "text-foreground font-bold" : "text-muted-foreground"}>{label}</span>
@@ -87,57 +120,25 @@ function Row({ label, value, positive, bold }: { label: string; value: number; p
 function VatTab() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
-  const [data, setData] = useState<{ revenue: number; output_vat: number; vat_applicable_expenses: number; input_vat: number; net_vat_due: number } | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/finance/vat?from=${from}&to=${to}`);
-    setData(await res.json());
-  }, [from, to]);
-  useEffect(() => { load(); }, [load]);
+  const { data, error } = usePnl(from, to, "vat");
 
   return (
     <div>
       <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
       {data && (
-        <div className="mt-4 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border">
-          <Row label="Sales (VAT-inclusive)" value={data.revenue} />
-          <Row label="Output VAT (on sales)" value={data.output_vat} />
-          <Row label="Expenses with VAT" value={data.vat_applicable_expenses} />
-          <Row label="Input VAT (reclaimable)" value={-data.input_vat} />
-          <Row label="Net VAT Due" value={data.net_vat_due} bold />
+        <div className={cardClass}>
+          <Row label="Own sales after refunds (incl. VAT)" value={data.sales.own} />
+          <Row label="VAT on own sales" value={data.sales.vat_own} />
+          <Row label="Delivery platform sales (incl. VAT)" value={data.sales.platforms} />
+          <Row label="VAT on platform sales" value={data.sales.vat_platforms} />
+          <Row label="Output VAT (on sales)" value={data.vat.output} bold />
+          <Row label="Expenses with VAT" value={data.vat.vat_applicable_expenses} />
+          <Row label="Input VAT (reclaimable)" value={-data.vat.input} />
+          <Row label="Net VAT Due" value={data.vat.net_due} bold />
         </div>
       )}
-      <p className="mt-3 text-amber-600 text-xs">⚠ Estimate only — assumes standard-rated sales and that raw ingredient purchases are zero-rated (typical for UK food wholesale). Verify with your accountant before filing.</p>
-    </div>
-  );
-}
-
-function CashReconTab() {
-  const [periods, setPeriods] = useState<{ id: number; opened_at: string; opening_cash: number; cash_sales: number; cash_tips: number; expected_cash: number; actual_cash: number | null; variance: number | null }[]>([]);
-  useEffect(() => { fetch("/api/finance/cash-reconciliation").then((r) => r.json()).then((d) => setPeriods(d.periods || [])); }, []);
-
-  return (
-    <div className="space-y-2">
-      {periods.map((p) => (
-        <div key={p.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <p className="text-foreground font-semibold">{new Date(p.opened_at).toLocaleDateString("en-GB")}</p>
-            <p className="text-muted-foreground text-sm">
-              Opening {fmtMoney(p.opening_cash)} + Cash sales {fmtMoney(p.cash_sales)}
-              {p.cash_tips > 0 && ` + Tips ${fmtMoney(p.cash_tips)}`} = Expected {fmtMoney(p.expected_cash)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-foreground">Actual: {p.actual_cash !== null ? fmtMoney(p.actual_cash) : "—"}</p>
-            {p.variance !== null && (
-              <p className={`text-sm font-bold ${p.variance === 0 ? "text-emerald-600" : Math.abs(p.variance) < 1 ? "text-amber-600" : "text-red-600"}`}>
-                {p.variance === 0 ? "Balanced" : `${p.variance > 0 ? "+" : ""}${fmtMoney(p.variance)}`}
-              </p>
-            )}
-          </div>
-        </div>
-      ))}
-      {periods.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No closed till sessions yet.</p>}
+      <p className="mt-3 text-amber-600 text-xs">⚠ Estimate only — assumes standard-rated sales (own VAT is what each bill actually charged; platform VAT is worked out from their gross sales), raw ingredient purchases zero-rated, and no VAT reclaimed on platform commission. Verify with your accountant before filing.</p>
     </div>
   );
 }
@@ -226,6 +227,8 @@ function AccountantExportTab() {
 function ExpensesTab() {
   const [expenses, setExpenses] = useState<{ id: number; category: string; description: string; amount: number; expense_date: string; vat_applicable: number }[]>([]);
   const [form, setForm] = useState({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
+  const [error, setError] = useState("");
+  const [dupe, setDupe] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/expenses");
@@ -234,8 +237,16 @@ function ExpensesTab() {
   useEffect(() => { load(); }, [load]);
 
   async function save() {
-    if (!form.description || !form.amount) return;
-    await fetch("/api/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, amount: Number(form.amount), vat_applicable: form.vat_applicable ? 1 : 0 }) });
+    setError("");
+    if (!form.description.trim()) return setError("Add a description.");
+    if (!(Number(form.amount) > 0)) return setError("Amount must be more than £0.");
+    const res = await fetch("/api/expenses", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, amount: Number(form.amount), vat_applicable: form.vat_applicable ? 1 : 0, allow_duplicate: dupe }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setError(data.error || "Couldn't save"); setDupe(!!data.duplicate); return; }
+    setDupe(false);
     setForm({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
     load();
   }
@@ -248,11 +259,20 @@ function ExpensesTab() {
         </select>
         <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
         <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add</button>
+        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{dupe ? "Add anyway" : "+ Add"}</button>
       </div>
-      <label className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-        <input type="checkbox" checked={form.vat_applicable} onChange={(e) => setForm({ ...form, vat_applicable: e.target.checked })} /> VAT applicable
-      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <label className="flex items-center gap-2">
+          Date <input type="date" value={form.expense_date} onChange={(e) => { setForm({ ...form, expense_date: e.target.value }); setDupe(false); }} className="bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-sm" />
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={form.vat_applicable} onChange={(e) => setForm({ ...form, vat_applicable: e.target.checked })} /> VAT applicable (amount includes VAT)
+        </label>
+      </div>
+      {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Add anyway if it really is a second one."}</p>}
+      <p className="mt-2 text-muted-foreground text-xs">
+        Not for food/stock invoices — those are counted from Inventory → Purchase Orders when received. Not for staff pay (from attendance), card fees or delivery-platform commission (all worked out automatically).
+      </p>
       <div className="mt-4 space-y-1.5">
         {expenses.map((e) => (
           <div key={e.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">
@@ -270,9 +290,8 @@ function SupplierPaymentsTab() {
   const [payments, setPayments] = useState<{ id: number; supplier_name: string; amount: number; method: string | null; paid_at: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: number; name: string }[]>([]);
   const [form, setForm] = useState({ supplier_id: "", amount: "", method: "bank_transfer" });
-  const [addingSupplier, setAddingSupplier] = useState(false);
-  const [newSupplier, setNewSupplier] = useState({ name: "", contact_name: "", phone: "", email: "" });
-  const [supplierError, setSupplierError] = useState("");
+  const [error, setError] = useState("");
+  const [dupe, setDupe] = useState(false);
 
   const loadSuppliers = useCallback(async () => {
     const res = await fetch("/api/suppliers");
@@ -285,57 +304,38 @@ function SupplierPaymentsTab() {
   useEffect(() => { load(); loadSuppliers(); }, [load, loadSuppliers]);
 
   async function save() {
-    if (!form.supplier_id || !form.amount) return;
-    await fetch("/api/supplier-payments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method }) });
-    setForm({ supplier_id: "", amount: "", method: "bank_transfer" });
-    load();
-  }
-
-  async function saveSupplier() {
-    setSupplierError("");
-    if (!newSupplier.name.trim()) return setSupplierError("Supplier name is required.");
-    const res = await fetch("/api/suppliers", {
+    setError("");
+    if (!form.supplier_id) return setError("Pick a supplier.");
+    if (!(Number(form.amount) > 0)) return setError("Amount must be more than £0.");
+    const res = await fetch("/api/supplier-payments", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newSupplier.name.trim(), contact_name: newSupplier.contact_name.trim() || null, phone: newSupplier.phone.trim() || null, email: newSupplier.email.trim() || null }),
+      body: JSON.stringify({ supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method, allow_duplicate: dupe }),
     });
     const data = await res.json();
-    if (!res.ok) return setSupplierError(data.error || "Failed to add supplier");
-    setNewSupplier({ name: "", contact_name: "", phone: "", email: "" });
-    setAddingSupplier(false);
-    await loadSuppliers();
-    setForm((f) => ({ ...f, supplier_id: String(data.supplier.id) }));
+    if (!res.ok) { setError(data.error || "Couldn't record payment"); setDupe(!!data.duplicate); return; }
+    setDupe(false);
+    setForm({ supplier_id: "", amount: "", method: "bank_transfer" });
+    load();
   }
 
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <select value={form.supplier_id} onChange={(e) => setForm({ ...form, supplier_id: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2">
+        <select value={form.supplier_id} onChange={(e) => { setForm({ ...form, supplier_id: e.target.value }); setDupe(false); }} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2">
           <option value="">Select supplier…</option>
           {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Record</button>
+        <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => { setForm({ ...form, amount: e.target.value }); setDupe(false); }} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{dupe ? "Record anyway" : "+ Record"}</button>
       </div>
-      <button onClick={() => setAddingSupplier((v) => !v)} className="mt-2 text-red-600 text-xs font-semibold">
-        {addingSupplier ? "Cancel" : "+ New supplier not in the list?"}
-      </button>
-      {addingSupplier && (
-        <div className="mt-2 rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-3 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <input placeholder="Supplier name" value={newSupplier.name} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
-            <input placeholder="Contact name" value={newSupplier.contact_name} onChange={(e) => setNewSupplier({ ...newSupplier, contact_name: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder="Phone" value={newSupplier.phone} onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder="Email" value={newSupplier.email} onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
-          </div>
-          {supplierError && <p className="text-red-600 text-xs">{supplierError}</p>}
-          <button onClick={saveSupplier} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">Add Supplier</button>
-          <p className="text-muted-foreground text-xs">Full supplier management (edit, deactivate) lives in Inventory → Suppliers — this is just a quick add so you don&apos;t have to leave this screen.</p>
-        </div>
-      )}
+      {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Record anyway if it really is a second payment."}</p>}
+      <p className="mt-2 text-muted-foreground text-xs">
+        A record of money paid to suppliers — it isn&apos;t a cost in Profit &amp; Loss (the cost is counted once, when the purchase order is received). Suppliers are added in Inventory → Suppliers.
+      </p>
       <div className="mt-4 space-y-1.5">
         {payments.map((p) => (
           <div key={p.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">
-            <span className="text-foreground">{p.supplier_name} {p.method && `· ${p.method}`} <span className="text-muted-foreground">({new Date(p.paid_at).toLocaleDateString("en-GB")})</span></span>
+            <span className="text-foreground">{p.supplier_name} {p.method && `· ${p.method.replace("_", " ")}`} <span className="text-muted-foreground">({new Date(p.paid_at).toLocaleDateString("en-GB")})</span></span>
             <span className="text-foreground">{fmtMoney(p.amount)}</span>
           </div>
         ))}
@@ -346,11 +346,10 @@ function SupplierPaymentsTab() {
 }
 
 export default function FinanceView() {
-  const [tab, setTab] = useState<"pnl" | "vat" | "cash" | "zreports" | "export" | "expenses" | "supplier_payments">("pnl");
+  const [tab, setTab] = useState<"pnl" | "vat" | "zreports" | "export" | "expenses" | "supplier_payments">("pnl");
   const tabs = [
     { id: "pnl", label: "Profit & Loss" },
     { id: "vat", label: "VAT" },
-    { id: "cash", label: "Cash Reconciliation" },
     { id: "zreports", label: "Z Reports" },
     { id: "export", label: "Accountant export" },
     { id: "expenses", label: "Expenses" },
@@ -381,7 +380,6 @@ export default function FinanceView() {
         <div className="mt-5">
           {tab === "pnl" && <PnlTab />}
           {tab === "vat" && <VatTab />}
-          {tab === "cash" && <CashReconTab />}
           {tab === "zreports" && <ZReportsTab />}
           {tab === "export" && <AccountantExportTab />}
           {tab === "expenses" && <ExpensesTab />}

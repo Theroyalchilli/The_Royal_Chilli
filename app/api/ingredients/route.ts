@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
+import { findActiveByName } from "@/lib/unique-entry";
 import { canManageInventory } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
@@ -38,12 +39,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { name, unit, reorder_level, reorder_quantity, cost_per_unit, supplier_id, opening_stock } = await req.json();
-    if (!name || !unit) return NextResponse.json({ error: "Name and unit are required" }, { status: 400 });
+    if (!name || !String(name).trim() || !unit) return NextResponse.json({ error: "Name and unit are required" }, { status: 400 });
+    const existing = await findActiveByName("ingredients", String(name));
+    if (existing) return NextResponse.json({ error: `"${existing.name}" is already an ingredient — use Adjust on it instead` }, { status: 409 });
 
     const { data: ingredient, error } = await supabase
       .from("ingredients")
       .insert({
-        name, unit,
+        name: String(name).trim().replace(/\s+/g, " "), unit,
         reorder_level: reorder_level || 0,
         reorder_quantity: reorder_quantity || 0,
         cost_per_unit: cost_per_unit || 0,

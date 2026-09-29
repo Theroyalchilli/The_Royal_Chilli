@@ -28,9 +28,13 @@ export async function POST(
 
     const overrides = new Map((items || []).map((i: { item_id: number; received_quantity?: number; expiry_date?: string }) => [i.item_id, i]));
 
+    // What the delivery actually cost — this is the ingredient cost in the P&L,
+    // so a short delivery mustn't still count at the ordered total.
+    let receivedCost = 0;
     for (const item of poItems || []) {
       const override = overrides.get(item.id) as { received_quantity?: number; expiry_date?: string } | undefined;
-      const receivedQty = override?.received_quantity ?? item.quantity;
+      const receivedQty = Math.max(0, Number(override?.received_quantity ?? item.quantity));
+      receivedCost += receivedQty * Number(item.unit_cost);
 
       await supabase.from("purchase_order_items").update({
         received_quantity: receivedQty,
@@ -53,7 +57,7 @@ export async function POST(
 
     const { data: updatedPo, error: updateErr } = await supabase
       .from("purchase_orders")
-      .update({ status: "received", received_date: londonDateStr() })
+      .update({ status: "received", received_date: londonDateStr(), total_cost: Math.round(receivedCost * 100) / 100 })
       .eq("id", id)
       .select()
       .single();

@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
+import { allRows } from "@/lib/finance";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import type { ZReport } from "@/lib/z-report";
 
@@ -21,9 +22,13 @@ export async function GET(req: NextRequest) {
   const to = `${month}-${String(lastDay).padStart(2, "0")}`;
   const { start, end } = tradingRangeUtc(from, to);
 
-  const [{ data: payments }, { data: orders }, { data: periods }] = await Promise.all([
-    supabase.from("payments").select("order_id, method, amount, tip_amount, reference, created_at, orders(order_number)").gte("created_at", start).lte("created_at", end).order("created_at"),
-    supabase.from("orders").select("id, created_at, tax, discount").eq("is_paid", true).gte("created_at", start).lte("created_at", end),
+  type PayRow = { order_id: number; method: string; amount: number; tip_amount: number | null; reference: string | null; created_at: string; orders: unknown };
+  type OrderRow = { id: number; created_at: string; tax: number; discount: number | null };
+  const [payments, orders, { data: periods }] = await Promise.all([
+    allRows<PayRow>((a, b) => supabase.from("payments").select("order_id, method, amount, tip_amount, reference, created_at, orders(order_number, total, tax)")
+      .gte("created_at", start).lte("created_at", end).order("created_at").order("id").range(a, b)),
+    allRows<OrderRow>((a, b) => supabase.from("orders").select("id, created_at, tax, discount").eq("is_paid", true)
+      .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     supabase.from("work_periods").select("id, opened_at, closed_at, close_note, z_report").eq("status", "closed").gte("closed_at", start).lte("closed_at", end).order("closed_at"),
   ]);
 
@@ -35,19 +40,25 @@ export async function GET(req: NextRequest) {
   type Day = { sales: number; card: number; cash: number; online: number; tips: number; refunds: number; vat: number; discounts: number; orders: number };
   const days = new Map<string, Day>();
   for (let d = 1; d <= lastDay; d++) days.set(`${month}-${String(d).padStart(2, "0")}`, { sales: 0, card: 0, cash: 0, online: 0, tips: 0, refunds: 0, vat: 0, discounts: 0, orders: 0 });
-  for (const p of payments ?? []) {
+  for (const p of payments) {
     const day = days.get(tradingDayStr(new Date(p.created_at)));
     if (!day) continue;
     const amount = Number(p.amount);
     const tip = Number(p.tip_amount || 0);
-    if (amount < 0) { day.refunds += -amount; continue; }
+    if (amount < 0) {
+      // Refunds give back VAT in the same proportion as the bill (as in the P&L).
+      const o = p.orders as { total: number; tax: number } | null;
+      day.refunds += -amount;
+      if (o && Number(o.total) > 0) day.vat -= -amount * (Number(o.tax) / Number(o.total));
+      continue;
+    }
     day.sales += amount + tip;
     day.tips += tip;
     if (p.method === "cash") day.cash += amount + tip;
     else if (p.method === "card_online") day.online += amount + tip;
     else day.card += amount + tip;
   }
-  for (const o of orders ?? []) {
+  for (const o of orders) {
     const day = days.get(tradingDayStr(new Date(o.created_at)));
     if (!day) continue;
     day.orders += 1;
@@ -64,7 +75,7 @@ export async function GET(req: NextRequest) {
     Tips: r2(d.tips),
     Refunds: r2(d.refunds),
     "Net taken": r2(d.sales - d.refunds),
-    "VAT (in paid orders)": r2(d.vat),
+    "VAT (paid orders less refunds)": r2(d.vat),
     Discounts: r2(d.discounts),
   }));
   const totals = daily.reduce<Record<string, number | string>>((acc, row) => {
@@ -74,11 +85,11 @@ export async function GET(req: NextRequest) {
   daily.push(totals as (typeof daily)[number]);
 
   const orderNo = (p: { orders: unknown }) => (p.orders as { order_number: string } | null)?.order_number ?? "";
-  const paymentRows = (payments ?? []).filter((p) => Number(p.amount) > 0).map((p) => ({
+  const paymentRows = payments.filter((p) => Number(p.amount) > 0).map((p) => ({
     "Date/time (UK)": uk(p.created_at), "Trading day": tradingDayStr(new Date(p.created_at)), Order: orderNo(p),
     Method: METHOD[p.method] ?? p.method, Amount: r2(Number(p.amount)), Tip: r2(Number(p.tip_amount || 0)), Reference: p.reference ?? "",
   }));
-  const refundRows = (payments ?? []).filter((p) => Number(p.amount) < 0).map((p) => ({
+  const refundRows = payments.filter((p) => Number(p.amount) < 0).map((p) => ({
     "Date/time (UK)": uk(p.created_at), "Trading day": tradingDayStr(new Date(p.created_at)), Order: orderNo(p),
     Method: METHOD[p.method] ?? p.method, Amount: r2(-Number(p.amount)), Reason: p.reference ?? "",
   }));

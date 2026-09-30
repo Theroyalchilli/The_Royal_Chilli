@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getOrderForPrint } from "@/lib/kot";
+import { getBrand } from "@/lib/brand";
 import AutoPrint from "./AutoPrint";
 import PrintNav from "./PrintNav";
 
@@ -18,13 +19,14 @@ export default async function KotPrintPage({
     return <div style={{ padding: 20, fontFamily: "monospace" }}>Order not found.</div>;
   }
   const { order, items } = data;
+  const brand = await getBrand(session.businessId);
 
   return (
     <>
       <AutoPrint />
       <PrintNav />
       <div className="kot-ticket">
-        <p className="center bold big">THE ROYAL CHILLI</p>
+        <p className="center bold big">{brand.name.toUpperCase()}</p>
         <p className="center">KITCHEN ORDER TICKET</p>
         <div className="divider" />
         <p className="bold big">{order.table_number ? `TABLE ${order.table_number}` : order.order_type.toUpperCase()}</p>

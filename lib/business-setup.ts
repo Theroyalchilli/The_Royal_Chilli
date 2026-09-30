@@ -88,6 +88,7 @@ export const SECTIONS: SectionDef[] = [
     about: "How the business is named and reached. The trading name shows on the till, receipts and website.",
     fields: [
       { key: "name", label: "Trading name", kind: "text", required: true },
+      { key: "tagline", label: "Tagline", kind: "text", hint: "Short line under the name on the till and Staff Hub, e.g. Dil Se Desi" },
       { key: "legal_name", label: "Legal company name", kind: "text", hint: "As registered at Companies House, e.g. Melt House Ltd" },
       { key: "company_number", label: "Company number", kind: "text", check: checks.companyNumber },
       { key: "phone", label: "Phone", kind: "phone", check: checks.phone },

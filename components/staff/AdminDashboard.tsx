@@ -62,7 +62,7 @@ function Legend({ items }: { items: { label: string; colour: string }[] }) {
   );
 }
 
-export default function AdminDashboard({ data }: { data: Data }) {
+export default function AdminDashboard({ data, businessName }: { data: Data; businessName: string }) {
   const router = useRouter();
   const { summary: sm } = data;
 
@@ -119,7 +119,7 @@ export default function AdminDashboard({ data }: { data: Data }) {
         <Card title="Summary" className="md:col-span-2 xl:col-span-1">
           <div className="mb-3 mt-1 flex flex-wrap gap-2">
             <select disabled aria-label="Business" className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px] text-[#5B524B]">
-              <option>The Royal Chilli</option>
+              <option>{businessName}</option>
             </select>
             <select aria-label="Date range" value={sm.range} onChange={(e) => router.push(`/staff?range=${e.target.value}`, { scroll: false })}
               className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px]">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useBrand } from "@/components/pos/useBrand";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency } from "@/lib/utils";
 import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
@@ -171,6 +172,7 @@ const ORDER_TYPE_ICONS: Record<string, string> = { dine_in: "🍽️", takeaway:
 const todayStr = () => tradingDayStr();
 
 function SalesReport() {
+  const brand = useBrand();
   const [data, setData] = useState<ReportData | null>(null);
   const [from, setFrom] = useState(todayStr());
   const [to, setTo] = useState(todayStr());
@@ -254,7 +256,7 @@ function SalesReport() {
     <div className="space-y-6">
       {/* Print-only header — the sticky page title and these controls are hidden for print */}
       <div className="hidden print:block mb-2">
-        <h1 className="text-lg font-bold">The Royal Chilli — Sales Report</h1>
+        <h1 className="text-lg font-bold">{brand?.name} — Sales Report</h1>
         <p className="text-sm text-neutral-600">{isToday ? "Today" : from === to ? from : `${from} → ${to}`} · Printed {new Date().toLocaleString("en-GB")}</p>
       </div>
 
@@ -536,6 +538,7 @@ function today() {
 }
 
 function StaffLabourReport() {
+  const brand = useBrand();
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
   const [rows, setRows] = useState<StaffRow[]>([]);
@@ -563,7 +566,7 @@ function StaffLabourReport() {
     <div>
       {/* Print-only header — the controls below and the parent tab bar are hidden for print */}
       <div className="hidden print:block mb-2">
-        <h1 className="text-lg font-bold text-foreground">The Royal Chilli — Staff Hours &amp; Labour Cost</h1>
+        <h1 className="text-lg font-bold text-foreground">{brand?.name} — Staff Hours &amp; Labour Cost</h1>
         <p className="text-sm text-muted-foreground">{isToday ? "Today" : `${from} → ${to}`} · Printed {new Date().toLocaleString("en-GB")}</p>
       </div>
 

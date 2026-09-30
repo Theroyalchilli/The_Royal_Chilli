@@ -1,4 +1,7 @@
 import { getOrderForPrint } from "@/lib/kot";
+import { getBrand } from "@/lib/brand";
+import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
+import supabase from "@/lib/supabase";
 import { getOrderForReceipt } from "@/lib/receipt";
 import { paymentState } from "@/lib/payment-status";
 import { roundNumberFor } from "@/lib/kitchen-rounds";
@@ -142,11 +145,13 @@ async function buildZReportTicket(workPeriodId: number, width: number): Promise<
   const { row, DIVIDER } = layout(width);
   const report = await getZReport(workPeriodId);
   if (!report) return null;
+  const { data: period } = await supabase.from("work_periods").select("business_id").eq("id", workPeriodId).single();
+  const brand = await getBrand(period?.business_id ?? DEFAULT_BUSINESS_ID);
   const t: Ticket = [];
-  t.push({ text: "THE ROYAL CHILLI", align: "center", bold: true, size: "big" });
+  t.push({ text: brand.name.toUpperCase(), align: "center", bold: true, size: "big" });
   // Full address under the name, split to fit a narrow line.
-  for (const part of addressLines(siteContent.contact.address, width)) t.push({ text: part, align: "center" });
-  t.push({ text: siteContent.contact.phone, align: "center" });
+  for (const part of addressLines(brand.fullAddress, width)) t.push({ text: part, align: "center" });
+  if (brand.phone) t.push({ text: brand.phone, align: "center" });
   t.push({ text: DIVIDER });
   for (const l of zReportLines(report)) {
     if (l.kind === "title") t.push({ text: l.text, bold: true, size: "tall" });
@@ -225,6 +230,9 @@ async function buildKitchenTicket(job: PrintJob, orderId: number, width: number)
   return t;
 }
 
+/** A setup text box as printed lines (blank lines dropped). */
+const lines = (text: string | null) => (text ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
 const METHOD_LABEL: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
 
 async function buildReceipt(orderId: number, width: number): Promise<Ticket | null> {
@@ -242,10 +250,14 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
     : String(order.order_type).toUpperCase();
 
+  const brand = await getBrand(order.business_id ?? DEFAULT_BUSINESS_ID);
   const t: Ticket = [];
-  t.push({ text: "THE ROYAL CHILLI", align: "center", bold: true, size: "big" });
-  t.push({ text: "43 Kingsley Road, Hounslow TW3 1PA", align: "center" });
-  t.push({ text: "020 8797 3044", align: "center" });
+  t.push({ text: brand.name.toUpperCase(), align: "center", bold: true, size: "big" });
+  if (brand.address) t.push({ text: brand.address, align: "center" });
+  if (brand.phone) t.push({ text: brand.phone, align: "center" });
+  // Business setup → Receipts & numbering / Tax & VAT.
+  for (const line of lines(brand.receiptHeader)) t.push({ text: line, align: "center" });
+  if (brand.vatNumber) t.push({ text: `VAT No. ${brand.vatNumber}`, align: "center" });
   t.push({ text: DIVIDER });
   t.push({ text: "RECEIPT", align: "center", bold: true });
   t.push({ text: statusLine, align: "center", bold: true });
@@ -307,7 +319,7 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
       t.push({ text: DIVIDER });
     }
   }
-  t.push({ text: "Thank you for dining with us.", align: "center" });
+  for (const line of lines(brand.receiptFooter)) t.push({ text: line, align: "center" });
   t.push({ text: `Printed ${londonTime(new Date().toISOString(), true)}`, align: "center" });
   return t;
 }

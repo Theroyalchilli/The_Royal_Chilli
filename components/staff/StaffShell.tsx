@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { HubNotice } from "@/lib/hub-notifications";
 import BusinessSwitcher, { type SwitcherOption } from "@/components/staff/BusinessSwitcher";
+import { initials } from "@/lib/brand-client";
 
 export type NavItem = { href: string; label: string; icon: string; note?: string; external?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -24,7 +25,7 @@ export default function StaffShell({
 }: {
   user: { name: string; role: string };
   /** The business this login is working for. */
-  business: { id: number; name: string };
+  business: { id: number; name: string; logoUrl: string | null; tagline: string | null };
   /** The group owner's business picker (owner only). */
   switcher?: SwitcherOption[];
   nav: NavGroup[];
@@ -95,11 +96,15 @@ export default function StaffShell({
         <div className="mx-auto flex max-w-[1240px] items-center gap-4 px-4 py-2.5">
           <Link href="/staff" className="flex min-w-0 items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" className="h-[42px] w-[42px] flex-shrink-0 rounded-[10px] object-cover" />
+            {business.logoUrl ? (
+              <img src={business.logoUrl} alt="" className="h-[42px] w-[42px] flex-shrink-0 rounded-[10px] object-cover" />
+            ) : (
+              <span className="grid h-[42px] w-[42px] flex-shrink-0 place-items-center rounded-[10px] bg-foreground text-[15px] font-bold text-background">{initials(business.name)}</span>
+            )}
             <span className="min-w-0">
               <b style={{ fontFamily: "var(--font-cinzel)" }} className="block truncate text-[15px] leading-tight text-foreground">{business.name}</b>
               <small className="hidden truncate text-[11.5px] leading-snug text-muted-foreground lg:block">
-                <i style={{ fontFamily: "var(--font-playfair)" }} className="text-[#E34435]">Dil Se Desi</i> · {user.name} · {ROLE_LABEL[user.role] ?? user.role}
+                {business.tagline && <><i style={{ fontFamily: "var(--font-playfair)" }} className="text-[#E34435]">{business.tagline}</i> · </>}{user.name} · {ROLE_LABEL[user.role] ?? user.role}
               </small>
             </span>
           </Link>

@@ -14,7 +14,7 @@ import { encryptSecret, secretsConfigured } from "@/lib/secrets";
 // the page only learns whether each is connected.
 
 const PUBLIC_COLUMNS = [
-  "id", "slug", "name", "legal_name", "company_number", "phone", "email", "website", "logo_url", "brand_colour",
+  "id", "slug", "name", "tagline", "legal_name", "company_number", "phone", "email", "website", "logo_url", "brand_colour",
   "trading_address", "registered_address", "vat_registered", "vat_number", "vat_rate", "vat_scheme", "utr",
   "paye_reference", "year_end", "accounts_email", "receipt_header", "receipt_footer", "order_prefix", "po_prefix",
   "modules", "privacy_policy", "terms", "refund_policy", "active",

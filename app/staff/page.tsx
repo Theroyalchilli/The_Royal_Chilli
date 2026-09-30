@@ -4,6 +4,7 @@ import { getAdminDashboard, RANGES, type RangeKey } from "@/lib/admin-dashboard"
 import StaffDashboard, { KpiCard } from "@/components/staff/StaffDashboard";
 import AdminDashboard from "@/components/staff/AdminDashboard";
 import GroupOverview from "@/components/staff/GroupOverview";
+import { getBrand } from "@/lib/brand";
 import { getGroupOverview } from "@/lib/group-dashboard";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
@@ -45,7 +46,7 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
         <div className="mx-auto max-w-[1240px]">
           {header}
           {group && <GroupOverview data={group} current={session!.businessId} />}
-          <AdminDashboard data={data} />
+          <AdminDashboard data={data} businessName={(await getBrand(session!.businessId)).name} />
         </div>
       </div>
     );

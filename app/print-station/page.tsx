@@ -236,8 +236,7 @@ export default function PrintStationPage() {
 
   async function testPrint() {
     await printTicket([
-      { text: "THE ROYAL CHILLI", align: "center", bold: true, size: "big" },
-      { text: "PRINT STATION TEST", align: "center", bold: true },
+      { text: "PRINT STATION TEST", align: "center", bold: true, size: "big" },
       { text: `Printed ${new Date().toLocaleString("en-GB")}`, align: "center" },
       { text: "If this printed without a", align: "center" },
       { text: "print dialog, you're all set.", align: "center" },

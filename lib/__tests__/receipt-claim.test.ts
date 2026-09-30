@@ -1,5 +1,16 @@
 // Rewards Club "claim your points" QR on dine-in receipts.
 let receipt: unknown = null;
+// Printed tickets carry the business's own header (lib/brand.ts) — The Royal Chilli here.
+jest.mock("@/lib/brand", () => ({
+  getBrand: async () => ({
+    businessId: 1, name: "The Royal Chilli", address: "43 Kingsley Road, Hounslow TW3 1PA",
+    fullAddress: "43 Kingsley Road, Hounslow, London, TW3 1PA", phone: "020 8797 3044", logoUrl: "/logo.png", tagline: "Dil Se Desi",
+  }),
+}));
+jest.mock("@/lib/supabase", () => ({
+  __esModule: true,
+  default: { from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { business_id: 1 }, error: null }) }) }) }) },
+}));
 jest.mock("@/lib/receipt", () => ({ getOrderForReceipt: jest.fn(async () => receipt) }));
 jest.mock("@/lib/kot", () => ({ getOrderForPrint: jest.fn(async () => null) }));
 jest.mock("@/lib/z-report-db", () => ({ getZReport: jest.fn(async () => null) }));

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useBrand } from "@/components/pos/useBrand";
 import {
   Dialog,
   DialogContent,
@@ -116,6 +117,8 @@ export default function PaymentModal({
   amountPaid = 0,
   onPaymentComplete,
 }: Props) {
+  // This business's name / address for the receipt (each business is independent).
+  const brand = useBrand();
   // A member added from this screen (🎁 panel) until the parent catches up.
   const [linkedCustomerId, setLinkedCustomerId] = useState<number | null>(null);
   useEffect(() => { setLinkedCustomerId(null); }, [open, orderId]);
@@ -1229,10 +1232,10 @@ export default function PaymentModal({
 
             <div className="bg-surface-hover rounded-xl p-4 font-mono text-sm">
               <div className="text-center text-foreground font-bold mb-2">
-                THE ROYAL CHILLI
+                {brand?.name.toUpperCase()}
               </div>
               <div className="text-center text-muted-foreground text-xs mb-3">
-                43 Kingsley Road, Hounslow TW3 1PA
+                {brand?.address}
               </div>
               <div className="border-t border-dashed border-elevated pt-2 space-y-1">
                 {items.filter(i => !i.voided).map((item, i) => (
@@ -1286,7 +1289,7 @@ export default function PaymentModal({
                 )}
               </div>
               <div className="text-center text-muted-foreground text-xs mt-3">
-                Thank you for visiting!<br />
+                {brand?.receiptFooter && <span className="whitespace-pre-line">{brand.receiptFooter}<br /></span>}
                 {new Date().toLocaleString("en-GB")}
               </div>
             </div>

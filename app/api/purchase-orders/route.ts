@@ -3,15 +3,16 @@ import { allOwned, bizDb, type BizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
+import { poNumberPrefix } from "@/lib/business";
 
 // Based on the highest sequence number actually issued today, not a row
 // COUNT — a COUNT drifts (and reissues an already-used number, which then
 // collides on the unique constraint) the moment any of today's purchase
 // orders is deleted rather than just cancelled. Same fix as
 // lib/orders.ts's generateOrderNumber().
-async function generatePoNumber(db: BizDb): Promise<string> {
+async function generatePoNumber(db: BizDb, businessId: number): Promise<string> {
   const dateStr = londonDateStr().replace(/-/g, "");
-  const prefix = `PO-${dateStr}-`;
+  const prefix = `${await poNumberPrefix(businessId)}-${dateStr}-`;
   const { data: rows } = await db
     .from("purchase_orders")
     .select("order_number")
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     let po: { id: number } | null = null;
     let poErr: { code?: string; message?: string } | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const orderNumber = await generatePoNumber(db);
+      const orderNumber = await generatePoNumber(db, session.businessId);
       const result = await db
         .from("purchase_orders")
         .insert({

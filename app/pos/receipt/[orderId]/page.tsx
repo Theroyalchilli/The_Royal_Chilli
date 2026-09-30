@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getOrderForReceipt } from "@/lib/receipt";
+import { getBrand } from "@/lib/brand";
 import { paymentState } from "@/lib/payment-status";
 import AutoPrint from "./AutoPrint";
 import PrintNav from "./PrintNav";
@@ -22,6 +23,7 @@ export default async function ReceiptPrintPage({
     return <div style={{ padding: 20, fontFamily: "monospace" }}>Order not found.</div>;
   }
   const { order, items, payments } = data;
+  const brand = await getBrand(session.businessId);
 
   const placeLabel = order.order_type === "dine_in"
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
@@ -39,9 +41,11 @@ export default async function ReceiptPrintPage({
       <AutoPrint />
       <PrintNav />
       <div className="receipt-ticket">
-        <p className="center bold big">THE ROYAL CHILLI</p>
-        <p className="center small">43 Kingsley Road, Hounslow TW3 1PA</p>
-        <p className="center small">020 8797 3044</p>
+        <p className="center bold big">{brand.name.toUpperCase()}</p>
+        {brand.address && <p className="center small">{brand.address}</p>}
+        {brand.phone && <p className="center small">{brand.phone}</p>}
+        {brand.receiptHeader && <p className="center small" style={{ whiteSpace: "pre-line" }}>{brand.receiptHeader}</p>}
+        {brand.vatNumber && <p className="center small">VAT No. {brand.vatNumber}</p>}
         <div className="divider" />
         <p className="center bold">RECEIPT</p>
         <p className={`center bold ${isPaid ? "paid" : "due"}`}>{statusLine}</p>
@@ -119,7 +123,7 @@ export default async function ReceiptPrintPage({
         )}
         <div className="divider" />
 
-        <p className="center">Thank you for dining with us.</p>
+        {brand.receiptFooter && <p className="center" style={{ whiteSpace: "pre-line" }}>{brand.receiptFooter}</p>}
         <p className="center small">Printed {new Date().toLocaleString("en-GB")}</p>
       </div>
 

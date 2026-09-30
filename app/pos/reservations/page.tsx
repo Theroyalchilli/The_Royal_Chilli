@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useBrand } from "@/components/pos/useBrand";
 import Link from "next/link";
 import type { RestaurantTable } from "@/lib/types";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
@@ -277,6 +278,7 @@ function NewReservationModal({ onClose, onCreated }: { onClose: () => void; onCr
 
 // ── Main Page ─────────────────────────────────────────────────────────────
 export default function ReservationsPage() {
+  const brand = useBrand();
   const [tables, setTables] = useState<RestaurantTable[]>([]);
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -366,7 +368,7 @@ export default function ReservationsPage() {
           <div className="min-w-0">
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-lg leading-tight tracking-[-0.02em] truncate">Reservations</h1>
             <p className="text-muted-foreground text-[10px] sm:text-xs hidden sm:block">
-              The Royal Chilli · Hounslow{pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
+              {brand?.name ?? ""}{pendingCount > 0 ? ` · ${pendingCount} pending` : ""}
             </p>
           </div>
           <button onClick={() => setAdding(true)}

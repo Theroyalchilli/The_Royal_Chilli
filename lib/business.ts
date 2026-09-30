@@ -31,6 +31,14 @@ export type Business = {
   modules: BusinessModules;
   active: boolean;
   display_order: number;
+  // Business setup (migrations 080, 082)
+  tagline?: string | null;
+  trading_address?: unknown;
+  vat_registered?: boolean;
+  receipt_header?: string | null;
+  receipt_footer?: string | null;
+  order_prefix?: string | null;
+  po_prefix?: string | null;
 };
 
 // The list changes rarely; keep it for a minute per server instance.
@@ -131,8 +139,15 @@ export async function staffIdsAt(businessId: number): Promise<number[]> {
 
 /** Short prefix for this business's order numbers: RC-20260929-001, MH-…  */
 export async function orderNumberPrefix(businessId: number): Promise<string> {
-  if (businessId === DEFAULT_BUSINESS_ID) return "RC";
   const b = await getBusiness(businessId);
+  // Settings → Business setup → Receipts & numbering.
+  if (b?.order_prefix) return b.order_prefix;
+  if (businessId === DEFAULT_BUSINESS_ID) return "RC";
   const parts = (b?.slug ?? `b${businessId}`).split("-").filter(Boolean);
   return (parts.length > 1 ? parts.map((p) => p[0]).join("") : parts[0].slice(0, 2)).toUpperCase();
+}
+
+/** The start of purchase-order numbers (Business setup; "PO" until set). */
+export async function poNumberPrefix(businessId: number): Promise<string> {
+  return (await getBusiness(businessId))?.po_prefix || "PO";
 }

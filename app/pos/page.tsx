@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { initials, type Brand } from "@/lib/brand-client";
 import { useRouter } from "next/navigation";
 import { formatCurrency, isHappyHour, isBreakfastTime } from "@/lib/utils";
 import OrderTypeSelector from "@/components/pos/OrderTypeSelector";
@@ -38,6 +39,8 @@ interface SessionUser {
 export default function POSPage() {
   const router = useRouter();
   const [session, setSession] = useState<SessionUser | null>(null);
+  // This business's name / logo (each business is independent) — /api/auth/me.
+  const [brand, setBrand] = useState<Brand | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Menu data
@@ -258,6 +261,7 @@ export default function POSPage() {
       if (meRes.ok) {
         const meData = await meRes.json();
         setSession(meData.user);
+        setBrand(meData.brand ?? null);
       }
     } catch {
       router.push("/login");
@@ -879,14 +883,21 @@ export default function POSPage() {
 
         {/* Brand */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <img src="/logo.png" alt="The Royal Chilli" className="h-10 w-10 rounded-lg object-cover flex-shrink-0" />
+          {brand && (brand.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brand.logoUrl} alt={brand.name} className="h-10 w-10 rounded-lg object-cover flex-shrink-0" />
+          ) : (
+            <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-foreground text-sm font-bold text-background">{initials(brand.name)}</span>
+          ))}
           <div className="flex flex-col leading-none gap-0.5">
             <span style={{ fontFamily: "var(--font-cinzel)" }} className="text-foreground font-bold text-sm lg:text-[15px] tracking-wide leading-none">
-              The Royal Chilli
+              {brand?.name ?? ""}
             </span>
-            <span style={{ fontFamily: "var(--font-playfair)" }} className="text-yellow-600 text-[11px] font-bold italic tracking-widest leading-none">
-              Dil Se Desi
-            </span>
+            {brand?.tagline && (
+              <span style={{ fontFamily: "var(--font-playfair)" }} className="text-yellow-600 text-[11px] font-bold italic tracking-widest leading-none">
+                {brand.tagline}
+              </span>
+            )}
           </div>
           {breakfastTime && (
             <span className="hidden sm:inline bg-yellow-500 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">BREAKFAST</span>

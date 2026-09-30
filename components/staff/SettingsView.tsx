@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { confirmDelete } from "@/components/ui/confirm";
 
 type Matrix = Record<string, Record<string, boolean>>;
@@ -352,16 +351,11 @@ function FeaturedDishesPanel() {
   );
 }
 
-export default function SettingsView({ canEditPermissions }: { canEditPermissions: boolean }) {
-  const [tab, setTab] = useState<"general" | "permissions">("general");
-  // The top menu's "Roles & Permissions" links here with ?tab=permissions.
-  const tabParam = useSearchParams().get("tab");
-  useEffect(() => { setTab(tabParam === "permissions" ? "permissions" : "general"); }, [tabParam]);
-  const [companyName, setCompanyName] = useState("");
-  const [currency, setCurrency] = useState("GBP");
+// Settings → General and Settings → Roles & Permissions (the page's tabs are
+// in app/staff/settings/page.tsx).
+export default function SettingsView({ section, canEditPermissions }: { section: "general" | "permissions"; canEditPermissions: boolean }) {
   const [weekStartDay, setWeekStartDay] = useState("Monday");
   const [overtimeEnabled, setOvertimeEnabled] = useState(false);
-  const [vatRate, setVatRate] = useState("0.2");
   const [maxEmployees, setMaxEmployees] = useState("20");
   const [depositAmount, setDepositAmount] = useState("0");
   const [openingHours, setOpeningHours] = useState<{ day: string; open: string; close: string }[]>([]);
@@ -394,11 +388,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
       .then((r) => r.json())
       .then((d) => {
         const s = d.settings || {};
-        if (s.company_name) setCompanyName(s.company_name);
-        if (s.currency) setCurrency(s.currency);
         if (s.week_start_day) setWeekStartDay(s.week_start_day);
         setOvertimeEnabled(!!s.overtime_enabled);
-        if (s.vat_rate !== undefined) setVatRate(String(s.vat_rate));
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
         if (Array.isArray(s.opening_hours)) setOpeningHours(s.opening_hours);
@@ -476,8 +467,8 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
     await fetch("/api/settings", {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        company_name: companyName, currency, week_start_day: weekStartDay, overtime_enabled: overtimeEnabled,
-        vat_rate: Number(vatRate), max_employees: Number(maxEmployees),
+        week_start_day: weekStartDay, overtime_enabled: overtimeEnabled,
+        max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
         opening_hours: openingHours,
         about_excerpt: aboutExcerpt,
@@ -498,85 +489,16 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
     setSaved(true);
   }
 
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Loading…</div>;
+  if (loading) return <div className="py-16 text-center text-muted-foreground">Loading…</div>;
 
+  if (section === "permissions") return <PermissionsPanel canEdit={canEditPermissions} />;
+
+  // General — grouped into cards; one Save for all of them (the featured
+  // dishes and promotion banner save on their own, as before).
   return (
-    <>
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
-        <div className="mx-auto max-w-3xl">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Settings</h1>
-              <p className="text-muted-foreground text-sm">Restaurant-wide configuration — roles, permissions and more.</p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2 border-b border-border">
-            <button
-              onClick={() => setTab("general")}
-              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${tab === "general" ? "text-red-600 border-red-500" : "text-muted-foreground border-transparent hover:text-foreground"}`}
-            >
-              General
-            </button>
-            <button
-              onClick={() => setTab("permissions")}
-              className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${tab === "permissions" ? "text-red-600 border-red-500" : "text-muted-foreground border-transparent hover:text-foreground"}`}
-            >
-              Roles &amp; Permissions
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 py-6">
-      <div className="mx-auto max-w-3xl">
-        {tab === "general" ? (
-          <>
-          <div className="mt-6 max-w-md rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5 space-y-4">
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Company Name</label>
-              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Currency</label>
-              <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
-                <option value="GBP">£ GBP</option>
-                <option value="EUR">€ EUR</option>
-                <option value="USD">$ USD</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Week Start Day</label>
-              <select value={weekStartDay} onChange={(e) => setWeekStartDay(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
-                <option value="Monday">Monday</option>
-                <option value="Sunday">Sunday</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">VAT Rate</label>
-              <select value={vatRate} onChange={(e) => setVatRate(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
-                <option value="0.2">20% (Standard)</option>
-                <option value="0.05">5% (Reduced)</option>
-                <option value="0">0% (Zero-rated)</option>
-              </select>
-              <p className="mt-1 text-muted-foreground text-xs">Used by Finance → VAT report to extract VAT from your VAT-inclusive menu prices.</p>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Employee Limit</label>
-              <input type="number" value={maxEmployees} onChange={(e) => setMaxEmployees(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-              <p className="mt-1 text-muted-foreground text-xs">Blocks adding new employees once this many are active.</p>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Reservation Deposit (£)</label>
-              <input type="number" step="0.01" min="0" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-              <p className="mt-1 text-muted-foreground text-xs">0 = no deposit required. When set, new website reservations (not waitlist entries) are redirected to pay this online before confirming.</p>
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Opening Hours (displayed on the website)</label>
-              <p className="mb-2 text-muted-foreground text-xs">
-                Shown in the footer, homepage, FAQ and Google listing data. Doesn&apos;t change what times customers can
-                actually place an order — that&apos;s controlled separately.
-              </p>
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card icon="🕐" title="Opening hours" hint="Shown in the website footer, homepage, FAQ and Google listing. When customers can actually order is set separately.">
               <div className="space-y-1.5">
                 {openingHours.map((h, i) => (
                   <div key={h.day} className="flex items-center gap-2">
@@ -606,132 +528,9 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
                 ))}
               </div>
               <p className="mt-1 text-muted-foreground text-xs">A close time earlier than open (e.g. 09:00 to 01:00) means past midnight.</p>
-            </div>
+        </Card>
 
-            <div className="pt-2 border-t border-border">
-              <label className="block text-xs text-muted-foreground mb-1">Our Story</label>
-              <p className="mb-2 text-muted-foreground text-xs">Homepage excerpt and the full story shown on the About page.</p>
-
-              <p className="mt-3 text-xs font-semibold text-foreground">Homepage excerpt</p>
-              <input
-                placeholder="Heading (black part)" value={aboutExcerpt.title}
-                onChange={(e) => setAboutExcerpt((a) => ({ ...a, title: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <input
-                placeholder="Heading (gold/italic part)" value={aboutExcerpt.titleGold}
-                onChange={(e) => setAboutExcerpt((a) => ({ ...a, titleGold: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <textarea
-                placeholder="First paragraph" value={aboutExcerpt.text1} rows={2}
-                onChange={(e) => setAboutExcerpt((a) => ({ ...a, text1: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <textarea
-                placeholder="Second paragraph" value={aboutExcerpt.text2} rows={2}
-                onChange={(e) => setAboutExcerpt((a) => ({ ...a, text2: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-
-              <p className="mt-4 text-xs font-semibold text-foreground">Full story (About page)</p>
-              <div className="mt-1.5 space-y-2">
-                {storyParagraphs.map((p, i) => (
-                  <div key={i} className="flex gap-2">
-                    <textarea
-                      value={p} rows={2}
-                      onChange={(e) => setStoryParagraphs((prev) => prev.map((x, j) => j === i ? e.target.value : x))}
-                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setStoryParagraphs((prev) => prev.filter((_, j) => j !== i))}
-                      className="flex-shrink-0 text-muted-foreground hover:text-red-600 text-xs"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setStoryParagraphs((prev) => [...prev, ""])}
-                className="mt-2 text-red-600 text-xs font-semibold"
-              >
-                + Add paragraph
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-border">
-              <label className="block text-xs text-muted-foreground mb-1">Hero Banner (homepage)</label>
-              <p className="mb-2 text-muted-foreground text-xs">
-                The full-screen photo + headline at the top of the homepage. One shared image set rotates on
-                both desktop and mobile.
-              </p>
-              <input
-                placeholder="Small tag line above the headline" value={heroContent.tag}
-                onChange={(e) => setHeroContent((h) => ({ ...h, tag: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <input
-                placeholder="Headline (white part)" value={heroContent.headline}
-                onChange={(e) => setHeroContent((h) => ({ ...h, headline: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <input
-                placeholder="Headline (gold/italic part)" value={heroContent.headlineGold}
-                onChange={(e) => setHeroContent((h) => ({ ...h, headlineGold: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <textarea
-                placeholder="Description" value={heroContent.description} rows={2}
-                onChange={(e) => setHeroContent((h) => ({ ...h, description: e.target.value }))}
-                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-
-              <p className="mt-4 text-xs font-semibold text-foreground">Rotating photos ({heroImages.length})</p>
-              <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {heroImages.map((url, i) => (
-                  <div key={url} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-border">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary uploaded URLs, not a next/image-optimizable static path */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 opacity-0 group-hover:opacity-100">
-                      {i > 0 && (
-                        <button type="button" onClick={() => setHeroImages((prev) => { const next = [...prev]; [next[i - 1], next[i]] = [next[i], next[i - 1]]; return next; })} className="text-white text-xs">
-                          ← Move earlier
-                        </button>
-                      )}
-                      <button type="button" onClick={() => setHeroImages((prev) => prev.filter((_, j) => j !== i))} className="text-red-300 text-xs font-semibold">
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-muted-foreground hover:border-red-400 hover:text-red-600">
-                  <span className="text-xs font-semibold">{uploadingHero ? "Uploading…" : "+ Add photo"}</span>
-                  <input
-                    type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingHero}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadHeroImage(f); e.target.value = ""; }}
-                  />
-                </label>
-              </div>
-              {uploadError && <p className="mt-1 text-red-600 text-xs">{uploadError}</p>}
-              <p className="mt-1 text-muted-foreground text-xs">JPEG, PNG or WEBP, up to 10MB. New photos are added to the end of the rotation.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Google review link</label>
-              <input
-                type="url" placeholder="https://g.page/r/…/review" value={googleReviewUrl}
-                onChange={(e) => setGoogleReviewUrl(e.target.value)}
-                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
-              />
-              <p className="mt-1 text-muted-foreground text-xs">
-                Used in the &quot;How was your meal?&quot; email sent the day after an order, only to customers who opted in to hear from us.
-                Leave blank to send none. Find it in Google Maps → your restaurant → Reviews → &quot;Ask for reviews&quot;.
-              </p>
-            </div>
-
+        <Card icon="💷" title="Till & bookings" hint="The till's card reader, the table-booking deposit and the start of the working week.">
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Till card reader</label>
               <select value={tillProvider} onChange={(e) => { setTillProvider(e.target.value as "sumup" | "stripe" | "none"); setPairError(""); setPairedStatus(""); }} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
@@ -797,18 +596,137 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
                 </div>
               </>
             )}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-foreground text-sm font-medium">Automatic Overtime</p>
-                <p className="text-muted-foreground text-xs">Currently off — all hours pay at the flat rate.</p>
-              </div>
-              <button onClick={() => setOvertimeEnabled((v) => !v)}
-                className={`w-12 h-6 rounded-full transition-colors relative ${overtimeEnabled ? "bg-red-600" : "bg-elevated"}`}>
-                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${overtimeEnabled ? "translate-x-6" : ""}`} />
-              </button>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Reservation Deposit (£)</label>
+              <input type="number" step="0.01" min="0" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              <p className="mt-1 text-muted-foreground text-xs">0 = no deposit required. When set, new website reservations (not waitlist entries) are redirected to pay this online before confirming.</p>
             </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Week Start Day</label>
+              <select value={weekStartDay} onChange={(e) => setWeekStartDay(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
+                <option value="Monday">Monday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+            </div>
+        </Card>
 
-            <div className="pt-2 border-t border-border">
+        <Card icon="🌐" title="Website" hint="What customers see on the homepage and About page." wide>
+          <p className="text-xs font-semibold text-foreground">Hero banner (top of the homepage)</p>
+              <input
+                placeholder="Small tag line above the headline" value={heroContent.tag}
+                onChange={(e) => setHeroContent((h) => ({ ...h, tag: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <input
+                placeholder="Headline (white part)" value={heroContent.headline}
+                onChange={(e) => setHeroContent((h) => ({ ...h, headline: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <input
+                placeholder="Headline (gold/italic part)" value={heroContent.headlineGold}
+                onChange={(e) => setHeroContent((h) => ({ ...h, headlineGold: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <textarea
+                placeholder="Description" value={heroContent.description} rows={2}
+                onChange={(e) => setHeroContent((h) => ({ ...h, description: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+
+              <p className="mt-4 text-xs font-semibold text-foreground">Rotating photos ({heroImages.length})</p>
+              <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {heroImages.map((url, i) => (
+                  <div key={url} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary uploaded URLs, not a next/image-optimizable static path */}
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 opacity-0 group-hover:opacity-100">
+                      {i > 0 && (
+                        <button type="button" onClick={() => setHeroImages((prev) => { const next = [...prev]; [next[i - 1], next[i]] = [next[i], next[i - 1]]; return next; })} className="text-white text-xs">
+                          ← Move earlier
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setHeroImages((prev) => prev.filter((_, j) => j !== i))} className="text-red-300 text-xs font-semibold">
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-muted-foreground hover:border-red-400 hover:text-red-600">
+                  <span className="text-xs font-semibold">{uploadingHero ? "Uploading…" : "+ Add photo"}</span>
+                  <input
+                    type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingHero}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadHeroImage(f); e.target.value = ""; }}
+                  />
+                </label>
+              </div>
+              {uploadError && <p className="mt-1 text-red-600 text-xs">{uploadError}</p>}
+              <p className="mt-1 text-muted-foreground text-xs">JPEG, PNG or WEBP, up to 10MB. New photos are added to the end of the rotation.</p>
+          <div className="border-t border-border pt-4">
+            <p className="text-xs font-semibold text-foreground">Our story</p>
+              <p className="mt-3 text-xs font-semibold text-foreground">Homepage excerpt</p>
+              <input
+                placeholder="Heading (black part)" value={aboutExcerpt.title}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, title: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <input
+                placeholder="Heading (gold/italic part)" value={aboutExcerpt.titleGold}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, titleGold: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <textarea
+                placeholder="First paragraph" value={aboutExcerpt.text1} rows={2}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, text1: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <textarea
+                placeholder="Second paragraph" value={aboutExcerpt.text2} rows={2}
+                onChange={(e) => setAboutExcerpt((a) => ({ ...a, text2: e.target.value }))}
+                className="mt-1.5 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+
+              <p className="mt-4 text-xs font-semibold text-foreground">Full story (About page)</p>
+              <div className="mt-1.5 space-y-2">
+                {storyParagraphs.map((p, i) => (
+                  <div key={i} className="flex gap-2">
+                    <textarea
+                      value={p} rows={2}
+                      onChange={(e) => setStoryParagraphs((prev) => prev.map((x, j) => j === i ? e.target.value : x))}
+                      className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setStoryParagraphs((prev) => prev.filter((_, j) => j !== i))}
+                      className="flex-shrink-0 text-muted-foreground hover:text-red-600 text-xs"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setStoryParagraphs((prev) => [...prev, ""])}
+                className="mt-2 text-red-600 text-xs font-semibold"
+              >
+                + Add paragraph
+              </button>
+          </div>
+          <div className="border-t border-border pt-4">
+            <label className="block text-xs text-muted-foreground mb-1">Google review link</label>
+              <input
+                type="url" placeholder="https://g.page/r/…/review" value={googleReviewUrl}
+                onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm"
+              />
+              <p className="mt-1 text-muted-foreground text-xs">
+                Used in the &quot;How was your meal?&quot; email sent the day after an order, only to customers who opted in to hear from us.
+                Leave blank to send none. Find it in Google Maps → your restaurant → Reviews → &quot;Ask for reviews&quot;.
+              </p>
+          </div>
+        </Card>
+
+        <Card icon="📍" title="Clock-in location" hint="Stops staff clocking in away from the restaurant.">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-foreground text-sm font-medium">Geofenced Clock-In</p>
@@ -850,26 +768,51 @@ export default function SettingsView({ canEditPermissions }: { canEditPermission
                   <p className="text-muted-foreground text-xs">A manager can always clock a team member in manually from Attendance → Team, bypassing this check (GPS trouble, dead phone, etc.). Browser location can be spoofed, so treat this as a soft deterrent, not a hard security control.</p>
                 </div>
               )}
-            </div>
+        </Card>
 
-            <button onClick={save} disabled={saving} className="w-full py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold rounded-lg">
-              {saving ? "Saving…" : saved ? "✓ Saved" : "Save Settings"}
-            </button>
-          </div>
-          <div className="mt-6 max-w-md">
-            <FeaturedDishesPanel />
-          </div>
-          <div className="mt-6 max-w-md">
-            <PromotionPanel />
-          </div>
-          </>
-        ) : (
-          <div className="mt-6">
-            <PermissionsPanel canEdit={canEditPermissions} />
-          </div>
-        )}
+        <Card icon="👥" title="Staff" hint="Limits and pay rules for this business.">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Employee Limit</label>
+              <input type="number" value={maxEmployees} onChange={(e) => setMaxEmployees(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+              <p className="mt-1 text-muted-foreground text-xs">Blocks adding new employees once this many are active.</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-foreground text-sm font-medium">Automatic Overtime</p>
+                <p className="text-muted-foreground text-xs">Currently off — all hours pay at the flat rate.</p>
+              </div>
+              <button onClick={() => setOvertimeEnabled((v) => !v)}
+                className={`w-12 h-6 rounded-full transition-colors relative ${overtimeEnabled ? "bg-red-600" : "bg-elevated"}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${overtimeEnabled ? "translate-x-6" : ""}`} />
+              </button>
+            </div>
+          <p className="text-muted-foreground text-xs">Company name, currency and VAT rate are in <b>Business setup</b>.</p>
+        </Card>
       </div>
+
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <span className="mr-auto text-xs text-muted-foreground">{saved ? "✓ Saved" : "Save to apply the changes above."}</span>
+        <button onClick={save} disabled={saving} className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-50">
+          {saving ? "Saving…" : "Save changes"}
+        </button>
       </div>
-    </>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <FeaturedDishesPanel />
+        <PromotionPanel />
+      </div>
+    </div>
+  );
+}
+
+function Card({ icon, title, hint, wide, children }: { icon: string; title: string; hint: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <section className={`space-y-4 rounded-2xl border border-border bg-surface p-5 shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] ${wide ? "md:col-span-2" : ""}`}>
+      <div>
+        <h2 className="flex items-center gap-2 text-[15.5px] font-bold text-foreground"><span aria-hidden>{icon}</span>{title}</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+      </div>
+      {children}
+    </section>
   );
 }

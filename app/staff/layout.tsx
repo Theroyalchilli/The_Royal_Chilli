@@ -55,16 +55,11 @@ export default async function StaffHubLayout({
         ...(see("audit") ? [{ href: "/staff/audit-log", label: "Audit log", icon: "🔍" }] : []),
       ],
     },
+    // One link — General, Business setup, Roles & Permissions and (owner)
+    // Businesses are tabs on the Settings page.
     {
       label: "Settings",
-      items: see("settings")
-        ? [
-            { href: "/staff/settings", label: "Settings", icon: "⚙️" },
-            { href: "/staff/business", label: "Business setup", icon: "🏢", note: "Name, address, VAT, receipts" },
-            ...(session.owner ? [{ href: "/staff/businesses", label: "Businesses", icon: "🗂️", note: "All businesses — owner only" }] : []),
-            { href: "/staff/settings?tab=permissions", label: "Roles & Permissions", icon: "🔐" },
-          ]
-        : [],
+      items: see("settings") || session.owner ? [{ href: "/staff/settings", label: "Settings", icon: "⚙️" }] : [],
     },
   ].filter((g, i) => i === 0 || g.items.length > 0);
 

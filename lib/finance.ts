@@ -26,9 +26,10 @@ export const CARD_FEE_RATE = 0.0175;
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export async function getVatRate(): Promise<number> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "vat_rate").maybeSingle();
-  return data ? Number(data.value) : 0.2;
+// The business's own VAT rate (Settings → Business setup → Tax & VAT).
+export async function getVatRate(businessId: number): Promise<number> {
+  const { data } = await supabase.from("businesses").select("vat_rate").eq("id", businessId).maybeSingle();
+  return data?.vat_rate != null ? Number(data.vat_rate) : 0.2;
 }
 
 // For VAT-inclusive gross amounts: the VAT portion is gross * (rate / (1 + rate)).
@@ -248,7 +249,7 @@ export async function getPnl(businessId: number, from: string, to: string): Prom
     getIngredientPurchases(businessId, from, to),
     getLabourCost(businessId, from, to),
     getOtherExpenses(businessId, from, to),
-    getVatRate(),
+    getVatRate(businessId),
   ]);
   const recipe = await getRecipeCogs(businessId, sales.orders.map((o) => o.id));
   return buildPnl({ from, to, vatRate, sales, ingredients, staff, expenses, recipe });

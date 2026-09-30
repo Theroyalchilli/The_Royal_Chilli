@@ -99,7 +99,7 @@ export default function BusinessesView({ current }: { current: number }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={btn} disabled={!!busy} onClick={() => workIn(b.id, "/staff")}>Work in</button>
-                <button type="button" className={btn} disabled={!!busy} onClick={() => workIn(b.id, "/staff/business")}>Set up</button>
+                <button type="button" className={btn} disabled={!!busy} onClick={() => workIn(b.id, "/staff/settings?tab=setup")}>Set up</button>
                 {!b.hasRewards && (
                   <button type="button" className={btn} disabled={!!busy} onClick={() => copyRewards(b.id)}>Copy Royal Chilli&apos;s rewards</button>
                 )}

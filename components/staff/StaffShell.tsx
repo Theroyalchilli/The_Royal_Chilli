@@ -114,7 +114,13 @@ export default function StaffShell({
                 {item.label}
               </Link>
             ))}
-            {groups.map((g) => (
+            {groups.map((g) => g.items.length === 1 && g.items[0].label === g.label ? (
+              // A group of one (Settings) is just a link.
+              <Link key={g.label} href={g.items[0].href}
+                className={`${topBtn} ${groupActive(g) ? "bg-[#FDECE9] text-[#C82D1D]" : "text-[#5B524B] hover:bg-[#F6F1E6] hover:text-foreground"}`}>
+                {g.label}
+              </Link>
+            ) : (
               <div key={g.label} className={`hub-mi relative ${openMenu === g.label ? "open" : ""}`}>
                 <button type="button" onClick={() => toggle(g.label)} aria-expanded={openMenu === g.label}
                   className={`${topBtn} ${groupActive(g) ? "text-[#C82D1D]" : "text-[#5B524B]"} hover:bg-[#F6F1E6]`}>

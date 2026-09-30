@@ -8,5 +8,5 @@ export default async function InventoryPage() {
   if (!session || !canAccess(session.role, "inventory")) {
     redirect("/staff");
   }
-  return <InventoryView canApproveStockTakes={canAccess(session.role, "inventory")} />;
+  return <InventoryView canApproveStockTakes={canAccess(session.role, "inventory")} canRecordSpending={canAccess(session.role, "finance")} />;
 }

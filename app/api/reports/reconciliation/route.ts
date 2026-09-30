@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageInventory } from "@/lib/permissions";
+import { canManageFinance, canManageInventory } from "@/lib/permissions";
 import { getReconciliationReport } from "@/lib/inventory";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageInventory(session.role)) {
+  // Inventory → Reconciliation and Finance → Food cost & GP.
+  if (!session || !(canManageInventory(session.role) || canManageFinance(session.role))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { searchParams } = new URL(req.url);

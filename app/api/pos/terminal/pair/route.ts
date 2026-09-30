@@ -4,6 +4,8 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { stripe, TERMINAL_LOCATION_ADDRESS } from "@/lib/stripe";
 import { pairReader } from "@/lib/sumup";
+import { getBusinessSetting, saveBusinessSettings } from "@/lib/business-settings";
+import { getBrand } from "@/lib/brand";
 
 type PairedReader = { id: string; label: string | null; status: string | null };
 
@@ -41,22 +43,15 @@ export async function POST(req: NextRequest) {
     }
 
     // --- ensure a Terminal Location exists ---
-    const { data: locSetting } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "stripe_terminal_location_id")
-      .maybeSingle();
-    let locationId = locSetting ? String(locSetting.value || "").trim() : "";
+    let locationId = String((await getBusinessSetting(session.businessId, "stripe_terminal_location_id")) ?? "").trim();
 
     if (!locationId) {
       const location = await stripe.terminal.locations.create({
-        display_name: "The Royal Chilli",
+        display_name: (await getBrand(session.businessId)).name || "Till",
         address: { ...TERMINAL_LOCATION_ADDRESS },
       });
       locationId = location.id;
-      await supabase
-        .from("app_settings")
-        .upsert({ key: "stripe_terminal_location_id", value: locationId, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      await saveBusinessSettings(session.businessId, { stripe_terminal_location_id: locationId });
     }
 
     const reader = await stripe.terminal.readers.create({

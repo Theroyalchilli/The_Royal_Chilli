@@ -1,4 +1,4 @@
-import supabase from "@/lib/supabase";
+import { getBusinessSetting } from "@/lib/business-settings";
 
 export type DayHours = { day: string; open: string; close: string };
 
@@ -6,9 +6,9 @@ const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satu
 
 // Displayed-only hours (footer, homepage badge, FAQ, schema.org). Does NOT
 // gate live ordering — see lib/hours.ts for that, deliberately kept separate.
-export async function getOpeningHours(): Promise<DayHours[]> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "opening_hours").maybeSingle();
-  const hours = (data?.value as DayHours[] | undefined) ?? [];
+export async function getOpeningHours(businessId: number): Promise<DayHours[]> {
+  const value = await getBusinessSetting(businessId, "opening_hours");
+  const hours = (value as DayHours[] | undefined) ?? [];
   return [...hours].sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
 }
 

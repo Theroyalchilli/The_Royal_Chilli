@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "A positive amount is required" }, { status: 400 });
     }
 
-    const reader = await getTillReader();
+    const reader = await getTillReader(session.businessId);
     if (reader.provider === "none") {
       return NextResponse.json({ error: "No card reader is configured in Settings" }, { status: 400 });
     }

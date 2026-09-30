@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const reader = await getTillReader();
+    const reader = await getTillReader(session.businessId);
     if (reader.provider === "none") {
       return NextResponse.json({ error: "No card reader is configured" }, { status: 400 });
     }

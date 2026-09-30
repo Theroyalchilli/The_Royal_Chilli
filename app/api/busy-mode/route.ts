@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { busyState, endOfTradingDay, NORMAL_MODE, type BusyMode } from "@/lib/busy-mode";
+import { getBusinessSetting, saveBusinessSettings } from "@/lib/business-settings";
+import { requestBusinessId } from "@/lib/business";
 
 export const dynamic = "force-dynamic";
 
-async function readMode(): Promise<BusyMode> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "busy_mode").maybeSingle();
-  return (data?.value as BusyMode) ?? NORMAL_MODE;
+async function readMode(businessId: number): Promise<BusyMode> {
+  return (await getBusinessSetting<BusyMode>(businessId, "busy_mode")) ?? NORMAL_MODE;
 }
 
-// GET — current busy state (public: the website reads it at checkout).
-export async function GET() {
-  return NextResponse.json(busyState(await readMode()));
+// GET — current busy state (public: the website reads it at checkout; the
+// till reads its own business's).
+export async function GET(req: NextRequest) {
+  return NextResponse.json(busyState(await readMode(await requestBusinessId(req))));
 }
 
 // POST — set from the till by any staff member:
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const current = await readMode();
+  const current = await readMode(session.businessId);
   let next: BusyMode;
   if (body.action === "normal") {
     next = NORMAL_MODE;
@@ -43,10 +44,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from("app_settings")
-    .upsert({ key: "busy_mode", value: next, updated_at: new Date().toISOString() }, { onConflict: "key" });
-  if (error) return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+  try {
+    await saveBusinessSettings(session.businessId, { busy_mode: next });
+  } catch {
+    return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+  }
   revalidatePath("/order");
   return NextResponse.json(busyState(next));
 }

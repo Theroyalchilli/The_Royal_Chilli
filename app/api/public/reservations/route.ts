@@ -7,6 +7,7 @@ import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { sendReservationConfirmationEmail } from "@/lib/email";
 import { isValidEmail } from "@/lib/utils";
+import { getBusinessSetting } from "@/lib/business-settings";
 
 const ACTIVE_STATUSES = ["pending", "confirmed", "seated"];
 
@@ -47,12 +48,7 @@ export async function POST(req: NextRequest) {
     // there's no table to hold yet.
     let depositAmount = 0;
     if (!isFull) {
-      const { data: setting } = await supabase
-        .from("app_settings")
-        .select("value")
-        .eq("key", "reservation_deposit_amount")
-        .maybeSingle();
-      depositAmount = setting ? Number(setting.value) : 0;
+      depositAmount = Number((await getBusinessSetting(db.businessId, "reservation_deposit_amount")) ?? 0) || 0;
     }
 
     const { data, error } = await db

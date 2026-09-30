@@ -4,6 +4,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { staffIdsAt } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
+import { getBusinessSetting } from "@/lib/business-settings";
 
 const PROFILE_FIELDS =
   "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, created_at";
@@ -60,8 +61,8 @@ export async function POST(req: NextRequest) {
     }
 
     const { count: activeCount } = await supabase.from("staff").select("*", { count: "exact", head: true }).eq("active", 1).eq("business_id", session.businessId);
-    const { data: limitSetting } = await supabase.from("app_settings").select("value").eq("key", "max_employees").maybeSingle();
-    const maxEmployees = limitSetting ? Number(limitSetting.value) : null;
+    const limitSetting = await getBusinessSetting(session.businessId, "max_employees");
+    const maxEmployees = limitSetting != null ? Number(limitSetting) : null;
     if (maxEmployees !== null && (activeCount ?? 0) >= maxEmployees) {
       return NextResponse.json({ error: `Employee limit reached (${maxEmployees}). Increase it in Settings or deactivate an existing employee first.` }, { status: 400 });
     }

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const declined = (message: string) => ({ ...waiting, declined: true, error_message: message });
 
   try {
-    const { provider } = await getTillReader();
+    const { provider } = await getTillReader(session.businessId);
 
     if (provider === "sumup") {
       // Always SumUp's own record — never the (unsigned) webhook — decides

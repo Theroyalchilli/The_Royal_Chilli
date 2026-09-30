@@ -25,9 +25,9 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const { differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
-  const about = await getAboutExcerpt();
-  const hero = await getHeroContent();
-  const heroImages = await getHeroImages();
+  const about = await getAboutExcerpt(await pageBusinessId());
+  const hero = await getHeroContent(await pageBusinessId());
+  const heroImages = await getHeroImages(await pageBusinessId());
   const featuredDishes = await getFeaturedDishes(await pageBusinessId());
 
   return (

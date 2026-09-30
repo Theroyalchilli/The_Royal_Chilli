@@ -15,6 +15,7 @@ import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
+import { getBusinessSetting } from "@/lib/business-settings";
 
 export async function POST(req: NextRequest) {
   try {
@@ -61,8 +62,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Busy mode set at the till: online ordering paused, or extra prep time.
-    const { data: busyRow } = await supabase.from("app_settings").select("value").eq("key", "busy_mode").maybeSingle();
-    const busyError = busyOrderError(busyState(busyRow?.value as BusyMode | null), scheduled_for || null);
+    const busyMode = await getBusinessSetting<BusyMode>(businessId, "busy_mode");
+    const busyError = busyOrderError(busyState(busyMode ?? null), scheduled_for || null);
     if (busyError) return NextResponse.json({ error: busyError }, { status: 409 });
 
     let deliverable = false;

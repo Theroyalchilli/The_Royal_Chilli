@@ -8,6 +8,6 @@ export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { provider } = await getTillReader();
+  const { provider } = await getTillReader(session.businessId);
   return NextResponse.json({ enabled: provider !== "none", provider });
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
+import { pageBusinessId } from "@/lib/business";
 
 export const metadata: Metadata = {
   title: "FAQ — The Royal Chilli",
@@ -31,7 +32,7 @@ function buildFaqs(hoursText: string) {
 }
 
 export default async function FaqPage() {
-  const summary = summarizeOpeningHours(await getOpeningHours());
+  const summary = summarizeOpeningHours(await getOpeningHours(await pageBusinessId()));
   const hoursText = summary.length === 1
     ? `${summary[0].day.toLowerCase()}, ${summary[0].time}`
     : summary.map((h) => `${h.day} ${h.time}`).join(", ");

@@ -1,16 +1,13 @@
-import supabase from "@/lib/supabase";
+import { getBusinessSettings } from "@/lib/business-settings";
 
 // Which card reader the till drives (Staff → Settings). "none" = no reader:
 // the till shows the manual "Card Paid" button for a standalone card machine.
 export type TillCardProvider = "sumup" | "stripe" | "none";
 export type TillReader = { provider: TillCardProvider; readerId: string };
 
-export async function getTillReader(): Promise<TillReader> {
-  const { data } = await supabase
-    .from("app_settings")
-    .select("key, value")
-    .in("key", ["till_card_provider", "sumup_reader_id", "stripe_terminal_reader_id"]);
-  const s = Object.fromEntries((data ?? []).map((r) => [r.key, String(r.value ?? "").trim()]));
+export async function getTillReader(businessId: number): Promise<TillReader> {
+  const raw = await getBusinessSettings(businessId, ["till_card_provider", "sumup_reader_id", "stripe_terminal_reader_id"]);
+  const s = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v ?? "").trim()]));
 
   // Before the provider setting existed, a Stripe reader id alone meant Stripe.
   const provider: TillCardProvider =

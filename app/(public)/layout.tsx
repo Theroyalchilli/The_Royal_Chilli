@@ -27,7 +27,7 @@ const jost = Jost({ subsets: ["latin"], weight: ["300", "400", "500", "600"], va
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const siteUrl = SITE_URL;
-  const openingHours = await getOpeningHours();
+  const openingHours = await getOpeningHours(await pageBusinessId());
   const schema = buildRestaurantSchema(siteUrl, openingHours);
   const hoursSummary = summarizeOpeningHours(openingHours);
 

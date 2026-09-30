@@ -1,13 +1,13 @@
-import supabase from "@/lib/supabase";
+import { getBusinessSetting } from "@/lib/business-settings";
 
 export type HeroContent = { tag: string; headline: string; headlineGold: string; description: string };
 
-export async function getHeroContent(): Promise<HeroContent> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "hero_content").maybeSingle();
-  return data?.value as HeroContent;
+export async function getHeroContent(businessId: number): Promise<HeroContent> {
+  const value = await getBusinessSetting(businessId, "hero_content");
+  return value as HeroContent;
 }
 
-export async function getHeroImages(): Promise<string[]> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "hero_images").maybeSingle();
-  return (data?.value as string[] | undefined) ?? [];
+export async function getHeroImages(businessId: number): Promise<string[]> {
+  const value = await getBusinessSetting(businessId, "hero_images");
+  return (value as string[] | undefined) ?? [];
 }

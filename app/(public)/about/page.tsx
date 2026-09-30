@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
 import { getOurStoryParagraphs } from "@/lib/our-story";
+import { pageBusinessId } from "@/lib/business";
 
 export const metadata: Metadata = {
   title: "About Us — The Royal Chilli",
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function AboutPage() {
   const { mission, vision, principles, values, ourPromise } = siteContent;
-  const storyParagraphs = await getOurStoryParagraphs();
+  const storyParagraphs = await getOurStoryParagraphs(await pageBusinessId());
 
   return (
     <div>

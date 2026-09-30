@@ -353,6 +353,8 @@ function FeaturedDishesPanel() {
 
 // Settings → General and Settings → Roles & Permissions (the page's tabs are
 // in app/staff/settings/page.tsx).
+const WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function SettingsView({ section, canEditPermissions }: { section: "general" | "permissions"; canEditPermissions: boolean }) {
   const [weekStartDay, setWeekStartDay] = useState("Monday");
   const [overtimeEnabled, setOvertimeEnabled] = useState(false);
@@ -392,7 +394,9 @@ export default function SettingsView({ section, canEditPermissions }: { section:
         setOvertimeEnabled(!!s.overtime_enabled);
         if (s.max_employees !== undefined) setMaxEmployees(String(s.max_employees));
         if (s.reservation_deposit_amount !== undefined) setDepositAmount(String(s.reservation_deposit_amount));
-        if (Array.isArray(s.opening_hours)) setOpeningHours(s.opening_hours);
+        // Always all seven days — a new business has none saved yet.
+        const saved = Array.isArray(s.opening_hours) ? (s.opening_hours as { day: string; open: string; close: string }[]) : [];
+        setOpeningHours(WEEK.map((day) => saved.find((h) => h.day === day) ?? { day, open: "", close: "" }));
         if (s.about_excerpt) setAboutExcerpt(s.about_excerpt);
         if (Array.isArray(s.our_story_paragraphs)) setStoryParagraphs(s.our_story_paragraphs);
         if (s.hero_content) setHeroContent(s.hero_content);
@@ -470,7 +474,8 @@ export default function SettingsView({ section, canEditPermissions }: { section:
         week_start_day: weekStartDay, overtime_enabled: overtimeEnabled,
         max_employees: Number(maxEmployees),
         reservation_deposit_amount: Number(depositAmount),
-        opening_hours: openingHours,
+        // A day left blank is closed — not listed on the website.
+        opening_hours: openingHours.filter((h) => h.open && h.close),
         about_excerpt: aboutExcerpt,
         our_story_paragraphs: storyParagraphs,
         hero_content: heroContent,
@@ -527,7 +532,7 @@ export default function SettingsView({ section, canEditPermissions }: { section:
                   </div>
                 ))}
               </div>
-              <p className="mt-1 text-muted-foreground text-xs">A close time earlier than open (e.g. 09:00 to 01:00) means past midnight.</p>
+              <p className="mt-1 text-muted-foreground text-xs">Leave a day blank if you're closed. A close time earlier than open (e.g. 12:00 to 01:00) means past midnight.</p>
         </Card>
 
         <Card icon="💷" title="Till & bookings" hint="The till's card reader, the table-booking deposit and the start of the working week.">

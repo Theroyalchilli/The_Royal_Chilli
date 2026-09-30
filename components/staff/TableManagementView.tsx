@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { confirmDelete } from "@/components/ui/confirm";
 
 type Table = {
   id: number;
@@ -190,7 +191,7 @@ export default function TableManagementView() {
                         <div className="flex-1" />
                         <button onClick={() => startEdit(t)} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Edit</button>
                         <button
-                          onClick={() => { if (confirm(`Delete table ${t.table_number}?`)) call(`/api/tables?id=${t.id}`, "DELETE"); }}
+                          onClick={async () => { if (await confirmDelete(`table ${t.table_number}`)) call(`/api/tables?id=${t.id}`, "DELETE"); }}
                           disabled={busy}
                           className="text-xs font-semibold text-red-600 hover:text-red-500"
                         >

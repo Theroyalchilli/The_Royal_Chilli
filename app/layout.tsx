@@ -3,6 +3,7 @@ import { Poppins, Playfair_Display, Cinzel, Work_Sans, Space_Grotesk } from "nex
 import PwaRegister from "@/components/PwaRegister";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site-url";
+import { ConfirmHost } from "@/components/ui/confirm";
 
 const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-poppins" });
 
@@ -56,6 +57,7 @@ export default function RootLayout({
       <body className={`${poppins.variable} ${playfair.variable} ${cinzel.variable} ${workSans.variable} ${spaceGrotesk.variable} ${poppins.className} antialiased`}>
         <PwaRegister />
         {children}
+        <ConfirmHost />
       </body>
     </html>
   );

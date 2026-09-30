@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { isValidUkMobile } from "@/lib/utils";
 import LogoutButton from "@/components/site/LogoutButton";
 import { siteContent } from "@/lib/site-content";
+import { confirmDelete } from "@/components/ui/confirm";
 
 type Address = { id: number; label: string; line: string; postcode: string | null; is_default: boolean };
 
@@ -89,6 +90,7 @@ export default function AccountView({
     await refreshAddresses();
   }
   async function removeAddress(id: number) {
+    if (!(await confirmDelete("this address"))) return;
     await fetch(`/api/account/addresses/${id}`, { method: "DELETE" });
     await refreshAddresses();
   }

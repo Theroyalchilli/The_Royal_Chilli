@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { confirmDelete } from "@/components/ui/confirm";
 
 type Matrix = Record<string, Record<string, boolean>>;
 const FIXED = new Set(["admin", "employee"]); // admin always on, employee always off
@@ -261,6 +262,7 @@ function FeaturedDishesPanel() {
   }
 
   async function removeDish(id: number) {
+    if (!(await confirmDelete("this featured dish", "It will be removed from the website's featured list. Are you sure you want to proceed?"))) return;
     setDishes((prev) => prev.filter((d) => d.id !== id));
     await fetch(`/api/featured-dishes/${id}`, { method: "DELETE" });
   }

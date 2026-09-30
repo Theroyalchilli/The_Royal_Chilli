@@ -24,6 +24,7 @@ import type {
   CartItem,
   WorkPeriod,
 } from "@/lib/types";
+import { confirmDialog } from "@/components/ui/confirm";
 
 type OrderType = "dine_in" | "takeaway" | "delivery" | "online";
 type MobileTab = "floor" | "menu" | "order";
@@ -631,6 +632,13 @@ export default function POSPage() {
     refreshTables();
   };
 
+  // The Clear button: items not yet sent to the kitchen are erased, so ask first.
+  const confirmClear = async () => {
+    const unsent = cartItems.some((i) => !i.sent && !i.voided);
+    if (unsent && !(await confirmDialog({ title: "Clear this order?", message: "The items not yet sent to the kitchen will be erased. Are you sure you want to proceed?", confirmLabel: "Yes, clear" }))) return;
+    handleClear();
+  };
+
   // A paired till goes back to the PIN pad; any other device to the password login.
   const handleLogout = async () => {
     const data = await fetch("/api/auth/logout", { method: "POST" }).then((r) => r.json()).catch(() => ({}));
@@ -848,7 +856,7 @@ export default function POSPage() {
           <span className="text-[10px] font-semibold opacity-80">Pay Now</span>
           <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(Math.max(0, total - currentAmountPaid)) : "—"}</span>
         </button>
-        <button onClick={handleClear} disabled={loading}
+        <button onClick={confirmClear} disabled={loading}
           className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-border text-foreground hover:text-foreground font-semibold rounded-xl transition-all text-sm flex items-center justify-center gap-1.5">
           <span>🗑️</span><span>Clear</span>
         </button>

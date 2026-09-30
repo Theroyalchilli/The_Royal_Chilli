@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { confirmDelete } from "@/components/ui/confirm";
 
 type Driver = { id: number; name: string; phone: string | null; vehicle_type: string | null; vehicle_registration: string | null; driver_status: string; delivered_count: number; delivered_value: number };
 type UnassignedOrder = { id: number; order_number: string; customer_name: string; customer_phone: string; customer_address: string; total: number };
@@ -153,6 +154,7 @@ function ZoneModal({ zone, onClose, onSaved }: { zone: DeliveryZone | "new"; onC
 
   async function remove() {
     if (isNew) return;
+    if (!(await confirmDelete(`the delivery zone “${zone.name}”`))) return;
     const res = await fetch(`/api/delivery-zones/${zone.id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json();

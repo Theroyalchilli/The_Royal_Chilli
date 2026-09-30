@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ALLERGENS } from "@/lib/allergens";
+import { confirmDelete } from "@/components/ui/confirm";
 
 type Item = {
   id: number; category_id: number; category_name: string; name: string; description: string | null;
@@ -222,6 +223,7 @@ function GroupModal({ group, onClose, onSaved }: { group: ModifierGroup | "new";
 
   async function remove() {
     if (isNew) return;
+    if (!(await confirmDelete(`the option group “${group.name}”`))) return;
     const res = await fetch(`/api/modifier-groups/${group.id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json();
@@ -458,7 +460,7 @@ export default function MenuManagementView() {
                   }}
                   onRename={(name) => name.trim() && catCall(`/api/menu-categories/${c.id}`, "PATCH", { name: name.trim() })}
                   onToggleActive={() => catCall(`/api/menu-categories/${c.id}`, "PATCH", { active: c.active ? 0 : 1 })}
-                  onDelete={() => { if (confirm(`Delete "${c.name}"?`)) catCall(`/api/menu-categories/${c.id}`, "DELETE"); }}
+                  onDelete={async () => { if (await confirmDelete(`the category “${c.name}”`)) catCall(`/api/menu-categories/${c.id}`, "DELETE"); }}
                 />
               ))}
 

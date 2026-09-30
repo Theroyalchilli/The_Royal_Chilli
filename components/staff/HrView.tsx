@@ -7,6 +7,7 @@ import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
 import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
 import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
 import { londonDateStr } from "@/lib/london-date";
+import { confirmDelete } from "@/components/ui/confirm";
 
 type HrDetails = {
   preferred_name: string | null; job_title: string | null; department: string | null;
@@ -322,6 +323,7 @@ function ReferencesTab({ staffId }: { staffId: number }) {
   }
 
   async function remove(id: number) {
+    if (!(await confirmDelete("this reference"))) return;
     await fetch(`/api/hr/${staffId}/references?id=${id}`, { method: "DELETE" });
     load();
   }
@@ -410,6 +412,7 @@ function DocumentsTab({ staffId }: { staffId: number }) {
   }
 
   async function remove(id: number) {
+    if (!(await confirmDelete("this document"))) return;
     await fetch(`/api/hr/${staffId}/documents/${id}`, { method: "DELETE" });
     load();
   }

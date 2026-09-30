@@ -5,6 +5,7 @@ import Link from "next/link";
 import supabase from "@/lib/supabase";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
+import { getBusinessSettings } from "@/lib/business-settings";
 
 export const metadata: Metadata = {
   title: "Rewards Club Terms — The Royal Chilli",
@@ -27,15 +28,16 @@ function listDays(days: number[]): string {
 }
 
 async function rules() {
-  const [{ data: settings }, { data: rewards }] = await Promise.all([
-    supabase.from("app_settings").select("key, value").like("key", "loyalty_%"),
-    bizDb(await pageBusinessId())
+  const businessId = await pageBusinessId();
+  const [all, { data: rewards }] = await Promise.all([
+    getBusinessSettings(businessId),
+    bizDb(businessId)
       .from("loyalty_rewards")
       .select("discount_pct, discount_amount, max_discount, valid_days, is_welcome_reward, is_referral_reward")
       .eq("active", 1)
       .or("is_welcome_reward.eq.true,is_referral_reward.eq.true"),
   ]);
-  const s = new Map((settings ?? []).map((r) => [r.key, r.value as unknown]));
+  const s = new Map(Object.entries(all).filter(([k]) => k.startsWith("loyalty_")));
   const n = (k: string, d: number) => (Number.isFinite(Number(s.get(k))) ? Number(s.get(k)) : d);
   const welcome = (rewards ?? []).find((r) => r.is_welcome_reward);
   const referral = (rewards ?? []).find((r) => r.is_referral_reward);

@@ -1,6 +1,8 @@
 import supabase from "@/lib/supabase";
 import { tradingDayStr } from "@/lib/london-date";
 import { getLoyaltySetting, getPointsExpiryTimestamp } from "@/lib/loyalty";
+import { getBusinessSetting } from "@/lib/business-settings";
+import { customerBusinessId } from "@/lib/crm";
 
 // Rewards Club visit bonuses. A visit = a trading day (5am–5am UK) on which
 // the member had a paid, points-earning order; two bills on the same night
@@ -8,8 +10,8 @@ import { getLoyaltySetting, getPointsExpiryTimestamp } from "@/lib/loyalty";
 
 export type VisitBonusRules = { fixed: Record<number, number>; everyN: number; everyPoints: number };
 
-export async function getVisitBonusRules(): Promise<VisitBonusRules> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "loyalty_visit_bonus_fixed").maybeSingle();
+export async function getVisitBonusRules(businessId: number): Promise<VisitBonusRules> {
+  const data = { value: await getBusinessSetting(businessId, "loyalty_visit_bonus_fixed") };
   const raw = (data?.value ?? {}) as Record<string, unknown>;
   const fixed: Record<number, number> = {};
   for (const [k, v] of Object.entries(raw)) {
@@ -19,8 +21,8 @@ export async function getVisitBonusRules(): Promise<VisitBonusRules> {
   }
   return {
     fixed,
-    everyN: Math.max(0, Math.round(await getLoyaltySetting("loyalty_visit_bonus_every_n", 0))),
-    everyPoints: Math.max(0, Math.round(await getLoyaltySetting("loyalty_visit_bonus_every_points", 0))),
+    everyN: Math.max(0, Math.round(await getLoyaltySetting(businessId, "loyalty_visit_bonus_every_n", 0))),
+    everyPoints: Math.max(0, Math.round(await getLoyaltySetting(businessId, "loyalty_visit_bonus_every_points", 0))),
   };
 }
 
@@ -69,7 +71,7 @@ export async function upcomingVisitBonus(customerId: number, now: Date = new Dat
   const days = new Set((orders ?? []).filter((o) => o.status !== "cancelled").map((o) => tradingDayStr(new Date(o.created_at))));
   if (days.has(today)) return { visit: 0, points: 0 };
   const visit = days.size + 1;
-  return { visit, points: visit >= 2 ? visitBonusFor(visit, await getVisitBonusRules()) : 0 };
+  return { visit, points: visit >= 2 ? visitBonusFor(visit, await getVisitBonusRules(await customerBusinessId(customerId))) : 0 };
 }
 
 /** Called once an order's purchase points are posted: add its visit bonus, if any. */
@@ -98,7 +100,8 @@ export async function awardVisitBonus(customerId: number, orderId: number): Prom
 
     const visit = visitNumber(orderId, live);
     if (visit < 2) return;
-    const points = visitBonusFor(visit, await getVisitBonusRules());
+    const businessId = await customerBusinessId(customerId);
+    const points = visitBonusFor(visit, await getVisitBonusRules(businessId));
     if (points <= 0) return;
 
     await supabase.from("loyalty_transactions").insert({
@@ -107,7 +110,7 @@ export async function awardVisitBonus(customerId: number, orderId: number): Prom
       reason: "visit_bonus",
       reference_type: "order",
       reference_id: orderId,
-      expires_at: await getPointsExpiryTimestamp(),
+      expires_at: await getPointsExpiryTimestamp(businessId),
     });
   } catch (err) {
     console.error(`Visit bonus failed (customer ${customerId}, order ${orderId}):`, err);
@@ -158,7 +161,7 @@ export async function reverseVisitRewardsForFullRefund(orderId: number, customer
     .eq("id", customerId)
     .single();
   if (!friend?.referred_by_customer_id || !friend.referral_completed_at) return;
-  const minSpend = await getLoyaltySetting("loyalty_referral_min_spend", 20);
+  const minSpend = await getLoyaltySetting(await customerBusinessId(customerId), "loyalty_referral_min_spend", 20);
   const { data: others } = await supabase
     .from("orders")
     .select("id, total")

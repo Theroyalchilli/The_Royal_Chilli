@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     const { data: customer } = await bizDb(session.businessId).from("customers").select("loyalty_points").eq("id", customer_id).maybeSingle();
     if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
-    const cashCredit = await getCashCreditInfo(customer.loyalty_points);
+    const cashCredit = await getCashCreditInfo(session.businessId, customer.loyalty_points);
     if (!cashCredit.eligible) {
       return NextResponse.json(
         { error: `Not enough points yet — needs £${(cashCredit.step - cashCredit.convertedValue).toFixed(2)} more` },

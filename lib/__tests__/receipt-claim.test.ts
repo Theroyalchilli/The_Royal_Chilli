@@ -18,7 +18,7 @@ jest.mock("@/lib/kitchen-rounds", () => ({ roundNumberFor: jest.fn(async () => n
 jest.mock("@/lib/claim", () => ({
   claimUrl: (id: number) => `https://example.test/claim?o=${id}&k=abc123abc123`,
   paidAtFor: jest.fn(async () => new Date("2026-10-07T19:00:00Z")),
-  pointsForBill: jest.fn(async (total: number) => Math.floor(total * 10) * 2),
+  pointsForBill: jest.fn(async (_businessId: number, total: number) => Math.floor(total * 10) * 2),
 }));
 
 import { buildTicket, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";

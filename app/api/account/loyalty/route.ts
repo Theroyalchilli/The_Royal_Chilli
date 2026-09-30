@@ -3,6 +3,7 @@ import { customerBusinessId } from "@/lib/crm";
 import { bizDb } from "@/lib/business-db";
 import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
+import { getBusinessSetting } from "@/lib/business-settings";
 
 // Everything the Loyalty tab needs in one call: current points, the active
 // reward catalogue, this customer's active points voucher (if any), and their
@@ -14,12 +15,14 @@ export async function GET(req: NextRequest) {
   const session = await getCustomerSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [{ data: customer }, { data: shareSetting }] = await Promise.all([
+  const businessId = await customerBusinessId(session.id);
+  const [{ data: customer }, shareMessageSetting] = await Promise.all([
     supabase.from("customers").select("loyalty_points, referral_code").eq("id", session.id).maybeSingle(),
-    supabase.from("app_settings").select("value").eq("key", "loyalty_share_message").maybeSingle(),
+    getBusinessSetting(businessId, "loyalty_share_message"),
   ]);
+  const shareSetting = { value: shareMessageSetting };
 
-  const { data: rewards } = await bizDb(await customerBusinessId(session.id))
+  const { data: rewards } = await bizDb(businessId)
     .from("loyalty_rewards")
     .select("id, name, description, points_cost, discount_amount")
     .eq("active", 1)

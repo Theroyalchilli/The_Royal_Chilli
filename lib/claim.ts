@@ -41,10 +41,10 @@ export async function paidAtFor(orderId: number): Promise<Date> {
 }
 
 /** Points this bill earns — same maths as awardPurchasePoints (base, doubled Tue–Thu). */
-export async function pointsForBill(total: number, paidAt: Date): Promise<number> {
-  const rate = (await getLoyaltySetting("loyalty_points_per_pound", 1)) || 1;
+export async function pointsForBill(businessId: number, total: number, paidAt: Date): Promise<number> {
+  const rate = (await getLoyaltySetting(businessId, "loyalty_points_per_pound", 1)) || 1;
   const base = Math.floor(total * rate);
-  return (await doublePointsDay(paidAt)) ? base * 2 : base;
+  return (await doublePointsDay(businessId, paidAt)) ? base * 2 : base;
 }
 
 export type ClaimableOrder = { id: number; total: number; orderNumber: string; paidAt: Date; points: number };
@@ -57,7 +57,7 @@ export async function claimableOrder(orderId: number, key: string): Promise<{ ok
   if (!orderId || !claimKeyValid(orderId, key)) return { ok: false, error: "This link isn't valid — check you scanned the whole QR code." };
   const { data: o } = await supabase
     .from("orders")
-    .select("id, order_number, order_type, total, customer_id, is_paid, status, created_at")
+    .select("id, business_id, order_number, order_type, total, customer_id, is_paid, status, created_at")
     .eq("id", orderId)
     .maybeSingle();
   if (!o) return { ok: false, error: "We couldn't find that bill." };
@@ -71,6 +71,6 @@ export async function claimableOrder(orderId: number, key: string): Promise<{ ok
   const paidAt = await paidAtFor(o.id);
   return {
     ok: true,
-    order: { id: o.id, total: Number(o.total), orderNumber: o.order_number, paidAt, points: await pointsForBill(Number(o.total), paidAt) },
+    order: { id: o.id, total: Number(o.total), orderNumber: o.order_number, paidAt, points: await pointsForBill(o.business_id, Number(o.total), paidAt) },
   };
 }

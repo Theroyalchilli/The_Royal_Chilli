@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { getBusinessNumber } from "@/lib/business-settings";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 // Point types that actually "expire" — a manual adjustment is a deliberate
@@ -17,9 +18,9 @@ const EXPIRABLE_REASONS = ["earned_purchase", "tier_bonus", "midweek_bonus", "vi
 export async function GET(req: NextRequest) {
   if (!isAuthorizedCronRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: setting } = await supabase.from("app_settings").select("value").eq("key", "loyalty_points_expiry_months").maybeSingle();
-  const expiryMonths = Number(setting?.value ?? 12);
-  if (!expiryMonths || expiryMonths <= 0) return NextResponse.json({ enabled: false, processed: 0 });
+  // Points only carry an expires_at when their business had expiry switched
+  // on when they were earned; a business that has since switched it off
+  // (Settings → Rewards rules, 0 months) keeps its members' points.
 
   const nowIso = new Date().toISOString();
   const { data: dueRows } = await supabase
@@ -40,8 +41,12 @@ export async function GET(req: NextRequest) {
   }
 
   const results: { customer_id: number; expired: number }[] = [];
+  const expiryOn = new Map<number, boolean>();
   for (const [customerId, { rowIds, total }] of byCustomer) {
-    const { data: customer } = await supabase.from("customers").select("loyalty_points").eq("id", customerId).single();
+    const { data: customer } = await supabase.from("customers").select("loyalty_points, business_id").eq("id", customerId).single();
+    const bid = Number(customer?.business_id);
+    if (!expiryOn.has(bid)) expiryOn.set(bid, (await getBusinessNumber(bid, "loyalty_points_expiry_months", 12)) > 0);
+    if (!expiryOn.get(bid)) continue;
     const currentBalance = Number(customer?.loyalty_points ?? 0);
     const expireAmount = Math.min(total, Math.max(0, currentBalance));
 

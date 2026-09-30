@@ -10,6 +10,7 @@ import {
   issueReferralVoucher,
   issueSignupPoints,
   issueWelcomeVoucher,
+  getLoyaltySetting,
   unlockReferralVoucher,
 } from "@/lib/loyalty";
 import type { Customer } from "@/lib/types";
@@ -296,16 +297,10 @@ export async function joinMemberAtTill(businessId: number, input: {
   return { ok: true, customerId, alreadyMember };
 }
 
-async function getSetting(key: string, fallback: number): Promise<number> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
-  const n = Number(data?.value ?? fallback);
-  return isNaN(n) ? fallback : n;
-}
-
-// Points-per-£ rate is admin-configurable (app_settings), default 1 to match
-// the previous hardcoded behaviour.
-async function getPointsRate(): Promise<number> {
-  const rate = await getSetting("loyalty_points_per_pound", 1);
+// Points-per-£ rate — the customer's business's own rule (Settings →
+// Rewards rules), default 1.
+async function getPointsRate(businessId: number): Promise<number> {
+  const rate = await getLoyaltySetting(businessId, "loyalty_points_per_pound", 1);
   return rate <= 0 ? 1 : rate;
 }
 
@@ -317,7 +312,8 @@ export async function estimatePurchasePoints(
   customerId: number,
   orderTotal: number,
 ): Promise<{ base: number; bonus: number; midweek: number; doubleDay: string | null; total: number; tierName: string | null; multiplier: number }> {
-  const rate = await getPointsRate();
+  const businessId = await customerBusinessId(customerId);
+  const rate = await getPointsRate(businessId);
   const base = Math.floor(orderTotal * rate);
 
   const { data: paidOrders } = await supabase
@@ -327,11 +323,11 @@ export async function estimatePurchasePoints(
     .eq("is_paid", true);
   const lifetimeSpend = (paidOrders || []).reduce((s, o) => s + Number(o.total), 0);
 
-  const tiers = await getActiveTiers(await customerBusinessId(customerId));
+  const tiers = await getActiveTiers(businessId);
   const tier = tierForSpend(tiers, lifetimeSpend);
   const multiplier = tier?.points_multiplier ?? 1;
   const bonus = multiplier > 1 ? Math.floor(base * (multiplier - 1)) : 0;
-  const doubleDay = await doublePointsDay();
+  const doubleDay = await doublePointsDay(businessId);
   const midweek = doubleDay ? base : 0;
 
   return {
@@ -367,11 +363,12 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
     .limit(1);
   if (existing && existing.length > 0) return;
 
-  const rate = await getPointsRate();
+  const businessId = await customerBusinessId(customerId);
+  const rate = await getPointsRate(businessId);
   const basePoints = Math.floor(orderTotal * rate);
   if (basePoints <= 0) return;
 
-  const expiresAt = await getPointsExpiryTimestamp();
+  const expiresAt = await getPointsExpiryTimestamp(businessId);
 
   const { data: priorOrders } = await supabase
     .from("orders")
@@ -381,7 +378,7 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
     .neq("id", orderId);
   const priorSpend = (priorOrders || []).reduce((s, o) => s + Number(o.total), 0);
 
-  const tiers = await getActiveTiers(await customerBusinessId(customerId));
+  const tiers = await getActiveTiers(businessId);
   const tierBefore = tierForSpend(tiers, priorSpend);
   const multiplier = tierBefore?.points_multiplier ?? 1;
   const bonusPoints = multiplier > 1 ? Math.floor(basePoints * (multiplier - 1)) : 0;
@@ -406,7 +403,7 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
   }
   // Quiet-day doubling (Tue–Thu): the base earn again, as its own ledger line
   // so the customer's history reads "Midweek 2×".
-  if (await doublePointsDay(paidAt)) {
+  if (await doublePointsDay(businessId, paidAt)) {
     await supabase.from("loyalty_transactions").insert({
       customer_id: customerId,
       points_delta: basePoints,
@@ -442,13 +439,13 @@ export async function awardPurchasePoints(customerId: number, orderTotal: number
 async function checkReferralCompletion(customerId: number, orderTotal: number) {
   const { data: customer } = await supabase
     .from("customers")
-    .select("id, referred_by_customer_id, referral_completed_at")
+    .select("id, business_id, referred_by_customer_id, referral_completed_at")
     .eq("id", customerId)
     .single();
   if (!customer?.referred_by_customer_id || customer.referral_completed_at) return;
   if (customer.referred_by_customer_id === customerId) return; // defensive: no self-referral
 
-  const minSpend = await getSetting("loyalty_referral_min_spend", 20);
+  const minSpend = await getLoyaltySetting(customer.business_id, "loyalty_referral_min_spend", 20);
   if (orderTotal < minSpend) return;
 
   // Mark completed first so a second concurrent purchase can't race it.

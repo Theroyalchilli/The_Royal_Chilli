@@ -306,7 +306,7 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
 
   // No member on a paid dine-in bill: invite them to claim its points.
   if (order.order_type === "dine_in" && !order.customer_id && state === "paid") {
-    const points = await pointsForBill(Number(order.total), await paidAtFor(orderId));
+    const points = await pointsForBill(order.business_id ?? DEFAULT_BUSINESS_ID, Number(order.total), await paidAtFor(orderId));
     if (points > 0) {
       const url = claimUrl(orderId);
       t.push({ text: "JOIN OUR REWARDS CLUB", align: "center", bold: true });

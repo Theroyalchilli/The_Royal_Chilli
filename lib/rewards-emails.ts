@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { getBusinessSetting } from "@/lib/business-settings";
 import {
   sendNudgeEmail,
   sendReferralUnlockedEmail,
@@ -40,12 +41,12 @@ async function unusedWelcomeVoucher(customerId: number): Promise<Voucher | null>
 /** Just joined (website or till): welcome email with their voucher and friend link. */
 export async function sendWelcomeFor(customerId: number): Promise<void> {
   try {
-    const { data: c } = await supabase.from("customers").select("name, email, referral_code").eq("id", customerId).single();
+    const { data: c } = await supabase.from("customers").select("name, email, referral_code, business_id").eq("id", customerId).single();
     if (!c?.email) return;
     const voucher = await unusedWelcomeVoucher(customerId);
     await sendWelcomeEmail(c.email, {
       customerName: c.name,
-      signupPoints: await getLoyaltySetting("loyalty_signup_points", 0),
+      signupPoints: await getLoyaltySetting(c.business_id, "loyalty_signup_points", 0),
       voucherCode: voucher?.code ?? null,
       voucherValidFrom: voucher?.valid_from ?? null,
       voucherExpiresAt: voucher?.expires_at ?? null,
@@ -101,8 +102,15 @@ type Member = { id: number; name: string; email: string | null; marketing_consen
  * (nudge_sent_at) before sending, so a re-run never double-sends.
  */
 export async function runDailyMemberEmails(now: Date = new Date()): Promise<{ thankYou: number; review: number; nudge: number }> {
-  const { data: setting } = await supabase.from("app_settings").select("value").eq("key", "google_review_url").maybeSingle();
-  const reviewUrl = typeof setting?.value === "string" && /^https:\/\//.test(setting.value.trim()) ? setting.value.trim() : null;
+  // Each customer's business's own review link (Settings → Website).
+  const reviewUrls = new Map<number, string | null>();
+  const reviewUrlFor = async (businessId: number) => {
+    if (!reviewUrls.has(businessId)) {
+      const v = await getBusinessSetting(businessId, "google_review_url");
+      reviewUrls.set(businessId, typeof v === "string" && /^https:\/\//.test(v.trim()) ? v.trim() : null);
+    }
+    return reviewUrls.get(businessId) ?? null;
+  };
 
   const today = tradingDayStr(now);
   const yesterday = shiftDay(today, -1);
@@ -111,24 +119,25 @@ export async function runDailyMemberEmails(now: Date = new Date()): Promise<{ th
   // ---- yesterday's visitors ----
   const { data: orders } = await supabase
     .from("orders")
-    .select("id, customer_id, customers(id, name, email, marketing_consent, loyalty_points)")
+    .select("id, business_id, customer_id, customers(id, name, email, marketing_consent, loyalty_points)")
     .eq("is_paid", true)
     .is("review_requested_at", null)
     .not("customer_id", "is", null)
     .gte("created_at", start)
     .lte("created_at", end);
 
-  const byCustomer = new Map<number, { member: Member; orderIds: number[] }>();
-  for (const o of (orders ?? []) as unknown as { id: number; customer_id: number; customers: Member | null }[]) {
+  const byCustomer = new Map<number, { member: Member; orderIds: number[]; businessId: number }>();
+  for (const o of (orders ?? []) as unknown as { id: number; business_id: number; customer_id: number; customers: Member | null }[]) {
     if (!o.customers?.marketing_consent || !o.customers.email) continue;
-    const entry = byCustomer.get(o.customer_id) ?? { member: o.customers, orderIds: [] };
+    const entry = byCustomer.get(o.customer_id) ?? { member: o.customers, orderIds: [], businessId: o.business_id };
     entry.orderIds.push(o.id);
     byCustomer.set(o.customer_id, entry);
   }
 
   let thankYou = 0;
   let review = 0;
-  for (const [customerId, { member, orderIds }] of byCustomer) {
+  for (const [customerId, { member, orderIds, businessId }] of byCustomer) {
+    const reviewUrl = await reviewUrlFor(businessId);
     // first visit = no paid order of theirs before yesterday's trading day
     const { count: earlier } = await supabase
       .from("orders")
@@ -182,21 +191,21 @@ export async function runDailyMemberEmails(now: Date = new Date()): Promise<{ th
   const nudgeRange = tradingRangeUtc(nudgeDay);
   const { data: thenOrders } = await supabase
     .from("orders")
-    .select("customer_id, customers(id, name, email, marketing_consent, loyalty_points, nudge_sent_at)")
+    .select("customer_id, business_id, customers(id, name, email, marketing_consent, loyalty_points, nudge_sent_at)")
     .eq("is_paid", true)
     .not("customer_id", "is", null)
     .gte("created_at", nudgeRange.start)
     .lte("created_at", nudgeRange.end);
 
-  const candidates = new Map<number, Member>();
-  for (const o of (thenOrders ?? []) as unknown as { customer_id: number; customers: Member | null }[]) {
+  const candidates = new Map<number, Member & { businessId: number }>();
+  for (const o of (thenOrders ?? []) as unknown as { customer_id: number; business_id: number; customers: Member | null }[]) {
     const m = o.customers;
-    if (m?.marketing_consent && m.email && !m.nudge_sent_at) candidates.set(o.customer_id, m);
+    if (m?.marketing_consent && m.email && !m.nudge_sent_at) candidates.set(o.customer_id, { ...m, businessId: o.business_id });
   }
 
   let nudge = 0;
-  const secondVisitBonus = visitBonusFor(2, await getVisitBonusRules());
   for (const [customerId, member] of candidates) {
+    const secondVisitBonus = visitBonusFor(2, await getVisitBonusRules(member.businessId));
     const [{ count: before }, { count: since }] = await Promise.all([
       supabase.from("orders").select("id", { count: "exact", head: true }).eq("customer_id", customerId).eq("is_paid", true).lt("created_at", nudgeRange.start),
       supabase.from("orders").select("id", { count: "exact", head: true }).eq("customer_id", customerId).eq("is_paid", true).gt("created_at", nudgeRange.end),

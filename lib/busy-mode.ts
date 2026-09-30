@@ -3,7 +3,7 @@ import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 // Busy mode for website orders, set from the till (components/pos/BusyModeControl):
 // pause online ordering for a while (customers can still schedule for after
 // the pause), or add extra prep time to every online order. Stored in
-// app_settings.busy_mode; "until closing" ends at the next 5am trading-day
+// the business's busy_mode setting (business_settings); "until closing" ends at the next 5am trading-day
 // change, so tomorrow always starts normal. Table QR and till orders are
 // unaffected. Safe to import in the browser.
 

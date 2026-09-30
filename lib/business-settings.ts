@@ -1,14 +1,10 @@
 import supabase from "@/lib/supabase";
-import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
 
 // Each business's own settings (business_settings, migration 080) — opening
 // hours, busy mode, booking deposit, website text, card reader, clock-in
 // location… What used to be one shared list (app_settings) for everyone.
 //
-// Transition: the rewards rules (loyalty_* keys) and the daily review email
-// still read app_settings until they move over too, so saving The Royal
-// Chilli's settings also updates app_settings. Remove the mirror once
-// nothing reads app_settings except the print-station keys.
+// (app_settings now only holds the print-station device keys.)
 
 /** All of a business's settings, or just `keys`, as { key: value }. */
 export async function getBusinessSettings(businessId: number, keys?: readonly string[]): Promise<Record<string, unknown>> {
@@ -40,11 +36,4 @@ export async function saveBusinessSettings(businessId: number, values: Record<st
     .from("business_settings")
     .upsert(entries.map(([key, value]) => ({ business_id: businessId, key, value, updated_at: now })), { onConflict: "business_id,key" });
   if (error) throw error;
-  if (businessId === DEFAULT_BUSINESS_ID) {
-    // See the note at the top — keeps not-yet-moved readers in step.
-    const { error: mirrorErr } = await supabase
-      .from("app_settings")
-      .upsert(entries.map(([key, value]) => ({ key, value, updated_at: now })), { onConflict: "key" });
-    if (mirrorErr) throw mirrorErr;
-  }
 }

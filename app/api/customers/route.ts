@@ -5,6 +5,7 @@ import { canViewCrm } from "@/lib/permissions";
 import { getActiveTiers, tierForSpend, computeSegment } from "@/lib/crm";
 import { CUSTOMER_SAFE_FIELDS } from "@/lib/customers";
 import { tradingDayStr } from "@/lib/london-date";
+import { getBusinessNumber } from "@/lib/business-settings";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -34,8 +35,7 @@ export async function GET(req: NextRequest) {
   }
 
   const tiers = await getActiveTiers(session.businessId);
-  const { data: winbackSetting } = await db.from("app_settings").select("value").eq("key", "loyalty_winback_days").maybeSingle();
-  const winbackDays = Number(winbackSetting?.value ?? 45);
+  const winbackDays = await getBusinessNumber(session.businessId, "loyalty_winback_days", 45);
   const now = Date.now();
 
   const enriched = (customers || []).map((c) => {

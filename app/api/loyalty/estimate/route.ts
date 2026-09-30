@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
   const estimate = await estimatePurchasePoints(customerId, amount);
-  const cashCredit = await getCashCreditInfo(customer.loyalty_points);
+  const cashCredit = await getCashCreditInfo(session.businessId, customer.loyalty_points);
   const visitBonus = await upcomingVisitBonus(customerId);
   // Points and vouchers are dine-in only (Rewards Club)
   let canSpend = true;

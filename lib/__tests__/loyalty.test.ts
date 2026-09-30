@@ -1,5 +1,14 @@
 const settingValues: Record<string, unknown> = {};
 
+// Rewards rules are each business's own (lib/business-settings.ts).
+jest.mock("@/lib/business-settings", () => ({
+  getBusinessSetting: async (_bid: number, key: string) => settingValues[key],
+  getBusinessNumber: async (_bid: number, key: string, fallback: number) => {
+    const n = Number(settingValues[key] ?? fallback);
+    return isNaN(n) ? fallback : n;
+  },
+}));
+
 jest.mock("../supabase", () => ({
   __esModule: true,
   default: {
@@ -52,7 +61,7 @@ describe("getCashCreditInfo", () => {
   });
 
   it("is not eligible below the first £5 step", async () => {
-    const info = await getCashCreditInfo(499); // £4.99 worth
+    const info = await getCashCreditInfo(1, 499); // £4.99 worth
     expect(info.convertedValue).toBeCloseTo(4.99, 2);
     expect(info.eligible).toBe(false);
     expect(info.options).toEqual([]);
@@ -61,7 +70,7 @@ describe("getCashCreditInfo", () => {
   });
 
   it("offers £5 once there's £5 of points", async () => {
-    const info = await getCashCreditInfo(750); // £7.50 worth
+    const info = await getCashCreditInfo(1, 750); // £7.50 worth
     expect(info.eligible).toBe(true);
     expect(info.options).toEqual([5]);
     expect(info.redeemAmount).toBe(5);
@@ -69,7 +78,7 @@ describe("getCashCreditInfo", () => {
   });
 
   it("offers £5 or £10, never more than the £10 per-visit cap", async () => {
-    const info = await getCashCreditInfo(4200); // £42 worth
+    const info = await getCashCreditInfo(1, 4200); // £42 worth
     expect(info.options).toEqual([5, 10]);
     expect(info.redeemAmount).toBe(10);
     expect(info.redeemPoints).toBe(1000);
@@ -78,7 +87,7 @@ describe("getCashCreditInfo", () => {
   it("with no step set, the cap is the only amount (old behaviour)", async () => {
     settingValues.loyalty_max_redeem_per_visit = "5";
     delete settingValues.loyalty_redeem_step;
-    const info = await getCashCreditInfo(1250);
+    const info = await getCashCreditInfo(1, 1250);
     expect(info.options).toEqual([5]);
     expect(info.redeemAmount).toBe(5);
   });
@@ -87,7 +96,7 @@ describe("getCashCreditInfo", () => {
     delete settingValues.loyalty_conversion_points_per_pound;
     delete settingValues.loyalty_max_redeem_per_visit;
     delete settingValues.loyalty_redeem_step;
-    const info = await getCashCreditInfo(500);
+    const info = await getCashCreditInfo(1, 500);
     expect(info.rate).toBe(100);
     expect(info.cap).toBe(5);
     expect(info.eligible).toBe(true);
@@ -108,21 +117,21 @@ describe("double points days", () => {
   });
 
   it("Tue–Thu are double, Mon and Fri aren't", async () => {
-    expect(await doublePointsDay(uk(5, 19))).toBeNull(); // Mon evening
-    expect(await doublePointsDay(uk(6, 19))).toBe("Tuesday");
-    expect(await doublePointsDay(uk(7, 13))).toBe("Wednesday");
-    expect(await doublePointsDay(uk(8, 21))).toBe("Thursday");
-    expect(await doublePointsDay(uk(9, 19))).toBeNull(); // Fri
+    expect(await doublePointsDay(1, uk(5, 19))).toBeNull(); // Mon evening
+    expect(await doublePointsDay(1, uk(6, 19))).toBe("Tuesday");
+    expect(await doublePointsDay(1, uk(7, 13))).toBe("Wednesday");
+    expect(await doublePointsDay(1, uk(8, 21))).toBe("Thursday");
+    expect(await doublePointsDay(1, uk(9, 19))).toBeNull(); // Fri
   });
 
   it("goes by trading day: Thursday night after midnight still counts, Monday night doesn't", async () => {
-    expect(await doublePointsDay(uk(9, 0.5))).toBe("Thursday"); // Fri 00:30 = Thu trading day
-    expect(await doublePointsDay(uk(6, 0.5))).toBeNull(); // Tue 00:30 = Mon trading day
+    expect(await doublePointsDay(1, uk(9, 0.5))).toBe("Thursday"); // Fri 00:30 = Thu trading day
+    expect(await doublePointsDay(1, uk(6, 0.5))).toBeNull(); // Tue 00:30 = Mon trading day
   });
 
   it("no setting → never double", async () => {
     delete settingValues.loyalty_double_points_days;
-    expect(await doublePointsDay(uk(7, 13))).toBeNull();
+    expect(await doublePointsDay(1, uk(7, 13))).toBeNull();
   });
 });
 

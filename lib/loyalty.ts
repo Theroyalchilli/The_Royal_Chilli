@@ -1,13 +1,14 @@
 import { randomBytes } from "crypto";
 import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
-import { getActiveTiers, tierForSpend } from "@/lib/crm";
+import { customerBusinessId, getActiveTiers, tierForSpend } from "@/lib/crm";
 import { londonDateStr, londonWallTimeUtc, TRADING_DAY_START_HOUR, tradingDayStr } from "@/lib/london-date";
+import { getBusinessNumber, getBusinessSetting } from "@/lib/business-settings";
 
-export async function getLoyaltySetting(key: string, fallback: number): Promise<number> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
-  const n = Number(data?.value ?? fallback);
-  return isNaN(n) ? fallback : n;
+// Each business's own rewards rules (Settings → Rewards rules, saved per
+// business in business_settings).
+export async function getLoyaltySetting(businessId: number, key: string, fallback: number): Promise<number> {
+  return getBusinessNumber(businessId, key, fallback);
 }
 
 // Ledger reasons that are "points this order earned" — the base earn, the
@@ -25,9 +26,9 @@ export function isoWeekday(dateStr: string): number {
   return ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1;
 }
 
-async function getDoublePointsDays(): Promise<number[]> {
-  const { data } = await supabase.from("app_settings").select("value").eq("key", "loyalty_double_points_days").maybeSingle();
-  return Array.isArray(data?.value) ? (data!.value as unknown[]).map(Number).filter((n) => n >= 1 && n <= 7) : [];
+async function getDoublePointsDays(businessId: number): Promise<number[]> {
+  const value = await getBusinessSetting(businessId, "loyalty_double_points_days");
+  return Array.isArray(value) ? (value as unknown[]).map(Number).filter((n) => n >= 1 && n <= 7) : [];
 }
 
 /**
@@ -35,8 +36,8 @@ async function getDoublePointsDays(): Promise<number[]> {
  * day (5am–5am UK), so Wednesday night's 00:30 bill still counts as
  * Wednesday. Returns the day's name when it's a double-points day, else null.
  */
-export async function doublePointsDay(at: Date = new Date()): Promise<string | null> {
-  const days = await getDoublePointsDays();
+export async function doublePointsDay(businessId: number, at: Date = new Date()): Promise<string | null> {
+  const days = await getDoublePointsDays(businessId);
   const wd = isoWeekday(tradingDayStr(at));
   return days.includes(wd) ? WEEKDAY_NAMES[wd] : null;
 }
@@ -45,8 +46,8 @@ export async function doublePointsDay(at: Date = new Date()): Promise<string | n
 // tier bonus, referral, birthday) so they're all swept by the same expiry
 // cron consistently — a reason listed in EXPIRABLE_REASONS but never given
 // an expires_at here would simply never expire, silently.
-export async function getPointsExpiryTimestamp(): Promise<string | null> {
-  const months = await getLoyaltySetting("loyalty_points_expiry_months", 12);
+export async function getPointsExpiryTimestamp(businessId: number): Promise<string | null> {
+  const months = await getLoyaltySetting(businessId, "loyalty_points_expiry_months", 12);
   if (!months || months <= 0) return null;
   const d = new Date();
   d.setMonth(d.getMonth() + months);
@@ -74,10 +75,10 @@ export type CashCreditInfo = {
   redeemPoints: number;
 };
 
-export async function getCashCreditInfo(loyaltyPoints: number): Promise<CashCreditInfo> {
-  const rate = await getLoyaltySetting("loyalty_conversion_points_per_pound", 100);
-  const cap = await getLoyaltySetting("loyalty_max_redeem_per_visit", 5);
-  const rawStep = await getLoyaltySetting("loyalty_redeem_step", cap);
+export async function getCashCreditInfo(businessId: number, loyaltyPoints: number): Promise<CashCreditInfo> {
+  const rate = await getLoyaltySetting(businessId, "loyalty_conversion_points_per_pound", 100);
+  const cap = await getLoyaltySetting(businessId, "loyalty_max_redeem_per_visit", 5);
+  const rawStep = await getLoyaltySetting(businessId, "loyalty_redeem_step", cap);
   const step = rawStep > 0 && rawStep <= cap ? rawStep : cap;
   const convertedValue = Math.floor((loyaltyPoints / rate) * 100) / 100;
   const options: number[] = [];
@@ -299,7 +300,7 @@ export async function issueReferralVoucher(referrerId: number, friendId: number)
       .maybeSingle();
     if (!reward) return;
 
-    const maxPerYear = await getLoyaltySetting("loyalty_referral_max_per_year", 10);
+    const maxPerYear = await getLoyaltySetting(referrer.business_id, "loyalty_referral_max_per_year", 10);
     const yearAgo = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString();
     const { count } = await supabase
       .from("loyalty_redemptions")
@@ -375,7 +376,8 @@ export function notYetValidMessage(validFrom: string | null | undefined, now: Da
  */
 export async function issueSignupPoints(customerId: number): Promise<boolean> {
   try {
-    const points = await getLoyaltySetting("loyalty_signup_points", 0);
+    const businessId = await customerBusinessId(customerId);
+    const points = await getLoyaltySetting(businessId, "loyalty_signup_points", 0);
     if (points <= 0) return false;
     const { data: already } = await supabase
       .from("loyalty_transactions")
@@ -389,7 +391,7 @@ export async function issueSignupPoints(customerId: number): Promise<boolean> {
       points_delta: points,
       reason: "welcome_bonus",
       reference_type: "signup",
-      expires_at: await getPointsExpiryTimestamp(),
+      expires_at: await getPointsExpiryTimestamp(businessId),
     });
     return !error;
   } catch (err) {

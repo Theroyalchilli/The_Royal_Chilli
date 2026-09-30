@@ -1,5 +1,5 @@
 // Bring a Friend share message — editable in Staff Hub → Customers & Loyalty →
-// Rewards Rules (app_settings.loyalty_share_message). "{link}" is replaced
+// Rewards Rules (the business's loyalty_share_message setting). "{link}" is replaced
 // with the member's own join link. Safe to import in the browser.
 
 export const DEFAULT_SHARE_MESSAGE = `🌶️ Fancy 20% off your first dine-in at The Royal Chilli?

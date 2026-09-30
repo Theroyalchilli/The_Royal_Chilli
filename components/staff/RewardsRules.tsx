@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DEFAULT_SHARE_MESSAGE } from "@/lib/share-message";
 
 // Staff Hub → Customers & Loyalty → Rules: the Rewards Club numbers, kept in
-// app_settings so they can change without a rebuild.
+// each business's own settings (business_settings) so they can change without a rebuild.
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 

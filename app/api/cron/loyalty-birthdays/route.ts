@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
+import { getBusinessNumber } from "@/lib/business-settings";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 import { issueRedemption, getPointsExpiryTimestamp } from "@/lib/loyalty";
 
@@ -17,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const { data: customers } = await supabase
     .from("customers")
-    .select("id, name, date_of_birth")
+    .select("id, business_id, name, date_of_birth")
     .not("date_of_birth", "is", null);
 
   const birthdayCustomers = (customers || []).filter((c) => {
@@ -27,15 +29,25 @@ export async function GET(req: NextRequest) {
 
   if (birthdayCustomers.length === 0) return NextResponse.json({ processed: 0, results: [] });
 
-  const { data: setting } = await supabase.from("app_settings").select("value").eq("key", "loyalty_birthday_points").maybeSingle();
-  const birthdayPoints = Number(setting?.value ?? 0);
-
-  const { data: birthdayRewards } = await supabase.from("loyalty_rewards").select("id, name").eq("is_birthday_reward", true).eq("active", 1);
-  const expiresAt = await getPointsExpiryTimestamp();
+  // Each customer's own business's birthday points and birthday rewards —
+  // never another business's.
+  const rules = new Map<number, { points: number; rewards: { id: number; name: string }[]; expiresAt: string | null }>();
+  const rulesFor = async (businessId: number) => {
+    if (!rules.has(businessId)) {
+      const { data: rewards } = await bizDb(businessId).from("loyalty_rewards").select("id, name").eq("is_birthday_reward", true).eq("active", 1);
+      rules.set(businessId, {
+        points: await getBusinessNumber(businessId, "loyalty_birthday_points", 0),
+        rewards: (rewards ?? []) as { id: number; name: string }[],
+        expiresAt: await getPointsExpiryTimestamp(businessId),
+      });
+    }
+    return rules.get(businessId)!;
+  };
 
   const results: { customer_id: number; name: string; points_awarded: number; rewards_issued: string[]; skipped: boolean }[] = [];
 
   for (const c of birthdayCustomers) {
+    const { points: birthdayPoints, rewards: birthdayRewards, expiresAt } = await rulesFor(c.business_id);
     // Already handled this year? Points and reward issuance are checked
     // together via the points row (reason=birthday_bonus) OR, when points
     // are disabled (0), via a redemption already issued this year for a

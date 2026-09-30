@@ -9,6 +9,7 @@ import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 import { bizDb } from "@/lib/business-db";
 import { pageBusinessId } from "@/lib/business";
 import { SITE_URL } from "@/lib/site-url";
+import { HoursProvider } from "@/components/site/HoursProvider";
 
 // Every page under this layout reads staff-editable content (opening hours,
 // hero text, promotions, etc.) straight from Supabase with no revalidate
@@ -50,7 +51,7 @@ export default async function PublicLayout({ children }: { children: React.React
       {/* SiteHeader no longer renders a top bar — just the fixed hamburger
           button and its full-screen overlay — so there's no header height
           left to clear here. */}
-      <main className="flex-1">{children}</main>
+      <main className="flex-1"><HoursProvider hours={openingHours}>{children}</HoursProvider></main>
       <SiteFooter hours={hoursSummary} />
       <CookieConsent />
     </div>

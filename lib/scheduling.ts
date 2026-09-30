@@ -1,4 +1,4 @@
-import { isRestaurantOpen, formatHoursForDate } from "./hours";
+import { isRestaurantOpen, formatHoursForDate, type WeekHours } from "./hours";
 
 const MIN_LEAD_MINUTES = 20;
 const MAX_ADVANCE_DAYS = 7;
@@ -7,7 +7,7 @@ const MAX_ADVANCE_DAYS = 7;
 // too far in the future, and within the restaurant's actual opening hours
 // for that day (via lib/hours.ts's structured hours) — a scheduled order
 // outside hours is rejected outright rather than left for staff to catch.
-export function validateScheduledTime(scheduledFor: string): string | null {
+export function validateScheduledTime(scheduledFor: string, week: WeekHours): string | null {
   const time = new Date(scheduledFor);
   if (isNaN(time.getTime())) return "Invalid scheduled time";
 
@@ -20,8 +20,9 @@ export function validateScheduledTime(scheduledFor: string): string | null {
   if (daysAhead > MAX_ADVANCE_DAYS) {
     return `Please choose a time within the next ${MAX_ADVANCE_DAYS} days`;
   }
-  if (!isRestaurantOpen(time)) {
-    return `We're closed at that time — opening hours that day are ${formatHoursForDate(time)}`;
+  if (!isRestaurantOpen(week, time)) {
+    const hours = formatHoursForDate(week, time);
+    return hours === "Closed" ? "We're closed that day — please pick another" : `We're closed at that time — opening hours that day are ${hours}`;
   }
   return null;
 }

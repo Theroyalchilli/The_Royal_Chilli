@@ -11,8 +11,10 @@ import type { BusyState } from "@/lib/busy-mode";
 import ModifierPickerModal from "./ModifierPickerModal";
 import ParticleButton from "@/components/kokonutui/particle-button";
 import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav, useIsNarrow } from "./CategoryNav";
+import { useWeekHours } from "@/components/site/HoursProvider";
 
 export default function OrderMenu({ categories }: { categories: MenuCategory[] }) {
+  const week = useWeekHours();
   const router = useRouter();
   const isNarrow = useIsNarrow();
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -36,9 +38,9 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   }, [categories]);
   useEffect(() => {
     setOrderType(readOrderType());
-    setOpenNow(isRestaurantOpen());
+    setOpenNow(isRestaurantOpen(week));
     fetch("/api/busy-mode", { cache: "no-store" }).then((r) => r.json()).then(setBusy).catch(() => {});
-  }, []);
+  }, [week]);
 
   function selectOrderType(type: OrderType) {
     setOrderType(type);
@@ -213,7 +215,7 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
               <p className="mt-1 text-sm">
                 You can still order for later — earliest{" "}
                 <strong>
-                  {nextValidScheduleSlot(new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                  {nextValidScheduleSlot(week, new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
                 </strong>
                 . You&apos;ll choose the time at checkout.
               </p>

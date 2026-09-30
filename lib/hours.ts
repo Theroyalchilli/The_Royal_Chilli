@@ -1,18 +1,32 @@
-// Structured opening hours, matching the display text in lib/site-content.ts's
-// contact.hours. Gates ASAP ordering at checkout, and (via lib/scheduling.ts)
-// constrains "Schedule for later" to real opening hours too. Minutes from
-// midnight the shift STARTS on; 0 = Sunday. `close` can exceed 1440 (e.g.
-// 1500 = 1:00 AM the next calendar day) for a shift that runs past midnight —
-// every function below accounts for that.
-const HOURS: Record<number, { open: number; close: number }> = {
-  0: { open: 9 * 60, close: 25 * 60 }, // Sunday: 9:00 AM – 1:00 AM
-  1: { open: 9 * 60, close: 25 * 60 }, // Monday
-  2: { open: 9 * 60, close: 25 * 60 }, // Tuesday
-  3: { open: 9 * 60, close: 25 * 60 }, // Wednesday
-  4: { open: 9 * 60, close: 25 * 60 }, // Thursday
-  5: { open: 9 * 60, close: 25 * 60 }, // Friday
-  6: { open: 9 * 60, close: 25 * 60 }, // Saturday
+// When a business is open — from its own opening hours (Settings → General →
+// Opening hours; lib/opening-hours.ts), nothing written in code. Gates ASAP
+// ordering at checkout, and (via lib/scheduling.ts) constrains "Schedule for
+// later" and table-booking times too. Minutes from midnight the shift STARTS
+// on; 0 = Sunday. `close` can exceed 1440 (e.g. 1500 = 1:00 AM the next
+// calendar day) for a shift that runs past midnight — every function below
+// accounts for that. A day with no hours (null) is closed.
+export type DayWindow = { open: number; close: number };
+export type WeekHours = Record<number, DayWindow | null>;
+
+const DAY_INDEX: Record<string, number> = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+const toMinutes = (hhmm: string) => {
+  const [h, m] = String(hhmm).split(":").map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
 };
+
+/** The saved hours list ({ day: "Monday", open: "12:00", close: "01:00" }) as a week table. */
+export function weekFromDayHours(list: { day: string; open: string; close: string }[] | null | undefined): WeekHours {
+  const week: WeekHours = { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
+  for (const h of list ?? []) {
+    const d = DAY_INDEX[h.day];
+    const open = toMinutes(h.open);
+    let close = toMinutes(h.close);
+    if (d === undefined || isNaN(open) || isNaN(close)) continue;
+    if (close <= open) close += 1440; // runs past midnight
+    week[d] = { open, close };
+  }
+  return week;
+}
 
 // The restaurant's hours are defined in UK wall-clock terms, so every check
 // against them must resolve "what day/time is it" in Europe/London — never
@@ -67,20 +81,20 @@ export function londonNowDateAndMinutes(date: Date = new Date()): { dateStr: str
   };
 }
 
-export function getHoursForDate(date: Date): { open: number; close: number } {
-  return HOURS[londonMinutesAndDay(date).day];
+export function getHoursForDate(week: WeekHours, date: Date): DayWindow | null {
+  return week[londonMinutesAndDay(date).day] ?? null;
 }
 
-export function isRestaurantOpen(date: Date = new Date()): boolean {
+export function isRestaurantOpen(week: WeekHours, date: Date = new Date()): boolean {
   const { minutesOfDay: minutesToday, day } = londonMinutesAndDay(date);
-  const today = HOURS[day];
-  if (minutesToday >= today.open && minutesToday < today.close) return true;
+  const today = week[day];
+  if (today && minutesToday >= today.open && minutesToday < today.close) return true;
 
   // Today's own window can't cover the small hours (minutesToday is always
   // < 1440), so check whether *yesterday's* shift ran past midnight and is
   // still covering right now.
-  const prev = HOURS[(day + 6) % 7];
-  if (prev.close > 1440 && minutesToday < prev.close - 1440) return true;
+  const prev = week[(day + 6) % 7];
+  if (prev && prev.close > 1440 && minutesToday < prev.close - 1440) return true;
 
   return false;
 }
@@ -89,9 +103,9 @@ export function isRestaurantOpen(date: Date = new Date()): boolean {
 // which the till's background checks (Print Station, new-order alerts) run
 // at full speed. Outside it they slow right down, to stay well inside
 // Vercel's free-plan function limits (see lib/poll-schedule.ts).
-export function isNearOpeningHours(date: Date = new Date(), bufferMinutes = 30): boolean {
+export function isNearOpeningHours(week: WeekHours, date: Date = new Date(), bufferMinutes = 30): boolean {
   const ms = bufferMinutes * 60_000;
-  return isRestaurantOpen(date) || isRestaurantOpen(new Date(date.getTime() + ms)) || isRestaurantOpen(new Date(date.getTime() - ms));
+  return isRestaurantOpen(week, date) || isRestaurantOpen(week, new Date(date.getTime() + ms)) || isRestaurantOpen(week, new Date(date.getTime() - ms));
 }
 
 function wrapMinutes(minutes: number): number {
@@ -109,9 +123,9 @@ function formatTime12h(minutes: number): string {
 
 // Human-readable "9:00 AM – 1:00 AM" for error messages, matching the style
 // already used in lib/site-content.ts's displayed hours.
-export function formatHoursForDate(date: Date): string {
-  const hours = getHoursForDate(date);
-  return `${formatTime12h(hours.open)} – ${formatTime12h(hours.close)}`;
+export function formatHoursForDate(week: WeekHours, date: Date): string {
+  const hours = getHoursForDate(week, date);
+  return hours ? `${formatTime12h(hours.open)} – ${formatTime12h(hours.close)}` : "Closed";
 }
 
 // Rounds `from` forward to the next quarter-hour plus a lead buffer, then
@@ -119,14 +133,20 @@ export function formatHoursForDate(date: Date): string {
 // opening hours (before open, or at/after close). Used both to default the
 // checkout page's "Schedule for later" fields and, indirectly, to validate
 // a chosen time actually falls within hours.
-export function nextValidScheduleSlot(from: Date, leadMinutes = 30): Date {
+export function nextValidScheduleSlot(week: WeekHours, from: Date, leadMinutes = 30): Date {
   const candidate = new Date(from.getTime() + leadMinutes * 60_000);
   candidate.setSeconds(0, 0);
   candidate.setMinutes(Math.ceil(candidate.getMinutes() / 15) * 15);
 
   for (let i = 0; i < 8; i++) {
-    const hours = getHoursForDate(candidate);
+    const hours = getHoursForDate(week, candidate);
     const minutesOfDay = candidate.getHours() * 60 + candidate.getMinutes();
+    if (!hours) {
+      // Closed all day — try the next one.
+      candidate.setDate(candidate.getDate() + 1);
+      candidate.setHours(0, 0, 0, 0);
+      continue;
+    }
     if (minutesOfDay < hours.open) {
       candidate.setHours(Math.floor(hours.open / 60), hours.open % 60, 0, 0);
       return candidate;
@@ -165,12 +185,14 @@ export function toDateTimeInputValue(date: Date): string {
 // calendar date from `date`. Using Date.setMinutes() to build it lets the
 // day roll over correctly instead of silently mis-dating that order.
 export function getScheduleSlotOptions(
+  week: WeekHours,
   date: Date,
   now: Date = new Date(),
   leadMinutes = 20,
   intervalMinutes = 15
 ): { value: string; label: string }[] {
-  const hours = getHoursForDate(date);
+  const hours = getHoursForDate(week, date);
+  if (!hours) return []; // closed that day
   let startMinutes = hours.open;
   const isToday = date.toDateString() === now.toDateString();
   if (isToday) {

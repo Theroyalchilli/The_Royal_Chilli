@@ -6,6 +6,7 @@ import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
 import { getScheduleSlotOptions, toDateInputValue } from "@/lib/hours";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
+import { useWeekHours } from "@/components/site/HoursProvider";
 
 type Result = { status: "full" | "waitlisted" | "booked" };
 
@@ -35,9 +36,10 @@ function ReservationsForm() {
   const [result, setResult] = useState<Result | null>(null);
 
   // Every valid quarter-hour slot for the chosen date, restricted to that
-  // day's real opening hours (9am–1am) — same helper the checkout page uses
+  // day's real opening hours (Settings → General) — same helper the checkout page uses
   // for "Schedule for later", so a customer can never pick a time we're shut.
-  const timeSlots = date ? getScheduleSlotOptions(new Date(`${date}T00:00:00`)) : [];
+  const week = useWeekHours();
+  const timeSlots = date ? getScheduleSlotOptions(week, new Date(`${date}T00:00:00`)) : [];
 
   // Keep the selected time inside the current date's valid slots — e.g.
   // changing the date could otherwise leave a stale slot the new day doesn't offer.

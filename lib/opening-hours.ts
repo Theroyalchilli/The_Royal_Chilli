@@ -4,8 +4,9 @@ export type DayHours = { day: string; open: string; close: string };
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-// Displayed-only hours (footer, homepage badge, FAQ, schema.org). Does NOT
-// gate live ordering — see lib/hours.ts for that, deliberately kept separate.
+// Each business's opening hours (Settings → General): shown on its website
+// (footer, homepage badge, FAQ, schema.org) and — via lib/hours.ts — when it
+// takes orders and bookings.
 export async function getOpeningHours(businessId: number): Promise<DayHours[]> {
   const value = await getBusinessSetting(businessId, "opening_hours");
   const hours = (value as DayHours[] | undefined) ?? [];

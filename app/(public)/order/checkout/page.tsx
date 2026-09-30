@@ -5,10 +5,11 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { formatCurrency, isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType, cartTotal } from "@/lib/cart";
-import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue } from "@/lib/hours";
+import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, type WeekHours } from "@/lib/hours";
 import type { BusyState } from "@/lib/busy-mode";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
+import { useWeekHours } from "@/components/site/HoursProvider";
 
 type ZoneCheck = { deliverable: boolean };
 
@@ -17,14 +18,14 @@ type ZoneCheck = { deliverable: boolean };
 // flag just needs to be flipped on once that's done.
 const STRIPE_ENABLED = process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
 
-function defaultScheduleDate() {
-  return toDateInputValue(nextValidScheduleSlot(new Date()));
+function defaultScheduleDate(week: WeekHours) {
+  return toDateInputValue(nextValidScheduleSlot(week, new Date()));
 }
 const busyTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
 
 // The earliest time an order can be scheduled for, for the closed notice.
-function earliestSlotLabel() {
-  return nextValidScheduleSlot(new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+function earliestSlotLabel(week: WeekHours) {
+  return nextValidScheduleSlot(week, new Date()).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 function maxScheduleDate() {
   const d = new Date();
@@ -33,6 +34,7 @@ function maxScheduleDate() {
 }
 
 export default function CheckoutPage() {
+  const week = useWeekHours();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [orderType, setOrderType] = useState<OrderType>("takeaway");
   const [name, setName] = useState("");
@@ -50,7 +52,7 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState<BusyState | null>(null);
   const acceptingAsap = openNow && !busy?.paused;
   const [isScheduled, setIsScheduled] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate());
+  const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate(week));
   // Never pre-filled: the customer picks the time themselves, so a
   // next-morning order is always a deliberate choice.
   const [scheduleTime, setScheduleTime] = useState("");
@@ -81,7 +83,7 @@ export default function CheckoutPage() {
   // Starts assuming open (matches server render) and corrects after mount —
   // avoids a hydration mismatch from checking the real clock during render.
   useEffect(() => {
-    const open = isRestaurantOpen();
+    const open = isRestaurantOpen(week);
     setOpenNow(open);
     if (!open) setIsScheduled(true);
     fetch("/api/busy-mode", { cache: "no-store" })
@@ -126,7 +128,7 @@ export default function CheckoutPage() {
     busy?.pausedUntil ? new Date(busy.pausedUntil).getTime() : 0,
     busy?.extraMinutes ? Date.now() + (20 + busy.extraMinutes) * 60_000 : 0
   );
-  const scheduleSlots = getScheduleSlotOptions(new Date(`${scheduleDate}T00:00:00`)).filter(
+  const scheduleSlots = getScheduleSlotOptions(week, new Date(`${scheduleDate}T00:00:00`)).filter(
     (slot) => new Date(`${slot.value}:00`).getTime() >= earliestBusy
   );
 
@@ -180,8 +182,8 @@ export default function CheckoutPage() {
       if (scheduledDate.getTime() - Date.now() < 20 * 60_000) {
         return setError("Please choose a time at least 20 minutes from now.");
       }
-      if (!isRestaurantOpen(scheduledDate)) {
-        return setError(`We're closed at that time — opening hours that day are ${formatHoursForDate(scheduledDate)}.`);
+      if (!isRestaurantOpen(week, scheduledDate)) {
+        return setError(`We're closed at that time — opening hours that day are ${formatHoursForDate(week, scheduledDate)}.`);
       }
     }
 
@@ -314,7 +316,7 @@ export default function CheckoutPage() {
         <div className="mt-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900">
           <p className="font-semibold">🕘 We&apos;re closed right now.</p>
           <p className="mt-1 text-sm">
-            You can still order for later — the earliest is <strong>{earliestSlotLabel()}</strong>. Choose your date and time below.
+            You can still order for later — the earliest is <strong>{earliestSlotLabel(week)}</strong>. Choose your date and time below.
           </p>
         </div>
       )}
@@ -336,7 +338,7 @@ export default function CheckoutPage() {
           <input
             type="date"
             value={scheduleDate}
-            min={defaultScheduleDate()}
+            min={defaultScheduleDate(week)}
             max={maxScheduleDate()}
             onChange={(e) => setScheduleDate(e.target.value)}
             className="w-full border border-border bg-background px-4 py-2.5 outline-none focus:border-primary"

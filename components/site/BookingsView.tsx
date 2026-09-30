@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getScheduleSlotOptions, toDateInputValue } from "@/lib/hours";
+import { useWeekHours } from "@/components/site/HoursProvider";
 
 type Booking = {
   id: number;
@@ -48,10 +49,11 @@ export default function BookingsView() {
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const week = useWeekHours();
   const timeOptions = useMemo(() => {
-    const opts = getScheduleSlotOptions(new Date(date + "T00:00:00"));
+    const opts = getScheduleSlotOptions(week, new Date(date + "T00:00:00"));
     return opts.map((o) => ({ value: o.value.slice(11, 16), label: o.label }));
-  }, [date]);
+  }, [date, week]);
   useEffect(() => {
     if (timeOptions.length > 0 && !timeOptions.some((o) => o.value === time)) setTime(timeOptions[0].value);
   }, [timeOptions, time]);

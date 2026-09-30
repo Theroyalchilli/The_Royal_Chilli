@@ -503,7 +503,7 @@ export default function SettingsView({ section, canEditPermissions }: { section:
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
-        <Card icon="🕐" title="Opening hours" hint="Shown in the website footer, homepage, FAQ and Google listing. When customers can actually order is set separately.">
+        <Card icon="🕐" title="Opening hours" hint="When the website takes orders and bookings, and what it shows in the footer, homepage and FAQ. Until hours are set, online ordering stays closed.">
               <div className="space-y-1.5">
                 {openingHours.map((h, i) => (
                   <div key={h.day} className="flex items-center gap-2">

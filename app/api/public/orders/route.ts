@@ -9,7 +9,8 @@ import { websiteBusinessId } from "@/lib/business";
 import { bizDb } from "@/lib/business-db";
 import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
-import { isRestaurantOpen } from "@/lib/hours";
+import { isRestaurantOpen, weekFromDayHours } from "@/lib/hours";
+import { getOpeningHours } from "@/lib/opening-hours";
 import { busyOrderError, busyState, type BusyMode } from "@/lib/busy-mode";
 import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
@@ -54,10 +55,12 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
+    // This business's own opening hours (Settings → General).
+    const week = weekFromDayHours(await getOpeningHours(businessId));
     if (scheduled_for) {
-      const scheduleError = validateScheduledTime(scheduled_for);
+      const scheduleError = validateScheduledTime(scheduled_for, week);
       if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
-    } else if (!isRestaurantOpen()) {
+    } else if (!isRestaurantOpen(week)) {
       return NextResponse.json({ error: "We're closed right now — please schedule your order for later." }, { status: 400 });
     }
 

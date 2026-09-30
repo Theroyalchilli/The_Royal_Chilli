@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatHoursForDate } from "@/lib/hours";
+import { useWeekHours } from "@/components/site/HoursProvider";
 
 // The homepage hero is a static server component, so today's hours can't be
 // computed there directly (it would bake in whatever day the page was last
@@ -9,9 +10,11 @@ import { formatHoursForDate } from "@/lib/hours";
 // same every day, so the default below never actually needs correcting,
 // but this still stays reactive if that ever changes again.
 export default function TodayHours() {
-  const [hours, setHours] = useState("9:00 AM – 1:00 AM");
+  // The business's own hours (Settings → General).
+  const week = useWeekHours();
+  const [hours, setHours] = useState("");
   useEffect(() => {
-    setHours(formatHoursForDate(new Date()));
-  }, []);
+    setHours(formatHoursForDate(week, new Date()));
+  }, [week]);
   return <>{hours}</>;
 }

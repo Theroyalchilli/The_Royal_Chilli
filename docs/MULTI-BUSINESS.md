@@ -47,7 +47,7 @@ Run in order in the Supabase SQL editor
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
 | 079 fully separate staff / suppliers / customers, owner login | run 29 Sep 2026 — Phase 2b code pushed after it; owner login `owner` (staff #26) created |
 | 080 business setup (details, owner-only bank / payment keys, per-business settings) | run 29 Sep 2026 — Business setup page live (960ecc7) |
-| 081 drop the old group-wide unique rules | before a second business opens |
+| 082 drop the old group-wide unique rules | before a second business opens |
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)
 
@@ -117,7 +117,7 @@ business's own admin — contact details, logo, receipt text, hours, busy mode.
    branding (already written locally, not pushed — reads the setup), VAT
    number on receipts, order prefixes, per-business settings, payments per
    company, accountant export header, website legal pages.
-5. Migration 081 (before a second business opens): drop the old group-wide
+5. Migration 082 (before a second business opens): drop the old group-wide
    unique rules kept by 078 / 079.
 
 ## Phase 3 — details already noted (folded into the setup page above)

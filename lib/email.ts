@@ -347,9 +347,12 @@ export async function sendPaymentReceiptEmail(
     orderType: "dine_in" | "takeaway" | "delivery";
     subtotal: number;
     discount: number;
+    loyaltyDiscount?: number;
+    loyaltyLabel?: string | null;
+    tip?: number;
     tax: number;
     serviceCharge: number;
-    total: number;
+    total: number; // the bill, before tip
     paymentMethod: string; // e.g. "Cash", "Card", "Cash + Card"
     paidAt: string; // ISO
     items: { name: string; quantity: number; unitPrice: number; notes?: string | null }[];
@@ -395,9 +398,11 @@ export async function sendPaymentReceiptEmail(
         <tr><td style="padding:14px 22px 20px; border-top:1px solid ${C.rule};">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-family:${SANS};">
             <tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Subtotal</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.subtotal)}</td></tr>
-            ${data.discount > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Discount</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.discount)}</td></tr>` : ""}
             ${data.serviceCharge > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Service charge</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.serviceCharge)}</td></tr>` : ""}
-            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.chilli};">${money(data.total)}</td></tr>
+            ${(data.tip ?? 0) > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Tip</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.tip ?? 0)}</td></tr>` : ""}
+            ${data.discount > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Discount</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.discount)}</td></tr>` : ""}
+            ${(data.loyaltyDiscount ?? 0) > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">${data.loyaltyLabel || "Loyalty"}</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.loyaltyDiscount ?? 0)}</td></tr>` : ""}
+            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.chilli};">${money(data.total + (data.tip ?? 0))}</td></tr>
             <tr><td colspan="2" style="padding:2px 0 0; font-size:11px; color:${C.muted};">incl. VAT ${money(data.tax)}</td></tr>
           </table>
         </td></tr>

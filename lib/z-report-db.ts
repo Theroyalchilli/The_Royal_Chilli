@@ -7,7 +7,7 @@ import { computeZReport, type ZOrder, type ZReport } from "@/lib/z-report";
 // reprint shows exactly what was printed that night even if an order is
 // edited afterwards.
 
-const ORDER_COLUMNS = "id, order_number, work_period_id, status, pay_later, total, amount_paid, discount, customer_name, created_at";
+const ORDER_COLUMNS = "id, order_number, work_period_id, status, pay_later, total, amount_paid, discount, loyalty_discount, customer_name, created_at";
 
 // Live calculation from the database. For an open shift, "now" is the end.
 export async function calculateZReport(periodId: number): Promise<ZReport | null> {

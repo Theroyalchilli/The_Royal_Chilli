@@ -51,3 +51,21 @@ describe("receipt claim QR", () => {
     expect(ticketHtml(t)).toContain('<div class="qr"><svg');
   });
 });
+
+describe("receipt bill lines", () => {
+  it("prints subtotal → service charge → tip → discount → loyalty → TOTAL (tip included), payments with their tip", async () => {
+    receipt = {
+      order: order({ customer_id: 7, subtotal: 100, discount: 10, discount_reason: "Staff", loyalty_discount: 5, loyalty_reason: "Loyalty credit", service_charge_amount: 8.5, total: 93.5, tax: 14.17 }),
+      items: [],
+      payments: [{ method: "card", amount: 93.5, tip_amount: 5 }],
+    };
+    const text = (await buildTicket(job))!.map((l) => l.text);
+    const at = (label: string) => text.findIndex((l) => l.startsWith(label));
+    const order_ = ["Subtotal", "Service Charge", "Tip", "Discount (Staff)", "Loyalty credit", "TOTAL", "incl. VAT"].map(at);
+    expect(order_.every((i) => i >= 0)).toBe(true);
+    expect([...order_].sort((a, b) => a - b)).toEqual(order_);
+    expect(text[at("TOTAL")]).toMatch(/98\.50$/);
+    expect(text[at("Card")]).toMatch(/98\.50$/);
+    expect(text.some((l) => l.includes("tip)"))).toBe(false);
+  });
+});

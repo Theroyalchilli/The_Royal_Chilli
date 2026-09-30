@@ -27,6 +27,8 @@ export default async function ReceiptPrintPage({
     ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
     : order.order_type.toUpperCase();
   const refunded = payments.reduce((s, p) => s + (Number(p.amount) < 0 ? -Number(p.amount) : 0), 0);
+  // Tips are taken per payment — shown as one line on the bill and included in TOTAL.
+  const tips = payments.reduce((s, p) => s + (Number(p.amount) > 0 ? Number(p.tip_amount || 0) : 0), 0);
   const state = paymentState(order, refunded);
   const balanceDue = state === "unpaid" || state === "part_paid" ? Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100 : 0;
   const isPaid = state === "paid";
@@ -70,18 +72,27 @@ export default async function ReceiptPrintPage({
         ))}
         <div className="divider" />
 
+        {/* Subtotal → service charge → tip → discount → loyalty → TOTAL (what
+            they paid, tip included). VAT is on the food only. */}
         <div className="row"><span>Subtotal</span><span>{money(order.subtotal)}</span></div>
+        {Number(order.service_charge_amount) > 0 && (
+          <div className="row"><span>Service Charge</span><span>{money(order.service_charge_amount)}</span></div>
+        )}
+        {tips > 0 && <div className="row"><span>Tip</span><span>{money(tips)}</span></div>}
         {Number(order.discount) > 0 && (
           <div className="row">
             <span>Discount{order.discount_reason ? ` (${order.discount_reason})` : ""}</span>
             <span>-{money(order.discount)}</span>
           </div>
         )}
-        {Number(order.service_charge_amount) > 0 && (
-          <div className="row"><span>Service Charge</span><span>{money(order.service_charge_amount)}</span></div>
+        {Number(order.loyalty_discount) > 0 && (
+          <div className="row">
+            <span>{order.loyalty_reason ?? "Loyalty"}</span>
+            <span>-{money(order.loyalty_discount)}</span>
+          </div>
         )}
         <div className="divider" />
-        <div className="row bold big"><span>TOTAL</span><span>{money(order.total)}</span></div>
+        <div className="row bold big"><span>TOTAL</span><span>{money(Number(order.total) + tips)}</span></div>
         <p className="small right">incl. VAT {money(order.tax)}</p>
         <div className="divider" />
 
@@ -93,11 +104,10 @@ export default async function ReceiptPrintPage({
             <div key={i} className="row">
               <span>
                 {Number(p.amount) < 0 ? "Refund — " : ""}{methodLabel[p.method] ?? p.method}
-                {p.tip_amount > 0 ? ` (+${money(p.tip_amount)} tip)` : ""}
                 <span className="small block">{new Date(p.created_at).toLocaleString("en-GB")}</span>
                 {p.reference && <span className="small block">{p.reference}</span>}
               </span>
-              <span className="bold">{money(p.amount)}</span>
+              <span className="bold">{money(Number(p.amount) + (Number(p.amount) > 0 ? Number(p.tip_amount || 0) : 0))}</span>
             </div>
           ))
         )}

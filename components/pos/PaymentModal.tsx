@@ -145,6 +145,8 @@ export default function PaymentModal({
   const [discountGiverId, setDiscountGiverId] = useState("");
   const [discountGivenBy, setDiscountGivenBy] = useState<string | null>(null);
   const [localDiscount, setLocalDiscount] = useState(discount);
+  // Loyalty (voucher code or points) — its own line, on top of any discount.
+  const [localLoyalty, setLocalLoyalty] = useState(0);
   const [localTax, setLocalTax] = useState(tax);
   const [localTotal, setLocalTotal] = useState(total);
   const [discountApplying, setDiscountApplying] = useState(false);
@@ -233,9 +235,24 @@ export default function PaymentModal({
       setDiscountGivenBy(null);
       // Pre-select whoever is signed in at the till (their PIN) as the giver.
       fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.user?.id) setDiscountGiverId(String(d.user.id)); }).catch(() => {});
-      // An order may already carry a discount from earlier — show who gave it.
-      if (orderId && discount > 0) {
-        fetch(`/api/orders/${orderId}`).then((r) => r.json()).then((d) => setDiscountGivenBy(d.order?.discount_given_by ?? null)).catch(() => {});
+      // The order may already carry a discount (show who gave it), loyalty or
+      // a service charge from earlier.
+      setLocalLoyalty(0);
+      if (orderId) {
+        fetch(`/api/orders/${orderId}`).then((r) => r.json()).then((d) => {
+          const o = d.order;
+          if (!o) return;
+          setDiscountGivenBy(o.discount_given_by ?? null);
+          setLocalLoyalty(Number(o.loyalty_discount) || 0);
+          // A combined-table bill's totals come from the parent; this order alone would undercount.
+          if (!extraOrderIds?.length) {
+            setLocalDiscount(Number(o.discount) || 0);
+            setLocalServiceCharge(Number(o.service_charge_amount) || 0);
+            // The saved bill is the source of truth (loyalty isn't in the till's own sum).
+            if (o.total != null) setLocalTotal(Number(o.total));
+            if (o.tax != null) setLocalTax(Number(o.tax));
+          }
+        }).catch(() => {});
       }
       setLocalDiscount(discount);
       setLocalTax(tax);
@@ -306,7 +323,7 @@ export default function PaymentModal({
       if (!res.ok) { setError(data.error || "Couldn't apply loyalty credit"); return; }
       setCashCreditApplied(data.amount);
       if (data.bill) {
-        setLocalDiscount(data.bill.discount ?? localDiscount);
+        setLocalLoyalty(data.bill.loyalty ?? data.amount);
         setLocalTax(data.bill.tax ?? localTax);
         setLocalTotal(data.bill.total ?? localTotal);
       }
@@ -385,7 +402,7 @@ export default function PaymentModal({
       setAppliedReward(data.reward_name);
       setRewardCodeInput("");
       if (data.bill) {
-        setLocalDiscount(data.bill.discount ?? localDiscount);
+        setLocalLoyalty(data.bill.loyalty ?? localLoyalty);
         setLocalTax(data.bill.tax ?? localTax);
         setLocalTotal(data.bill.total ?? localTotal);
       }
@@ -784,14 +801,19 @@ export default function PaymentModal({
                 <div className="flex justify-between text-muted-foreground text-xs">
                   <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
                 </div>
-                {localDiscount > 0 && (
-                  <div className="flex justify-between text-yellow-600 text-xs">
-                    <span>Discount</span><span>−{formatCurrency(localDiscount)}</span>
-                  </div>
-                )}
                 {localServiceCharge > 0 && (
                   <div className="flex justify-between text-purple-700 text-xs">
                     <span>Service Charge</span><span>{formatCurrency(localServiceCharge)}</span>
+                  </div>
+                )}
+                {localDiscount > 0 && (
+                  <div className="flex justify-between text-yellow-600 text-xs">
+                    <span>Discount{discountGivenBy ? ` (${discountGivenBy})` : ""}</span><span>−{formatCurrency(localDiscount)}</span>
+                  </div>
+                )}
+                {localLoyalty > 0 && (
+                  <div className="flex justify-between text-rose-700 text-xs">
+                    <span>Loyalty</span><span>−{formatCurrency(localLoyalty)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-foreground font-bold text-base border-t border-border pt-1.5 mt-1">
@@ -1224,25 +1246,30 @@ export default function PaymentModal({
                 <div className="flex justify-between text-muted-foreground text-xs">
                   <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
                 </div>
-                {localDiscount > 0 && (
-                  <div className="flex justify-between text-yellow-600 text-xs">
-                    <span>Discount</span><span>−{formatCurrency(localDiscount)}</span>
-                  </div>
-                )}
                 {localServiceCharge > 0 && (
                   <div className="flex justify-between text-purple-700 text-xs">
                     <span>Service Charge</span><span>{formatCurrency(localServiceCharge)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-foreground font-bold">
-                  <span>TOTAL</span><span>{formatCurrency(localTotal)}</span>
-                </div>
-                <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)}</div>
                 {tipAmount > 0 && (
-                  <div className="flex justify-between text-red-700 text-xs font-semibold">
+                  <div className="flex justify-between text-red-700 text-xs">
                     <span>Tip</span><span>{formatCurrency(tipAmount)}</span>
                   </div>
                 )}
+                {localDiscount > 0 && (
+                  <div className="flex justify-between text-yellow-600 text-xs">
+                    <span>Discount</span><span>−{formatCurrency(localDiscount)}</span>
+                  </div>
+                )}
+                {localLoyalty > 0 && (
+                  <div className="flex justify-between text-rose-700 text-xs">
+                    <span>Loyalty</span><span>−{formatCurrency(localLoyalty)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-foreground font-bold">
+                  <span>TOTAL</span><span>{formatCurrency(localTotal + tipAmount)}</span>
+                </div>
+                <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)} (on food only)</div>
                 <div className="flex justify-between text-foreground text-xs">
                   <span>Paid by</span>
                   <span className="capitalize">{method}</span>

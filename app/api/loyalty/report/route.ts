@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const { data: customers } = await db.from("customers").select("id, created_at").is("merged_into", null);
   const { data: orders } = await db
     .from("orders")
-    .select("customer_id, total, discount, discount_reason, created_at")
+    .select("customer_id, total, loyalty_discount, created_at")
     .eq("is_paid", true)
     .not("customer_id", "is", null);
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const st = byCustomer.get(o.customer_id) ?? { days: new Set<string>(), revenue: 0, rewardCost: 0 };
     st.days.add(tradingDayStr(new Date(o.created_at)));
     st.revenue += Number(o.total) || 0;
-    if (String(o.discount_reason || "").startsWith("Loyalty")) st.rewardCost += Number(o.discount) || 0;
+    st.rewardCost += Number(o.loyalty_discount) || 0;
     byCustomer.set(o.customer_id, st);
   }
 

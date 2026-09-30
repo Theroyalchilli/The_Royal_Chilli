@@ -34,6 +34,23 @@ describe("computeBill", () => {
     expect(bill).toMatchObject({ discounted: 80, serviceChargeAmount: 8, total: 88 });
   });
 
+  it("charges VAT on the food only — never on the service charge", () => {
+    const bill = computeBill({ subtotal: 120, discountType: null, discountPct: null, discountAmount: 0, serviceChargePct: 10 });
+    // food 120 → VAT 20; service charge 12 carries none
+    expect(bill).toMatchObject({ serviceChargeAmount: 12, total: 132, tax: 20 });
+  });
+
+  it("takes a staff discount AND loyalty off the same bill, VAT on what's left", () => {
+    const bill = computeBill({ subtotal: 100, discountType: "percent", discountPct: 10, discountAmount: 0, serviceChargePct: 10, loyaltyAmount: 30 });
+    // 100 − 10 discount − 30 loyalty = 60 food; +6 service charge = 66; VAT on 60 = 10
+    expect(bill).toMatchObject({ discount: 10, loyalty: 30, discounted: 60, serviceChargeAmount: 6, total: 66, tax: 10 });
+  });
+
+  it("never lets loyalty take the bill below zero", () => {
+    const bill = computeBill({ subtotal: 20, discountType: "amount", discountPct: null, discountAmount: 15, serviceChargePct: 0, loyaltyAmount: 10 });
+    expect(bill).toMatchObject({ discount: 15, loyalty: 5, discounted: 0, total: 0, tax: 0 });
+  });
+
   it("treats a null discount type as a legacy flat amount, same as \"amount\"", () => {
     const bill = computeBill({ subtotal: 100, discountType: null, discountPct: null, discountAmount: 10, serviceChargePct: 0 });
     expect(bill).toMatchObject({ discount: 10, discounted: 90, total: 90 });
@@ -118,5 +135,12 @@ describe("recalcTotals", () => {
     itemRows = [{ item_price: 100, quantity: 1 }];
     await recalcTotals("order-1");
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ service_charge_amount: 8, total: 88 }));
+  });
+
+  it("keeps a staff discount and takes the stored loyalty amount off too", async () => {
+    orderRow = { discount: 20, discount_type: "amount", discount_pct: null, service_charge_pct: 0, loyalty_discount: 10 };
+    itemRows = [{ item_price: 100, quantity: 1 }];
+    await recalcTotals("order-1");
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ total: 70 }));
   });
 });

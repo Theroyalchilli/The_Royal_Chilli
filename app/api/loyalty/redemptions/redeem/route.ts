@@ -9,8 +9,8 @@ import { notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDisco
 // member can (the "Loyalty Reward Code" box in the payment screen); codes
 // are one-time and fully checked here. A reward with money off (a £ amount,
 // or a % of the bill capped at max_discount — see rewardDiscount) sets the
-// order's discount (same field a manager discount uses; replaces rather than
-// stacks with an existing one); a reward with no money off (e.g. "free soft
+// order's loyalty line (its own line — a staff discount on the same bill
+// stays); a reward with no money off (e.g. "free soft
 // drink") just gets marked redeemed — staff hand over the item. A reward
 // limited to some order types (the welcome voucher: dine-in only) is refused
 // on any other order.
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     // The till's own business's order only.
     const { data: order, error: orderErr } = await bizDb(session.businessId)
       .from("orders")
-      .select("id, status, is_paid, order_type, subtotal, total")
+      .select("id, status, is_paid, order_type, subtotal, total, loyalty_discount, loyalty_reason")
       .eq("id", order_id)
       .single();
     if (orderErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -77,16 +77,18 @@ export async function POST(req: NextRequest) {
     const discount = rewardDiscount(reward, current.subtotal);
     let updatedBill = null;
     if (discount > 0) {
+      // One loyalty reward per bill (it has one loyalty line) — never swap one out unseen.
+      if (Number(order.loyalty_discount) > 0) {
+        return NextResponse.json({ error: `This bill already has a loyalty reward (${order.loyalty_reason ?? "loyalty"})` }, { status: 409 });
+      }
       await supabase
         .from("orders")
         .update({
-          discount_type: "amount",
-          discount_pct: null,
-          discount,
-          discount_reason: `Loyalty reward: ${reward.name}`,
-          // A voucher is the customer's reward, not a staff discount.
-          discount_given_by_staff_id: null,
-          discount_given_by: null,
+          loyalty_discount: discount,
+          loyalty_reason: `Loyalty reward: ${reward.name}`,
+          // Whoever is signed in on the till applied it.
+          loyalty_given_by_staff_id: session.id,
+          loyalty_given_by: session.name,
           updated_at: new Date().toISOString(),
         })
         .eq("id", order_id);

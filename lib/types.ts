@@ -187,6 +187,10 @@ export interface Order {
   subtotal: number;
   discount: number;
   discount_reason: string | null;
+  /** Loyalty reward (voucher or points) — its own line, on top of any discount. */
+  loyalty_discount?: number;
+  loyalty_reason?: string | null;
+  loyalty_given_by?: string | null;
   tax: number;
   total: number;
   notes: string | null;

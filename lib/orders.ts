@@ -98,7 +98,7 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
   try {
     const { data: order } = await supabase
       .from("orders")
-      .select("order_number, customer_id, customer_name, customer_email, order_type, subtotal, discount, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email, loyalty_points)")
+      .select("order_number, customer_id, customer_name, customer_email, order_type, subtotal, discount, loyalty_discount, loyalty_reason, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email, loyalty_points)")
       .eq("id", orderId)
       .single();
     if (!order) return;
@@ -133,7 +133,7 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
       .neq("status", "cancelled");
     if (!items || items.length === 0) return;
 
-    const { data: payments } = await supabase.from("payments").select("method, amount").eq("order_id", orderId);
+    const { data: payments } = await supabase.from("payments").select("method, amount, tip_amount").eq("order_id", orderId);
     const methodLabel: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
     const methods = new Set((payments || []).filter((p) => Number(p.amount) > 0).map((p) => methodLabel[p.method] ?? p.method));
 
@@ -146,6 +146,9 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
       orderType: order.order_type,
       subtotal: Number(order.subtotal),
       discount: Number(order.discount),
+      loyaltyDiscount: Number(order.loyalty_discount || 0),
+      loyaltyLabel: order.loyalty_reason ?? null,
+      tip: (payments || []).reduce((s, p) => s + (Number(p.amount) > 0 ? Number(p.tip_amount || 0) : 0), 0),
       tax: Number(order.tax),
       serviceCharge: Number(order.service_charge_amount),
       total: Number(order.total),

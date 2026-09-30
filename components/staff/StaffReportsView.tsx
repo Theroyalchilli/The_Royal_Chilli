@@ -158,6 +158,7 @@ interface ReportData {
   hourly: Array<{ hour: string; orders: number; revenue: number }>;
   cancellation: { cancelled_count: number; cancellation_rate: number };
   discountTotal: number;
+  loyaltyTotal?: number;
   refundsTotal: number;
   voidValue: number;
   customers: { new: number; returning: number };
@@ -337,7 +338,9 @@ function SalesReport() {
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Discounts Given</div>
               <div className="text-amber-600 text-3xl font-bold">{formatCurrency(data.discountTotal)}</div>
-              <div className="text-muted-foreground text-xs mt-1">across this period</div>
+              <div className="text-muted-foreground text-xs mt-1">
+                across this period{(data.loyaltyTotal ?? 0) > 0 ? ` · + ${formatCurrency(data.loyaltyTotal ?? 0)} loyalty` : ""}
+              </div>
             </div>
             <div className="bg-surface border border-border rounded-2xl p-5">
               <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-2">Voided Items</div>

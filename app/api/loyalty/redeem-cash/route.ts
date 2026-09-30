@@ -2,19 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canViewCrm } from "@/lib/permissions";
 import { recalcTotals } from "@/lib/order-totals";
 import { getCashCreditInfo } from "@/lib/loyalty";
 
 // One-tap "use my points" at the till — no code, no Staff Hub trip. Offered
 // in £ steps up to the per-visit cap (see getCashCreditInfo: £5 or £10);
-// body `amount` picks one, default the largest. Dine-in bills only. Same discount
-// mechanism as a code redemption or a manager discount — replaces rather
-// than stacks with any existing discount on the order.
+// body `amount` picks one, default the largest. Dine-in bills only. Any till
+// user can apply it (their name is saved on the order). It goes on the
+// order's loyalty line, same as a code redemption — a staff discount on the
+// same bill stays.
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canViewCrm(session.role)) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { customer_id, order_id, amount } = await req.json();
@@ -23,12 +23,16 @@ export async function POST(req: NextRequest) {
     // The till's own business's order only.
     const { data: order, error: orderErr } = await bizDb(session.businessId)
       .from("orders")
-      .select("id, status, is_paid, order_type")
+      .select("id, status, is_paid, order_type, loyalty_discount, loyalty_reason")
       .eq("id", order_id)
       .single();
     if (orderErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     if (order.is_paid || order.status === "cancelled") {
       return NextResponse.json({ error: "This order can no longer be changed" }, { status: 409 });
+    }
+    // One loyalty reward per bill (it has one loyalty line) — never swap one out unseen.
+    if (Number(order.loyalty_discount) > 0) {
+      return NextResponse.json({ error: `This bill already has a loyalty reward (${order.loyalty_reason ?? "loyalty"})` }, { status: 409 });
     }
     if (order.order_type !== "dine_in") {
       return NextResponse.json({ error: "Points can only be used on dine-in bills" }, { status: 400 });
@@ -75,10 +79,10 @@ export async function POST(req: NextRequest) {
     await supabase
       .from("orders")
       .update({
-        discount_type: "amount",
-        discount_pct: null,
-        discount: useAmount,
-        discount_reason: "Loyalty credit",
+        loyalty_discount: useAmount,
+        loyalty_reason: "Loyalty credit",
+        loyalty_given_by_staff_id: session.id,
+        loyalty_given_by: session.name,
         updated_at: new Date().toISOString(),
       })
       .eq("id", order_id);

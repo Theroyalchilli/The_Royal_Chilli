@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     // Fetch all non-cancelled orders for the day
     const { data: orders, error: ordersError } = await db
       .from("orders")
-      .select("id, total, discount, status, is_paid, order_type, created_at, customer_id")
+      .select("id, total, discount, loyalty_discount, status, is_paid, order_type, created_at, customer_id")
       .gte("created_at", dayStart)
       .lte("created_at", dayEnd)
       .not("status", "eq", "cancelled");
@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
     // total_revenue: a discount on a still-pending Pay Later order hasn't
     // really cost anything yet.
     const discountTotal = Math.round(paidOrdersData.reduce((s, o) => s + Number(o.discount || 0), 0) * 100) / 100;
+    const loyaltyTotal = Math.round(paidOrdersData.reduce((s, o) => s + Number(o.loyalty_discount || 0), 0) * 100) / 100;
 
     // New vs returning customers — "returning" means they have an order before this range started.
     const customerIds = [...new Set(ordersData.map((o) => o.customer_id).filter((id): id is number => id != null))];
@@ -206,6 +207,7 @@ export async function GET(req: NextRequest) {
       hourly,
       cancellation,
       discountTotal,
+      loyaltyTotal,
       refundsTotal,
       voidValue,
       customers,

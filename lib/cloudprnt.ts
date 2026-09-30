@@ -265,20 +265,27 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
   }
   t.push({ text: DIVIDER });
 
+  // Subtotal → service charge → tip → discount → loyalty → TOTAL (what they
+  // paid, tip included). VAT is on the food only — not service charge or tip.
+  const tips = payments.reduce((s, p) => s + (Number(p.amount) > 0 ? Number(p.tip_amount || 0) : 0), 0);
   t.push({ text: row("Subtotal", money(order.subtotal)) });
+  if (Number(order.service_charge_amount) > 0) t.push({ text: row("Service Charge", money(order.service_charge_amount)) });
+  if (tips > 0) t.push({ text: row("Tip", money(tips)) });
   if (Number(order.discount) > 0) {
     t.push({ text: row(`Discount${order.discount_reason ? ` (${order.discount_reason})` : ""}`, `-${money(order.discount)}`) });
   }
-  if (Number(order.service_charge_amount) > 0) t.push({ text: row("Service Charge", money(order.service_charge_amount)) });
-  t.push({ text: row("TOTAL", money(order.total)), bold: true, size: "tall" });
+  if (Number(order.loyalty_discount) > 0) {
+    t.push({ text: row(order.loyalty_reason || "Loyalty", `-${money(order.loyalty_discount)}`) });
+  }
+  t.push({ text: row("TOTAL", money(Number(order.total) + tips)), bold: true, size: "tall" });
   t.push({ text: row("incl. VAT", money(order.tax)) });
   t.push({ text: DIVIDER });
 
   if (payments.length > 0) {
     t.push({ text: "PAYMENTS", bold: true });
     for (const p of payments) {
-      const label = `${Number(p.amount) < 0 ? "Refund - " : ""}${METHOD_LABEL[p.method] ?? p.method}${p.tip_amount > 0 ? ` (+${money(p.tip_amount)} tip)` : ""}`;
-      t.push({ text: row(label, money(p.amount)) });
+      const refund = Number(p.amount) < 0;
+      t.push({ text: row(`${refund ? "Refund - " : ""}${METHOD_LABEL[p.method] ?? p.method}`, money(Number(p.amount) + (refund ? 0 : Number(p.tip_amount || 0)))) });
     }
   }
   if (refunded > 0.009) t.push({ text: row("Total Refunded", money(refunded)), bold: true });

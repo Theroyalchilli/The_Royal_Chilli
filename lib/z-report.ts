@@ -25,6 +25,9 @@ export type ZReport = {
 
   discount_count: number;
   discount_total: number; // positive number
+  // Loyalty rewards (voucher codes / points) — their own line, not a staff discount.
+  loyalty_count?: number;
+  loyalty_total?: number; // positive number
 
   tips_total: number;
 
@@ -71,6 +74,7 @@ export type ZOrder = {
   total: number | string;
   amount_paid: number | string;
   discount: number | string | null;
+  loyalty_discount?: number | string | null;
   customer_name: string | null;
   created_at: string | null;
 };
@@ -102,11 +106,18 @@ export function computeZReport(input: {
 
   let discountCount = 0;
   let discountTotal = 0;
+  let loyaltyCount = 0;
+  let loyaltyTotal = 0;
   for (const id of salesOrderIds) {
     const d = Number(orderById.get(id)?.discount || 0);
     if (d > 0) {
       discountCount += 1;
       discountTotal += d;
+    }
+    const l = Number(orderById.get(id)?.loyalty_discount || 0);
+    if (l > 0) {
+      loyaltyCount += 1;
+      loyaltyTotal += l;
     }
   }
 
@@ -154,6 +165,8 @@ export function computeZReport(input: {
 
     discount_count: discountCount,
     discount_total: r2(discountTotal),
+    loyalty_count: loyaltyCount,
+    loyalty_total: r2(loyaltyTotal),
 
     tips_total: r2(sales.reduce((s, p) => s + Number(p.tip_amount || 0), 0)),
 
@@ -247,6 +260,14 @@ export function zReportLines(r: ZReport, counted: number | null = r.cash.counted
   L.push({ kind: "row", label: "Number of discounts", value: String(r.discount_count) });
   L.push({ kind: "row", label: "Total discount amount", value: zMoney(-r.discount_total) });
   L.push({ kind: "gap" });
+
+  // Older saved reports (before loyalty had its own line) have no loyalty figures.
+  if (r.loyalty_count) {
+    L.push({ kind: "heading", text: "Loyalty" });
+    L.push({ kind: "row", label: "Number of loyalty rewards", value: String(r.loyalty_count) });
+    L.push({ kind: "row", label: "Total loyalty amount", value: zMoney(-(r.loyalty_total ?? 0)) });
+    L.push({ kind: "gap" });
+  }
 
   L.push({ kind: "heading", text: "Tips" });
   L.push({ kind: "row", label: "Total tips", value: zMoney(r.tips_total) });

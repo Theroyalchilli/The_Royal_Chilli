@@ -24,11 +24,11 @@ export async function GET(req: NextRequest) {
   const { start, end } = tradingRangeUtc(from, to);
 
   type PayRow = { order_id: number; method: string; amount: number; tip_amount: number | null; reference: string | null; created_at: string; orders: unknown };
-  type OrderRow = { id: number; created_at: string; tax: number; discount: number | null };
+  type OrderRow = { id: number; created_at: string; tax: number; discount: number | null; loyalty_discount: number | null };
   const [payments, orders, { data: periods }] = await Promise.all([
     allRows<PayRow>((a, b) => db.from("payments").select("order_id, method, amount, tip_amount, reference, created_at, orders(order_number, total, tax)")
       .gte("created_at", start).lte("created_at", end).order("created_at").order("id").range(a, b)),
-    allRows<OrderRow>((a, b) => db.from("orders").select("id, created_at, tax, discount").eq("is_paid", true)
+    allRows<OrderRow>((a, b) => db.from("orders").select("id, created_at, tax, discount, loyalty_discount").eq("is_paid", true)
       .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     db.from("work_periods").select("id, opened_at, closed_at, close_note, z_report").eq("status", "closed").gte("closed_at", start).lte("closed_at", end).order("closed_at"),
   ]);
@@ -38,9 +38,9 @@ export async function GET(req: NextRequest) {
   const METHOD: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
 
   // Daily summary, one row per trading day of the month.
-  type Day = { sales: number; card: number; cash: number; online: number; tips: number; refunds: number; vat: number; discounts: number; orders: number };
+  type Day = { sales: number; card: number; cash: number; online: number; tips: number; refunds: number; vat: number; discounts: number; loyalty: number; orders: number };
   const days = new Map<string, Day>();
-  for (let d = 1; d <= lastDay; d++) days.set(`${month}-${String(d).padStart(2, "0")}`, { sales: 0, card: 0, cash: 0, online: 0, tips: 0, refunds: 0, vat: 0, discounts: 0, orders: 0 });
+  for (let d = 1; d <= lastDay; d++) days.set(`${month}-${String(d).padStart(2, "0")}`, { sales: 0, card: 0, cash: 0, online: 0, tips: 0, refunds: 0, vat: 0, discounts: 0, loyalty: 0, orders: 0 });
   for (const p of payments) {
     const day = days.get(tradingDayStr(new Date(p.created_at)));
     if (!day) continue;
@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
     day.orders += 1;
     day.vat += Number(o.tax || 0);
     day.discounts += Number(o.discount || 0);
+    day.loyalty += Number(o.loyalty_discount || 0);
   }
   const daily = [...days].map(([date, d]) => ({
     "Trading day": date,
@@ -78,6 +79,7 @@ export async function GET(req: NextRequest) {
     "Net taken": r2(d.sales - d.refunds),
     "VAT (paid orders less refunds)": r2(d.vat),
     Discounts: r2(d.discounts),
+    Loyalty: r2(d.loyalty),
   }));
   const totals = daily.reduce<Record<string, number | string>>((acc, row) => {
     for (const [k, v] of Object.entries(row)) if (typeof v === "number") acc[k] = r2(Number(acc[k] ?? 0) + v);
